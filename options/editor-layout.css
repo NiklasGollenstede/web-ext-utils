@@ -1,0 +1,90 @@
+/* general */
+* {
+	font-family: "Segoe UI", Tahoma, sans-serif;
+	box-sizing: border-box;
+}
+code {
+	font-family: monospace;
+}
+body {
+	font-size: 12.5px;
+}
+::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+
+/* invalid inputs */
+input.invalid, .invalid input,
+select.invalid, .invalid select {
+	color: red;
+	border-color: red;
+}
+
+/* inputs */
+input, select {
+	border-style: solid;
+	border-width: 1px;
+	outline: none;
+	border-radius: 3px;
+	padding: 2px 7px;
+}
+input:focus, select:focus,
+input:active:focus, select:active:focus {
+	outline: none;
+}
+input[type="checkbox"] {
+	position: relative;
+	vertical-align: bottom;
+	width: 23px;
+	height: 23px;
+	margin: 0;
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	appearance: none;
+}
+input[type="checkbox"]::after {
+	content: '\2713'; /* '✓' */
+	position: absolute;
+	left: 25%;
+	top: 0%;
+}
+input[type="checkbox"]:not(:checked)::after {
+	color: transparent;
+}
+
+/* spacing */
+h1, h3 {
+	margin: 8px 0;
+}
+.value-container:not(:first-child) {
+	margin: 5px 0;
+}
+.value-unit {
+	margin-left: 3px;
+}
+
+/* sizes */
+input[type="text"] {
+	min-width: 500px;
+}
+pre {
+	white-space: pre-wrap;
+}
+.value-input[data-type="interval"] input {
+	width: 60px;
+}
+.value-input[data-type="interval"] b {
+	padding: 0 6px;
+}
+.add-value-entry, .remove-value-entry {
+	width: 23px;
+	height: 23px;
+	margin-right: 5px;
+}
+
+/* transitions */
+* {
+	transition-property: color, fill, background-color, border-color;
+	transition-duration: 0.21s;
+}

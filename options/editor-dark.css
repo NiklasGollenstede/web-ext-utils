@@ -1,0 +1,73 @@
+/* general */
+::selection {
+	background-color: black;
+	color: #c5ffc7;
+	fill: #c5ffc7;
+}
+html, body {
+	background-color: #222;
+	color: #c5e2ff;
+	fill: #c5e2ff;
+}
+::-webkit-scrollbar {
+	background-color: #000;
+}
+::-webkit-scrollbar-thumb {
+	background-color: #666;
+}
+
+/* inputs */
+input, select {
+	color: white;
+	border-color: white;
+	background-color: black;
+}
+input:focus, select:focus {
+	border-color: #7d7dff;
+	box-shadow: 0 0 6px 0 #4444ff;
+}
+input:active:focus, select:active:focus {
+	border-color: #0000f0;
+	box-shadow: 0 0 2px 1px blue;
+}
+input::selection, select::selection {
+	background-color: #39f;
+	color: white;
+}
+input[disabled] {
+	opacity: 0.5;
+}
+
+/* context menu */
+.popup-menu, .submenu {
+	background-color: black;
+	border-color: #333;
+}
+.menu-item:hover {
+	background-color: #191919;
+}
+
+/* invalid inputs */
+input.invalid, .invalid input,
+select.invalid, .invalid select {
+	color: white;
+	border-color: red;
+	background-color: #210006;
+	border-color: red;
+	box-shadow: 0 0 15px 0 red;
+}
+
+/* special elements */
+code {
+	background-color: #111;
+	color: #ebf5ff;
+    box-shadow: 0 0 1px 0px white inset;
+    padding: 0 5px;
+    border-radius: 2px;
+}
+a[href] {
+	color: #ebf5ff;
+}
+a[href]:visited {
+	color: #c5ffc7;
+}

@@ -1,0 +1,29 @@
+{
+	"indent": 1, // indent with tabs
+	"-W002": false, // Value of '{cought exception}' may be overwritten in IE 8 and earlier.
+	"-W006": false, // Confusing minuses.
+	"-W030": false, // Expected an assignment or function call and instead saw an expression.
+	"-W054": false, // The Function constructor is a form of eval.
+	"-W058": false, // Missing '()' invoking a constructor.
+
+	"curly": true,
+	"newcap": false,
+	"undef": false,
+	"eqnull": true,
+	"laxbreak": true,
+	"validthis": true,
+
+	"esversion": 6,
+	"strict": true,
+	"globalstrict": true,
+	"latedef": "nofunc",
+
+	"browser": true,
+	"devel": true,
+
+	"globals": {
+		"chrome": false,
+		"define": false,
+		"require": false
+	}
+}
