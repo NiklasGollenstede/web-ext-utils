@@ -52,6 +52,12 @@ input[type="checkbox"]::after {
 input[type="checkbox"]:not(:checked)::after {
 	color: transparent;
 }
+input[disabled] {
+	opacity: 0.5;
+}
+.add-value-entry[disabled] {
+	display: none;
+}
 
 /* spacing */
 h1, h3 {
@@ -72,13 +78,13 @@ pre {
 	white-space: pre-wrap;
 }
 .value-input[data-type="interval"] input {
-	width: 60px;
+	width: 100px;
 }
 .value-input[data-type="interval"] b {
 	padding: 0 6px;
 }
 .add-value-entry, .remove-value-entry {
-	width: 23px;
+	width: 25px;
 	height: 23px;
 	margin-right: 5px;
 }

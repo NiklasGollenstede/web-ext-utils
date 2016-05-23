@@ -46,6 +46,7 @@ return function loadEditor({ host, options, onCommand, }) {
 	});
 
 	displayPreferences(options, host);
+	return host;
 };
 
 function setButtonDisabled(element) {
@@ -135,7 +136,7 @@ function createInput(pref) {
 }
 
 function setInputValue(input, value) {
-	const { pref, firstChild: field, } = input;
+	const { pref, } = input, field = input.querySelector(':scope>.value-input');
 	switch (pref.type) {
 		case "bool":
 			field.checked = value;
@@ -163,7 +164,7 @@ function setInputValue(input, value) {
 }
 
 function getInputValue(input) {
-	const { pref, firstChild: field, } = input;
+	const { pref, } = input, field = input.querySelector(':scope>.value-input');
 	switch (pref.type) {
 		case "control":
 			return field.dataset.value;

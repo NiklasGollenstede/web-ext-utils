@@ -34,8 +34,13 @@ input::selection, select::selection {
 	background-color: #39f;
 	color: white;
 }
-input[disabled] {
-	opacity: 0.5;
+input[type="checkbox"]::after {
+	text-shadow: 0 0 5px green, 0 0 5px green, 0 0 5px green;
+}
+input[type="checkbox"]:not(:checked)::after {
+	color: black;
+	text-shadow: 0 0 5px red, 0 0 5px red, 0 0 5px red;
+	font-weight: bold;
 }
 
 /* context menu */
