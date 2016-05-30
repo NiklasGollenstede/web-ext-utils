@@ -12,16 +12,16 @@ return function loadEditor({ host, options, onCommand, }) {
 			case 'remove-value-entry': {
 				const element = getParent(target, '.pref-container');
 				target.parentNode.remove();
-				saveInput(element);
 				setButtonDisabled(element);
+				saveInput(element);
 			} break;
 			case 'add-value-entry': {
 				const element = getParent(target, '.pref-container');
 				const container = element.querySelector('.values-container');
 				const row = container.appendChild(cloneInput(element.input));
 				element.pref.hasOwnProperty('addDefault') && setInputValue(row, element.pref.addDefault);
-				saveInput(row.querySelector('.value-input'));
 				setButtonDisabled(element);
+				saveInput(row.querySelector('.value-input'));
 			} break;
 			case 'value-input': {
 				if (target.dataset.type !== 'control') { return; }
@@ -44,6 +44,10 @@ return function loadEditor({ host, options, onCommand, }) {
 		if (!target.matches || !target.matches('.value-input, .value-input *')) { return; }
 		saveInput(getParent(target, '.value-input'));
 	});
+
+	if (!Array.isArray(options)) {
+		options = options.constructor.name === 'OptionsRoot' ? options.children : [ options, ];
+	}
 
 	displayPreferences(options, host);
 	return host;
@@ -174,10 +178,11 @@ function getInputValue(input) {
 			return field.checked ? pref.on : pref.off;
 		case "menulist":
 			return pref.options && pref.options[field.selectedIndex].value;
+		case "number":
 		case "integer":
 			return +field.value;
 		case "interval": {
-			return { from: field.firstChild.value, to: field.lastChild.value, };
+			return { from: +field.firstChild.value, to: +field.lastChild.value, };
 		} break;
 		case "label":
 			return undefined;
