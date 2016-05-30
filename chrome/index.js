@@ -1,22 +1,27 @@
 'use strict'; define('web-ext-utils/chrome', function() {
 
+const _chrome = (() => { try { return window.top.chrome; } catch (e) { try { return window.parent.chrome; } catch (e) { } } })() || chrome; // for Firefox
+
 const cache = new WeakMap;
 let storageShim, messageHandler;
 
-const urlPrefix = chrome.extension.getURL('.').slice(0, -1);
+const urlPrefix = _chrome.extension.getURL('.').slice(0, -1);
+const gecko = urlPrefix.startsWith('moz');
+const chromium = urlPrefix.startsWith('chrome');
 
 const API = {
 	wrapApi: wrap,
-	applications: {
-		gecko: urlPrefix.startsWith('moz'),
-		chromium: urlPrefix.startsWith('chrome'),
-	},
-	extension: chrome.extension,
+	applications: Object.freeze({
+		gecko, firefox: gecko,
+		chromium, chrome: chromium,
+		current: gecko ? 'firefox' : 'chrome',
+	}),
+	extension: _chrome.extension,
 	get messages() { return (messageHandler || (messageHandler = new MessageHandler)); },
-	get runtime() { return wrap(chrome.runtime); },
-	get storage() { return chrome.storage ? wrap(chrome.storage) : (storageShim || (storageShim = new StorageShim)); },
-	get tabs() { return wrap(chrome.tabs); },
-	get windows() { return wrap(chrome.windows); },
+	get runtime() { return wrap(_chrome.runtime); },
+	get storage() { return _chrome.storage ? wrap(_chrome.storage) : (storageShim || (storageShim = new StorageShim)); },
+	get tabs() { return wrap(_chrome.tabs); },
+	get windows() { return wrap(_chrome.windows); },
 };
 Object.keys(API).forEach(key => Object.defineProperty(API, key.replace(/^./, s => s.toUpperCase()), Object.getOwnPropertyDescriptor(API, key)));
 
@@ -46,7 +51,7 @@ function promisify(method, thisArg) {
 	return function() {
 		return new Promise((resolve, reject) => {
 			method.call(thisArg, ...arguments, function() {
-				const error = chrome.runtime.lastError || chrome.extension.lastError;
+				const error = _chrome.runtime.lastError || _chrome.extension.lastError;
 				return error ? reject(error) : resolve(...arguments);
 			});
 		});
@@ -55,11 +60,11 @@ function promisify(method, thisArg) {
 
 function StorageShim() {
 	console.log('chrome.storage is unavailable (in this context), fall back to sending messages to the background script');
-	const sendMessage = promisify(chrome.runtime.sendMessage, chrome.runtime);
+	const sendMessage = promisify(_chrome.runtime.sendMessage, _chrome.runtime);
 	const proxy = (area, method) => (query) => sendMessage({ name: 'storage', args: [ area, method, query, ], })
-	.then(({ error, value, }) => { console.log('storageShim', error, value); if (error) { throw error; } return value; });
+	.then(({ error, value, }) => { error = fromJson(error); console.log('storageShim', error, value); if (error) { throw error; } return value; });
 	const listeners = new Set;
-	chrome.runtime.onMessage.addListener(message => message && message.name === 'storage.onChanged' && listeners.forEach(listener => {
+	_chrome.runtime.onMessage.addListener(message => message && message.name === 'storage.onChanged' && listeners.forEach(listener => {
 		// console.log('got change', listener, message);
 		try { listener(message.change, message.area); } catch (error) { console.error('error in chrome.storage.onChanged', error); }
 	}));
@@ -91,7 +96,7 @@ class MessageHandler {
 	constructor() {
 		this._handlers = { };
 		this._listener = null;
-		this._sendMessage = promisify(chrome.runtime.sendMessage, chrome.runtime);
+		this._sendMessage = promisify(_chrome.runtime.sendMessage, _chrome.runtime);
 		this.addHandler = this.addHandler.bind(this);
 		this.removeHandler = this.removeHandler.bind(this);
 		this.request = this.request.bind(this);
@@ -136,11 +141,11 @@ class MessageHandler {
 			}
 		};
 
-		chrome.runtime.onMessage.addListener(this._listener);
+		_chrome.runtime.onMessage.addListener(this._listener);
 	}
 	_detatch() {
 		if (Object.keys(this.listeners).length || !this._listener) { return; }
-		chrome.runtime.onMessage.removeListener(this._listener);
+		_chrome.runtime.onMessage.removeListener(this._listener);
 		this._listener = null;
 	}
 }
@@ -162,6 +167,6 @@ function fromJson(string) {
 	});
 }
 
-return API;
+return Object.freeze(API);
 
 });
