@@ -126,7 +126,7 @@ class MessageHandler {
 				return;
 			}
 			try {
-				const value = this._handlers[name](...args);
+				const value = this._handlers[name].apply(sender, args);
 				if (value instanceof Promise) {
 					value.then(
 						value => reply({ value, }),

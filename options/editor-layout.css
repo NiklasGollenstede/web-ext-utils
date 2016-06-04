@@ -28,6 +28,7 @@ input, select {
 	outline: none;
 	border-radius: 3px;
 	padding: 2px 7px;
+	height: 25px;
 }
 input:focus, select:focus,
 input:active:focus, select:active:focus {
@@ -36,8 +37,8 @@ input:active:focus, select:active:focus {
 input[type="checkbox"] {
 	position: relative;
 	vertical-align: bottom;
-	width: 23px;
-	height: 23px;
+	width: 25px;
+	height: 25px;
 	margin: 0;
 	-webkit-appearance: none;
 	-moz-appearance: none;
@@ -46,8 +47,8 @@ input[type="checkbox"] {
 input[type="checkbox"]::after {
 	content: '\2713'; /* '✓' */
 	position: absolute;
-	left: 25%;
-	top: 0%;
+	left: 33%;
+	top: 8%;
 }
 input[type="checkbox"]:not(:checked)::after {
 	color: transparent;
@@ -63,8 +64,8 @@ input[disabled] {
 h1, h3 {
 	margin: 8px 0;
 }
-.value-container:not(:first-child) {
-	margin: 5px 0;
+.value-container {
+	margin-bottom: 5px;
 }
 .value-unit {
 	margin-left: 3px;
@@ -85,7 +86,7 @@ pre {
 }
 .add-value-entry, .remove-value-entry {
 	width: 25px;
-	height: 23px;
+	height: 25px;
 	margin-right: 5px;
 }
 
