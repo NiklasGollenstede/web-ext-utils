@@ -71,8 +71,8 @@ code {
     border-radius: 2px;
 }
 a[href] {
-	color: #ebf5ff;
+	color: #c5ffc7;
 }
 a[href]:visited {
-	color: #c5ffc7;
+	color: #ebf5ff;
 }

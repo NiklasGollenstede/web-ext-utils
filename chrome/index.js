@@ -18,6 +18,7 @@ const API = {
 	}),
 	extension: _chrome.extension,
 	get messages() { return (messageHandler || (messageHandler = new MessageHandler)); },
+	get notifications() { return wrap(_chrome.notifications); },
 	get runtime() { return wrap(_chrome.runtime); },
 	get storage() { return _chrome.storage ? wrap(_chrome.storage) : (storageShim || (storageShim = new StorageShim)); },
 	get tabs() { return wrap(_chrome.tabs); },
@@ -116,13 +117,18 @@ class MessageHandler {
 	request(name, ...args) {
 		return this._sendMessage({ name, args, }).then(({ error, value, }) => { if (error) { throw fromJson(error); } return value; });
 	}
+	post(name, ...args) {
+		return _chrome.runtime.sendMessage({ name, args, post: true, });
+	}
 	_attach() {
 		if (this._listener) { return; }
-		this._listener = ({ name, args, }, sender, reply) => {
+		this._listener = ({ name, args, post, }, sender, reply) => {
+			post && (reply = arg => 'error' in arg && console.error('Uncaught Error in post to handler for "'+ name +'":', arg.error));
+			const makeError = post ? x => x : toJson;
 			if (!this._handlers[name]) {
 				if (!this.isExclusiveMessageHandler) { return; }
-				reply({ error: toJson(new Error('Missing message handler for "'+ name +'"')), });
-				console.error('Rejected message request for "'+ name +'": no such handler.');
+				post && reply({ error: makeError(new Error('Missing message handler for "'+ name +'"')), });
+				console.error((post ? 'Ignore post to' : 'Rejected message request for') +' "'+ name +'": no such handler.');
 				return;
 			}
 			try {
@@ -130,14 +136,14 @@ class MessageHandler {
 				if (value instanceof Promise) {
 					value.then(
 						value => reply({ value, }),
-						error => reply({ error: toJson(error), })
+						error => reply({ error: makeError(error), })
 					);
 					return true;
 				} else {
 					reply({ value, });
 				}
 			} catch (error) {
-				reply({ error: toJson(error), });
+				reply({ error: makeError(error), });
 			}
 		};
 
