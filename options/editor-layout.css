@@ -34,6 +34,9 @@ input:focus, select:focus,
 input:active:focus, select:active:focus {
 	outline: none;
 }
+input:active:focus, select:active:focus {
+	transition-delay: 0.06s;
+}
 input[type="checkbox"] {
 	position: relative;
 	vertical-align: bottom;
@@ -92,6 +95,6 @@ pre {
 
 /* transitions */
 * {
-	transition-property: color, fill, background-color, border-color;
+	transition-property: color, fill, background-color, border-color, box-shadow;
 	transition-duration: 0.21s;
 }

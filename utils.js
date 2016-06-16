@@ -7,7 +7,7 @@ const matchPattern = (/^(?:(\*|http|https|file|ftp):\/\/(\*|(?:\*\.)?[^\/\*]+|)\
 function matchPatternToRegExp(pattern) {
 	const [ , sheme, host, path, ] = matchPattern.exec(pattern);
 	return new RegExp('^(?:'+
-		(sheme === '*' ? '(?:https?|ftp|file|ftp)' : sheme)
+		(sheme === '*' ? 'https?' : escape(sheme))
 		+':\/\/'+
 		escape(host).replace(/\\\*/g, '[^\/]*')
 		+'\/'+

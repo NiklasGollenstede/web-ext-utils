@@ -68,8 +68,13 @@ const styles = {
 			width: 48px;
 		}
 		.tab>.title {
-			position: relative;
-			top: -15px;
+			position: absolute;
+			top: 0px;
+			right: 0px;
+			left: 56px;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
 		}
 	`,
 	horizontal: `
@@ -101,8 +106,15 @@ const styles = {
 		}
 		.tab>.title {
 			position: relative;
-			top: -7px;
+			display: inline-block;
+			height: 100%;
+			line-height: 23px;
 			padding-left: 4px;
+			min-width: 6em;
+			max-width: 12em;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
 		}
 	`,
 	firefox: `
