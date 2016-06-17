@@ -109,9 +109,9 @@ function createInput(pref) {
 				type: pref.type,
 			},
 		}, [
-			createElement('input', { type: 'number', }),
+			createElement('input', { type: 'number', step: 'any', }),
 			createElement('b', { textContent: '  -  ', }),
-			createElement('input', { type: 'number', }),
+			createElement('input', { type: 'number', step: 'any', }),
 		])
 		: createElement('input', {
 			name: pref.name,
@@ -119,6 +119,7 @@ function createInput(pref) {
 			dataset: {
 				type: pref.type,
 			},
+			step: 'any',
 			type: {
 				control: 'button',
 				bool: 'checkbox',

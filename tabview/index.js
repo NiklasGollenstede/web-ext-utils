@@ -45,10 +45,12 @@ const styles = {
 		.content {
 			top: 0px; height: 100%;
 			right: 0px; width: calc(100% - 200px);
+			transition: width 0.16s;
 		}
 		.tabwrapper {
 			top: 0px; height: 100%;
 			left: 0px; width: 200px;
+			transition: width 0.16s;
 		}
 		.tablist {
 			padding-top: 54px;
@@ -57,6 +59,7 @@ const styles = {
 			margin-right: -17px;
 		}
 		.tab {
+			position: relative;
 			height: 54px;
 			line-height: 54px;
 			font-size: 24px;
@@ -75,6 +78,15 @@ const styles = {
 			overflow: hidden;
 			text-overflow: ellipsis;
 			white-space: nowrap;
+		}
+
+		@media (max-width: 900px) {
+			.tabwrapper {
+				width: 60px;
+			}
+			.content {
+				width: calc(100% - 60px);
+			}
 		}
 	`,
 	horizontal: `

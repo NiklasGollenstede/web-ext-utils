@@ -1,5 +1,5 @@
 /* general */
-::selection {
+::selection, ::-moz-selection {
 	background-color: black;
 	color: #c5ffc7;
 	fill: #c5ffc7;
@@ -40,7 +40,6 @@ input[type="checkbox"]::after {
 input[type="checkbox"]:not(:checked)::after {
 	color: black;
 	text-shadow: 0 0 5px red, 0 0 5px red, 0 0 5px red;
-	font-weight: bold;
 }
 
 /* context menu */

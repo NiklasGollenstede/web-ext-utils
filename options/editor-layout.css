@@ -50,8 +50,10 @@ input[type="checkbox"] {
 input[type="checkbox"]::after {
 	content: '\2713'; /* '✓' */
 	position: absolute;
-	left: 33%;
-	top: 8%;
+	font-weight: bold;
+	font-size: 20px;
+	top: -14%;
+	left: 18%;
 }
 input[type="checkbox"]:not(:checked)::after {
 	color: transparent;
@@ -75,7 +77,7 @@ h1, h3 {
 }
 
 /* sizes */
-input[type="text"] {
+input[type="text"]:not([data-type="keybordKey"]) {
 	min-width: 500px;
 }
 pre {
