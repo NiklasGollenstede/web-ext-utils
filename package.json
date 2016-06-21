@@ -2,6 +2,7 @@
 	"author": "Niklas Gollenstede",
 	"description": "a collection of utilities to use with web extensions",
 	"name": "web-ext-utils",
+	"license": "MPL-2.0",
 	"repository" : {
 		"type" : "git",
 		"url" : "git@github.com:NiklasGollenstede/stop-fingerprinting.git"
