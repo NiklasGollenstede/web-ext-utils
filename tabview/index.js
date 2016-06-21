@@ -147,7 +147,7 @@ const styles = {
 	`,
 };
 
-return class Home {
+return class TabView {
 	constructor({ host, content, tabs, active, onSelect, style, }) {
 		this.style = host.appendChild(document.createElement('style'));
 		this.style.scoped = true;
@@ -177,7 +177,7 @@ return class Home {
 	add({ id, title, icon, position = Infinity, data, }) {
 		const tab = this.tablist.insertBefore(document.createElement('div'), this.tablist.children[position]);
 		tab.className = 'tab';
-		tab.dataset.id = id;
+		tab.id = tab.dataset.id = id;
 		tab.icon = tab.appendChild(document.createElement('div'));
 		tab.icon.classList = 'icon';
 		setIcon(tab, icon);

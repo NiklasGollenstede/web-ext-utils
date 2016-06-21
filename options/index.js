@@ -111,6 +111,7 @@ class OptionList extends Array {
 		items.forEach((item, index, array) => this[item.name] = this[index] = item);
 		return Object.freeze(this);
 	}
+	static get [Symbol.species]() { return Array; }
 }
 
 class ValueList {

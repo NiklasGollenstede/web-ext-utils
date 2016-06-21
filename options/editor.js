@@ -1,8 +1,4 @@
-'use strict'; define('web-ext-utils/options/editor', [
-	'es6lib'
-], function(
-	{ dom: { createElement, getParent, }, }
-) {
+'use strict'; define('web-ext-utils/options/editor', function() {
 
 return function loadEditor({ host, options, onCommand, }) {
 
@@ -198,6 +194,36 @@ function cloneInput(input) {
 	return clone;
 }
 
+function getParent(element, selector) {
+	while (element && (!element.matches || !element.matches(selector))) { element = element.parentNode; }
+	return element;
+}
+
+function createElement(tagName, properties, childList) {
+	const element = (this || window).document.createElement(tagName);
+	if (Array.isArray(properties)) { childList = properties; properties = null; }
+	properties && copyProperties(element, properties);
+	for (var i = 0; childList && i < childList.length; ++i) {
+		childList[i] && element.appendChild(childList[i]);
+	}
+	return element;
+}
+
+function copyProperties(target, source) {
+	source && Object.keys(source).forEach(function(key) {
+		if (Object.prototype.toString.call(source[key]) === '[object Object]') {
+			!target[key] && (target[key] = { });
+			copyProperties(target[key], source[key]);
+		} else if (Array.isArray(source[key])) {
+			!target[key] && (target[key] = [ ]);
+			copyProperties(target[key], source[key]);
+		} else {
+			target[key] = source[key];
+		}
+	});
+	return target;
+}
+
 function sanatize(html) {
 	const allowed = /^(a|b|big|br|code|div|i|p|pre|li|ol|ul|span|sup|sub|tt)$/;
 	return html.replace(
@@ -235,7 +261,7 @@ function displayPreferences(prefs, host, parent = null) {
 					minLength: pref.minLength || 0,
 				},
 			}),
-			pref.children.length && displayPreferences(
+			pref.children.filter(({ type, }) => type !== 'hidden').length && displayPreferences(
 				pref.children,
 				createElement('fieldset', {
 					className: 'pref-children'+ (pref.type === 'label' || pref.values.is ? '' : 'disabled'),

@@ -1,5 +1,10 @@
 /* general */
-::selection, ::-moz-selection {
+::selection {
+	background-color: black;
+	color: #c5ffc7;
+	fill: #c5ffc7;
+}
+::-moz-selection {
 	background-color: black;
 	color: #c5ffc7;
 	fill: #c5ffc7;
