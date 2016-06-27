@@ -15,6 +15,7 @@ body {
 }
 
 /* invalid inputs */
+textarea.invalid, .invalid textarea,
 input.invalid, .invalid input,
 select.invalid, .invalid select {
 	color: red;
@@ -22,7 +23,7 @@ select.invalid, .invalid select {
 }
 
 /* inputs */
-input, select {
+textarea, input, select {
 	border-style: solid;
 	border-width: 1px;
 	outline: none;
@@ -30,11 +31,11 @@ input, select {
 	padding: 2px 7px;
 	height: 25px;
 }
-input:focus, select:focus,
-input:active:focus, select:active:focus {
+textarea:focus, input:focus, select:focus,
+textarea:focus, input:active:focus, select:active:focus {
 	outline: none;
 }
-input:active:focus, select:active:focus {
+textarea:active:focus, input:active:focus, select:active:focus {
 	transition-delay: 0.06s;
 }
 input[type="checkbox"] {
@@ -77,8 +78,12 @@ h1, h3 {
 }
 
 /* sizes */
-input[type="text"]:not([data-type="keybordKey"]) {
+textarea, input[type="text"]:not([data-type="keybordKey"]) {
 	min-width: 500px;
+}
+textarea {
+	min-height: 4.5em;
+	max-width: 100%;
 }
 pre {
 	white-space: pre-wrap;
@@ -99,4 +104,37 @@ pre {
 * {
 	transition-property: color, fill, background-color, border-color, box-shadow;
 	transition-duration: 0.21s;
+}
+
+/* collapsing lists */
+.toggle-switch>* {
+	display: inline-block;
+}
+input.toggle-switch ~ label.toggle-switch {
+	cursor: pointer;
+}
+.toggle-marker {
+	padding-right: 5px;
+	transition: transform 0.12s;
+	transform-origin: 40% 50%;
+	user-select: none;
+	-moz-user-select: none;
+	-webkit-user-select: none;
+}
+input.toggle-switch:checked ~ *>.toggle-marker {
+	transform: rotate(90deg);
+}
+input.toggle-switch { display: none; }
+input.toggle-switch ~ .toggle-target {
+	max-height: 0;
+	transform: scaleY(0.2);
+	transform-origin: top;
+	transition-property: max-height, transform;
+	transition-duration: 0.12s;
+	transition-timing-function: cubic-bezier(1,0,0,1);
+	overflow: hidden;
+}
+input.toggle-switch:checked ~ .toggle-target {
+	max-height: 50000px;
+	transform: scaleY(1);
 }

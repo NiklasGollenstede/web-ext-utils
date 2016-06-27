@@ -27,6 +27,8 @@ class Option {
 		_default.description && (this.description = _default.description +'');
 		_default.unit && (this.unit = _default.unit +'');
 		_default.addDefault && (this.addDefault = _default.addDefault);
+		_default.expanded != null && (this.expanded = !!_default.expanded);
+		_default.placeholder && (this.placeholder = _default.placeholder +'');
 		_default.options && (this.options = Object.freeze(
 			Array.prototype.filter.call(_default.options, option => option && option.label)
 			.map(({ label, value, }) => Object.freeze({ label, value, }))
@@ -163,14 +165,14 @@ class Restriction {
 		this._parent = parent;
 		const from = this.from = restrict.from;
 		const to = this.to = restrict.to;
-		const match = this.match = restrict.match;
+		const match = this.match = restrict.match && Object.freeze({
+			exp: restrict.match.exp || new RegExp(restrict.match.source, restrict.match.flags),
+			message: restrict.match.message || 'This value must match '+ (restrict.match.exp || new RegExp(restrict.match.source, restrict.match.flags)),
+		});
 		const type = this.type = restrict.type;
 		const isRegExp = this.isRegExp = restrict.isRegExp;
 		const unique = this.unique = Object.freeze(restrict.unique);
 		const checks = [ ];
-		match && !match.exp && (match.exp = RegExp(match.source, match.flags));
-		match && !match.message && (match.message = 'This value must match '+ match);
-		Object.freeze(match);
 		restrict.hasOwnProperty('from') && checks.push(value => value < from && ('This value must be at least '+ from));
 		restrict.hasOwnProperty('to') && checks.push(value => value > to && ('This value can be at most '+ to));
 		match && checks.push(value => !match.exp.test(value) && match.message);

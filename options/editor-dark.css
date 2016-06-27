@@ -22,20 +22,20 @@ html, body {
 }
 
 /* inputs */
-input, select {
+textarea, input, select {
 	color: white;
 	border-color: white;
 	background-color: black;
 }
-input:focus, select:focus {
+textarea:focus, input:focus, select:focus {
 	border-color: #7d7dff;
 	box-shadow: 0 0 6px 0 #4444ff;
 }
-input:active:focus, select:active:focus {
+textarea:active:focus, input:active:focus, select:active:focus {
 	border-color: #0000f0;
 	box-shadow: 0 0 2px 1px blue;
 }
-input::selection, select::selection {
+textarea::selection, input::selection, select::selection {
 	background-color: #39f;
 	color: white;
 }

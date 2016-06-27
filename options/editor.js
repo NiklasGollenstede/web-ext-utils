@@ -77,6 +77,47 @@ function saveInput(target) {
 }
 
 function createInput(pref) {
+	const inputProps = {
+		name: pref.name,
+		className: 'value-input',
+		dataset: {
+			type: pref.type,
+		},
+		placeholder: pref.placeholder || '',
+	};
+	let input; switch (pref.type) {
+		case 'menulist': {
+			input = createElement('select', inputProps, (pref.options || [ ]).map(option => createElement('option', {
+				value: option.value,
+				textContent: option.label,
+			})));
+		} break;
+		case 'interval': {
+			input = createElement('span', inputProps, [
+				createElement('input', { type: 'number', step: 'any', }),
+				createElement('b', { textContent: '  -  ', }),
+				createElement('input', { type: 'number', step: 'any', }),
+			]);
+		} break;
+		case 'text': {
+			input = createElement('textarea', inputProps);
+		} break;
+		default: {
+			input = createElement('input', Object.assign(inputProps, {
+				step: pref.type === 'integer' ? 1 : 'any',
+				type: {
+					control: 'button',
+					bool: 'checkbox',
+					boolInt: 'checkbox',
+					integer: 'number',
+					string: 'text',
+					keybordKey: 'text',
+					color: 'color',
+					label: 'hidden',
+				}[pref.type] || pref.type,
+			}));
+		}
+	}
 	return Object.assign(createElement('div', {
 		className: 'value-container',
 	}, [
@@ -86,47 +127,7 @@ function createInput(pref) {
 			value: '-',
 			className: 'remove-value-entry',
 		}),
-		pref.type === 'menulist'
-		? createElement('select', {
-			name: pref.name,
-			className: 'value-input',
-			dataset: {
-				type: pref.type,
-			},
-		}, (pref.options || [ ]).map(option => createElement('option', {
-			value: option.value,
-			textContent: option.label,
-		})))
-		: pref.type === 'interval'
-		? createElement('span', {
-			name: pref.name,
-			className: 'value-input',
-			dataset: {
-				type: pref.type,
-			},
-		}, [
-			createElement('input', { type: 'number', step: 'any', }),
-			createElement('b', { textContent: '  -  ', }),
-			createElement('input', { type: 'number', step: 'any', }),
-		])
-		: createElement('input', {
-			name: pref.name,
-			className: 'value-input',
-			dataset: {
-				type: pref.type,
-			},
-			step: 'any',
-			type: {
-				control: 'button',
-				bool: 'checkbox',
-				boolInt: 'checkbox',
-				integer: 'number',
-				string: 'text',
-				keybordKey: 'text',
-				color: 'color',
-				label: 'hidden',
-			}[pref.type] || pref.type,
-		}),
+		input,
 		pref.unit && createElement('span', {
 			textContent: pref.unit,
 			className: 'value-unit'
@@ -237,37 +238,51 @@ function displayPreferences(prefs, host, parent = null) {
 		if (pref.type === 'hidden') { return; }
 
 		const input = createInput(pref);
+		const labelId = pref.expanded != null && 'l'+ Math.random().toString(36).slice(2);
 
 		let valuesContainer;
 		const element = Object.assign(host.appendChild(createElement('div', {
-			className: 'pref-container type-'+ pref.type,
+			className: 'pref-container type-'+ pref.type +' pref-name-'+ pref.name,
 		}, [
-			createElement('h1', {
-				textContent: pref.title || pref.name,
+			labelId && createElement('input', {
+				type: 'checkbox', className: 'toggle-switch', id: labelId, checked: pref.expanded,
 			}),
-			pref.description && createElement('h3', {
-				innerHTML: sanatize(pref.description),
-			}),
-			valuesContainer = createElement('div', {
-				className: 'values-container',
-			}),
-			pref.values.max > pref.values.min && createElement('input', {
-				title: 'add a value',
-				type: 'button',
-				value: '+',
-				className: 'add-value-entry',
-				dataset: {
-					maxLength: pref.maxLength,
-					minLength: pref.minLength || 0,
-				},
-			}),
-			pref.children.filter(({ type, }) => type !== 'hidden').length && displayPreferences(
-				pref.children,
-				createElement('fieldset', {
-					className: 'pref-children'+ (pref.type === 'label' || pref.values.is ? '' : 'disabled'),
+			createElement('label', {
+				className: 'toggle-switch', htmlFor: labelId,
+			}, [
+				labelId && createElement('h1', {
+					textContent: '➤', className: 'toggle-marker',
 				}),
-				pref
-			),
+				createElement('h1', {
+					textContent: pref.title || pref.name,
+				}),
+			]),
+
+			createElement('div', { className: 'toggle-target', }, [
+				pref.description && createElement('h3', {
+					innerHTML: sanatize(pref.description), classList: 'description',
+				}),
+				valuesContainer = createElement('div', {
+					className: 'values-container',
+				}),
+				pref.values.max > pref.values.min && createElement('input', {
+					title: 'add a value',
+					type: 'button',
+					value: '+',
+					className: 'add-value-entry',
+					dataset: {
+						maxLength: pref.maxLength,
+						minLength: pref.minLength || 0,
+					},
+				}),
+				pref.children.filter(({ type, }) => type !== 'hidden').length && displayPreferences(
+					pref.children,
+					createElement('fieldset', {
+						className: 'pref-children'+ (pref.type === 'label' || pref.values.is ? '' : 'disabled'),
+					}),
+					pref
+				),
+			]),
 		])), { pref, input, });
 
 		pref.whenChange((_, { current: values, }) => {
