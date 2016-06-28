@@ -50,12 +50,22 @@ return function loadEditor({ host, options, onCommand, }) {
 };
 
 function setButtonDisabled(element) {
-	const container = element.querySelector(':scope>.values-container');
-	const add = element.querySelector(':scope>.add-value-entry');
+	const container = element.querySelector(':scope>*>.values-container');
+	const add = element.querySelector(':scope>*>.add-value-entry');
 	if (!add) { return; }
 	const { min, max, } = element.pref.values, length = container.children.length;
-	add.disabled = length >= max;
-	Array.prototype.forEach.call(container.querySelectorAll('.remove-value-entry'), remove => remove.disabled = length <= min);
+	fieldEnabled(add, 'count', length < max);
+	Array.prototype.forEach.call(container.querySelectorAll('.remove-value-entry'), remove => fieldEnabled(remove, 'count', length > min));
+}
+
+function fieldEnabled(field, reason, enabled) {
+	const exp = new RegExp(String.raw`${ reason };|$`);
+	let reasons = (field.getAttribute('disabled') || '').replace(exp, () => enabled ? '' : reason +';');
+	field[(reasons ? 'set' : 'remove') +'Attribute']('disabled', reasons);
+}
+
+function fieldsEnabled(root, reason, enabled) {
+	Array.prototype.forEach.call(root.querySelectorAll('textarea, input, select'), field => fieldEnabled(field, reason, enabled));
 }
 
 function saveInput(target) {
@@ -95,7 +105,10 @@ function createInput(pref) {
 		case 'interval': {
 			input = createElement('span', inputProps, [
 				createElement('input', { type: 'number', step: 'any', }),
-				createElement('b', { textContent: '  -  ', }),
+				createElement('span', {
+					innerHTML: sanatize(pref.infix || '  -  '),
+					className: 'value-infix'
+				}),
 				createElement('input', { type: 'number', step: 'any', }),
 			]);
 		} break;
@@ -127,10 +140,14 @@ function createInput(pref) {
 			value: '-',
 			className: 'remove-value-entry',
 		}),
+		pref.prefix && createElement('span', {
+			innerHTML: sanatize(pref.prefix),
+			className: 'value-prefix'
+		}),
 		input,
-		pref.unit && createElement('span', {
-			textContent: pref.unit,
-			className: 'value-unit'
+		pref.suffix && createElement('span', {
+			innerHTML: sanatize(pref.suffix),
+			className: 'value-suffix'
 		}),
 	]), {
 		pref,
@@ -150,8 +167,10 @@ function setInputValue(input, value) {
 			field.selectedIndex = (pref.options || []).findIndex(option => option.value === value);
 		} break;
 		case "interval": {
-			field.firstChild.value = value && value.from || 0;
-			field.lastChild.value = value && value.to || 0;
+			const from = value && value.from || 0;
+			from !== field.firstChild.value && (field.firstChild.value = from);
+			const to = value && value.to || 0;
+			to !== field.lastChild.value && (field.lastChild.value = to);
 		} break;
 		case "label":
 			break;
@@ -159,7 +178,7 @@ function setInputValue(input, value) {
 			field.dataset.value = value;
 			/* falls through */
 		default:
-			field.value = value;
+			value !== field.value && (field.value = value);
 			break;
 	}
 	return input;
@@ -240,7 +259,7 @@ function displayPreferences(prefs, host, parent = null) {
 		const input = createInput(pref);
 		const labelId = pref.expanded != null && 'l'+ Math.random().toString(36).slice(2);
 
-		let valuesContainer;
+		let valuesContainer, childrenContainer;
 		const element = Object.assign(host.appendChild(createElement('div', {
 			className: 'pref-container type-'+ pref.type +' pref-name-'+ pref.name,
 		}, [
@@ -275,11 +294,9 @@ function displayPreferences(prefs, host, parent = null) {
 						minLength: pref.minLength || 0,
 					},
 				}),
-				pref.children.filter(({ type, }) => type !== 'hidden').length && displayPreferences(
+				childrenContainer = pref.children.filter(({ type, }) => type !== 'hidden').length && displayPreferences(
 					pref.children,
-					createElement('fieldset', {
-						className: 'pref-children'+ (pref.type === 'label' || pref.values.is ? '' : 'disabled'),
-					}),
+					createElement('fieldset', { className: 'pref-children', }),
 					pref
 				),
 			]),
@@ -289,6 +306,11 @@ function displayPreferences(prefs, host, parent = null) {
 			while (valuesContainer.children.length < values.length) { valuesContainer.appendChild(cloneInput(input)); }
 			while (valuesContainer.children.length > values.length) { valuesContainer.lastChild.remove(); }
 			values.forEach((value, index) => setInputValue(valuesContainer.children[index], value));
+		});
+
+		childrenContainer && pref.type !== 'label' && pref.when({
+			true: () => fieldsEnabled(childrenContainer, pref.path, true),
+			false: () => fieldsEnabled(childrenContainer, pref.path, false),
 		});
 
 		setButtonDisabled(element);

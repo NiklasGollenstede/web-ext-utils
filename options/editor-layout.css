@@ -38,6 +38,9 @@ textarea:focus, input:active:focus, select:active:focus {
 textarea:active:focus, input:active:focus, select:active:focus {
 	transition-delay: 0.06s;
 }
+textarea[disabled], input[disabled], select[disabled] {
+	opacity: 0.65;
+}
 input[type="checkbox"] {
 	position: relative;
 	vertical-align: bottom;
@@ -58,11 +61,11 @@ input[type="checkbox"]::after {
 }
 input[type="checkbox"]:not(:checked)::after {
 	color: transparent;
+	content: '\2717'; /* '✗' */
+	top: -18%;
+	left: 14%;
 }
-input[disabled] {
-	opacity: 0.5;
-}
-.add-value-entry[disabled] {
+.add-value-entry[disabled*='count;'] {
 	display: none;
 }
 
@@ -70,11 +73,17 @@ input[disabled] {
 h1, h3 {
 	margin: 8px 0;
 }
-.value-container {
+.value-container, .add-value-entry {
 	margin-bottom: 5px;
 }
-.value-unit {
-	margin-left: 3px;
+.value-prefix {
+	padding: 0 6px;
+}
+.value-infix {
+	padding: 0 6px;
+}
+.value-suffix {
+	padding: 0 6px;
 }
 
 /* sizes */
@@ -90,9 +99,6 @@ pre {
 }
 .value-input[data-type="interval"] input {
 	width: 100px;
-}
-.value-input[data-type="interval"] b {
-	padding: 0 6px;
 }
 .add-value-entry, .remove-value-entry {
 	width: 25px;

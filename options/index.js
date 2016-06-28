@@ -25,7 +25,9 @@ class Option {
 		_default.type && (this.type = _default.type +'');
 		_default.title && (this.title = _default.title +'');
 		_default.description && (this.description = _default.description +'');
-		_default.unit && (this.unit = _default.unit +'');
+		_default.prefix && (this.prefix = _default.prefix +'');
+		_default.infix && (this.infix = _default.infix +'');
+		_default.suffix && (this.suffix = _default.suffix +'');
 		_default.addDefault && (this.addDefault = _default.addDefault);
 		_default.expanded != null && (this.expanded = !!_default.expanded);
 		_default.placeholder && (this.placeholder = _default.placeholder +'');
