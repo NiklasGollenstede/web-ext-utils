@@ -70,8 +70,14 @@ input[type="checkbox"]:not(:checked)::after {
 }
 
 /* spacing */
-h1, h3 {
-	margin: 8px 0;
+h1 {
+	margin: 8px 0   0   0;
+}
+h3 {
+	margin: 3px 0   8px 0;
+}
+pre {
+	margin: 0;
 }
 .value-container, .add-value-entry {
 	margin-bottom: 5px;
