@@ -1,4 +1,4 @@
-'use strict'; define('web-ext-utils/options/editor', function() {
+define('web-ext-utils/options/editor', function() { 'use strict';
 
 return function loadEditor({ host, options, onCommand, }) {
 
@@ -65,7 +65,7 @@ function fieldEnabled(field, reason, enabled) {
 }
 
 function fieldsEnabled(root, reason, enabled) {
-	Array.prototype.forEach.call(root.querySelectorAll('textarea, input, select'), field => fieldEnabled(field, reason, enabled));
+	Array.prototype.forEach.call(root.querySelectorAll('textarea, input:not(.toggle-switch), select'), field => fieldEnabled(field, reason, enabled));
 }
 
 function saveInput(target) {
@@ -308,7 +308,7 @@ function displayPreferences(prefs, host, parent = null) {
 			values.forEach((value, index) => setInputValue(valuesContainer.children[index], value));
 		});
 
-		childrenContainer && pref.type !== 'label' && pref.when({
+		childrenContainer && pref.when({
 			true: () => fieldsEnabled(childrenContainer, pref.path, true),
 			false: () => fieldsEnabled(childrenContainer, pref.path, false),
 		});

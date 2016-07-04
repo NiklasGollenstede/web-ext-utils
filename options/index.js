@@ -1,6 +1,4 @@
-'use strict'; define('web-ext-utils/options', [
-], function(
-) {
+define('web-ext-utils/options', function() { 'use strict';
 
 let context = null; // a OptionsRoot during its constrution
 
@@ -168,7 +166,7 @@ class Restriction {
 		const from = this.from = restrict.from;
 		const to = this.to = restrict.to;
 		const match = this.match = restrict.match && Object.freeze({
-			exp: restrict.match.exp || new RegExp(restrict.match.source, restrict.match.flags),
+			exp: restrict.match.exp ? new RegExp(restrict.match.exp) : new RegExp(restrict.match.source, restrict.match.flags),
 			message: restrict.match.message || 'This value must match '+ (restrict.match.exp || new RegExp(restrict.match.source, restrict.match.flags)),
 		});
 		const type = this.type = restrict.type;
@@ -302,7 +300,7 @@ return class OptionsRoot {
 	}
 
 	resetAll() {
-		return this._shadow.resetAll();
+		return this.storage.remove(Array.from(this.options.keys()));
 	}
 
 	onAnyChange() {
