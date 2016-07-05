@@ -2,7 +2,7 @@ define('web-ext-utils/options', function() { 'use strict';
 
 let context = null; // a OptionsRoot during its constrution
 
-const Defaults = new WeakMap;
+const Models = new WeakMap;
 const Values = new WeakMap;
 const OnTrue = new WeakMap;
 const OnFalse = new WeakMap;
@@ -15,37 +15,37 @@ const Storage = new WeakMap;
 const _uniqueCache = new WeakMap;
 
 class Option {
-	constructor(_default, parent) {
-		Defaults.set(this, _default);
+	constructor(model, parent) {
+		Models.set(this, model);
 		this.parent = parent;
-		this.path = (parent ? parent.path +'.' : '') + (_default.name || '');
-		_default.name && (this.name = _default.name +'');
-		_default.type && (this.type = _default.type +'');
-		_default.title && (this.title = _default.title +'');
-		_default.description && (this.description = _default.description +'');
-		_default.prefix && (this.prefix = _default.prefix +'');
-		_default.infix && (this.infix = _default.infix +'');
-		_default.suffix && (this.suffix = _default.suffix +'');
-		_default.addDefault && (this.addDefault = _default.addDefault);
-		_default.expanded != null && (this.expanded = !!_default.expanded);
-		_default.placeholder && (this.placeholder = _default.placeholder +'');
-		_default.options && (this.options = Object.freeze(
-			Array.prototype.filter.call(_default.options, option => option && option.label)
+		this.path = (parent ? parent.path +'.' : '') + (model.name || '');
+		model.name && (this.name = model.name +'');
+		model.type && (this.type = model.type +'');
+		model.title && (this.title = model.title +'');
+		model.description && (this.description = model.description +'');
+		model.prefix && (this.prefix = model.prefix +'');
+		model.infix && (this.infix = model.infix +'');
+		model.suffix && (this.suffix = model.suffix +'');
+		model.addDefault && (this.addDefault = model.addDefault);
+		model.expanded != null && (this.expanded = !!model.expanded);
+		model.placeholder && (this.placeholder = model.placeholder +'');
+		model.options && (this.options = Object.freeze(
+			Array.prototype.filter.call(model.options, option => option && option.label)
 			.map(({ label, value, }) => Object.freeze({ label, value, }))
 		));
-		if (!_default.hasOwnProperty('default')) {
+		if (!model.hasOwnProperty('default')) {
 			this.defaults = Object.freeze([ ]);
-		} else if (Array.isArray(_default.default)) {
-			this.defaults = Object.freeze(_default.default.map(Object.freeze));
-			this.default = _default.default[0];
+		} else if (Array.isArray(model.default)) {
+			this.defaults = Object.freeze(model.default.map(Object.freeze));
+			this.default = model.default[0];
 		} else {
-			this.default = Object.freeze(_default.default);
+			this.default = Object.freeze(model.default);
 			this.defaults = Object.freeze([ this.default ]);
 		}
 
-		_default.restrict && (this.restrict = _default.restrict === 'inherit' ? parent.restrict : new Restriction(this, _default.restrict));
+		model.restrict && (this.restrict = model.restrict === 'inherit' ? parent.restrict : new Restriction(this, model.restrict));
 
-		this.children = new OptionList((_default.children || [ ]).map(child => new Option(child, this)), this);
+		this.children = new OptionList((model.children || [ ]).map(model => new Option(model, this)), this);
 
 		context.options.set(this.path, this);
 		return Object.freeze(this);
@@ -123,9 +123,9 @@ class ValueList {
 
 		this.key = context.prefix + this.parent.path;
 		Values.set(this, Object.freeze(values));
-		const _default = Defaults.get(parent);
-		this.max = _default.hasOwnProperty('maxLength') ? +_default.maxLength : 1;
-		this.min = _default.hasOwnProperty('minLength') ? +_default.minLength : +!_default.hasOwnProperty('maxLength');
+		const model = Models.get(parent);
+		this.max = model.hasOwnProperty('maxLength') ? +model.maxLength : 1;
+		this.min = model.hasOwnProperty('minLength') ? +model.minLength : +!model.hasOwnProperty('maxLength');
 		return Object.freeze(this);
 	}
 	get current() { return Values.get(this); }
@@ -260,10 +260,10 @@ function inContext(ctx, callback) {
 }
 
 return class OptionsRoot {
-	constructor({ defaults, prefix, storage, addChangeListener, removeChangeListener, }) {
+	constructor({ model, prefix, storage, addChangeListener, removeChangeListener, }) {
 		const options = this.options = new Map;
 		this.prefix = prefix; this.storage = storage;
-		inContext(this, () => this._shadow = new Option({ children: defaults, }, null));
+		inContext(this, () => this._shadow = new Option({ children: Array.isArray(model) ? model : [ model, ], }, null));
 		this.children = this._shadow.children;
 		this.onChange = this.onChange.bind(this);
 		this._removeChangeListener = removeChangeListener;
