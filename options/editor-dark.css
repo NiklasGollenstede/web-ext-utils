@@ -46,6 +46,11 @@ input[type="checkbox"]:not(:checked)::after {
 	color: black;
 	text-shadow: 0 0 5px red, 0 0 5px red, 0 0 5px red;
 }
+input[type="checkbox"]:not([disabled]):hover,
+input[type="button"]:not([disabled]):hover,
+button:not([disabled]):hover {
+	border-color: #7d7dff;
+}
 
 /* context menu */
 .popup-menu, .submenu {

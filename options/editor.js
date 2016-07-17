@@ -50,6 +50,9 @@ return function loadEditor({ host, options, onCommand, }) {
 };
 
 function setButtonDisabled(element) {
+	if (element.pref.model.disabled) {
+		fieldsEnabled(element, 'model', false);
+	}
 	const container = element.querySelector(':scope>*>.values-container');
 	const add = element.querySelector(':scope>*>.add-value-entry');
 	if (!add) { return; }
@@ -276,6 +279,13 @@ function displayPreferences(prefs, host, parent = null) {
 					textContent: pref.title || pref.name,
 				}),
 			]),
+			(pref.type !== 'label' && pref.type !== 'control' || pref.children.some(({ type, }) => type !== 'hidden' && type !== 'label' && type !== 'control'))
+			&& createElement('a', {
+				className: 'reset-values',
+				textContent: 'reset',
+				title: `Double click to reset this option and all it's children to their default values`,
+				ondblclick: ({ button, }) => !button && pref.resetAll(),
+			}),
 
 			createElement('div', { className: 'toggle-target', }, [
 				pref.description && createElement('h3', {
@@ -306,6 +316,7 @@ function displayPreferences(prefs, host, parent = null) {
 			while (valuesContainer.children.length < values.length) { valuesContainer.appendChild(cloneInput(input)); }
 			while (valuesContainer.children.length > values.length) { valuesContainer.lastChild.remove(); }
 			values.forEach((value, index) => setInputValue(valuesContainer.children[index], value));
+			setButtonDisabled(element);
 		});
 
 		childrenContainer && pref.when({

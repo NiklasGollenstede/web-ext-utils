@@ -2,7 +2,6 @@ define('web-ext-utils/options', function() { 'use strict';
 
 let context = null; // a OptionsRoot during its constrution
 
-const Models = new WeakMap;
 const Values = new WeakMap;
 const OnTrue = new WeakMap;
 const OnFalse = new WeakMap;
@@ -11,12 +10,12 @@ const OnAnyChange = new WeakMap;
 
 const callbackMaps = [ OnTrue, OnFalse, OnChange, OnAnyChange, ];
 
-const Storage = new WeakMap;
+const Contexts = new WeakMap;
 const _uniqueCache = new WeakMap;
 
 class Option {
 	constructor(model, parent) {
-		Models.set(this, model);
+		this.model = model;
 		this.parent = parent;
 		this.path = (parent ? parent.path +'.' : '') + (model.name || '');
 		model.name && (this.name = model.name +'');
@@ -48,6 +47,7 @@ class Option {
 		this.children = new OptionList((model.children || [ ]).map(model => new Option(model, this)), this);
 
 		context.options.set(this.path, this);
+		Contexts.set(this, context);
 		return Object.freeze(this);
 	}
 
@@ -57,8 +57,8 @@ class Option {
 	set values(values) { return Values.get(this).replace(values); }
 	reset() { return Values.get(this).reset(); }
 	resetAll() {
-		this.reset();
-		this.children.forEach(child => child.resetAll());
+		const ctx = Contexts.get(this), path = ctx.prefix + this.path;
+		return ctx.storage.remove(ctx.keys.filter(_=>_.startsWith(path)));
 	}
 
 	whenTrue(listener) {
@@ -119,11 +119,10 @@ class OptionList extends Array {
 class ValueList {
 	constructor(parent, values) {
 		this.parent = parent;
-		Storage.set(this, context.storage);
 
 		this.key = context.prefix + this.parent.path;
 		Values.set(this, Object.freeze(values));
-		const model = Models.get(parent);
+		const { model, } = parent;
 		this.max = model.hasOwnProperty('maxLength') ? +model.maxLength : 1;
 		this.min = model.hasOwnProperty('minLength') ? +model.minLength : +!model.hasOwnProperty('maxLength');
 		return Object.freeze(this);
@@ -137,14 +136,14 @@ class ValueList {
 		const values = Values.get(this).slice();
 		values[index] = value;
 		this.parent.restrict.validate(value, values, this.parent);
-		return Storage.get(this).set({ [this.key]: values, });
+		return Contexts.get(this.parent).storage.set({ [this.key]: values, });
 	}
 	replace(values) {
 		if (values.length < this.min || values.length > this.max) {
 			throw new Error('the number of values for the option "'+ this.key +'" must be between '+ this.min +' and '+ this.max);
 		}
 		this.parent.restrict && this.parent.restrict.validateAll(values, this.parent);
-		return Storage.get(this).set({ [this.key]: values, });
+		return Contexts.get(this.parent).storage.set({ [this.key]: values, });
 	}
 	splice(index, remove, ...insert) {
 		const values = Values.get(this).slice();
@@ -153,10 +152,10 @@ class ValueList {
 			throw new Error('the number of values for the option "'+ this.key +'" must be between '+ this.min +' and '+ this.max);
 		}
 		this.parent.restrict && this.parent.restrict.validateAll(insert, this.parent, index);
-		return Storage.get(this).set({ [this.key]: values, });
+		return Contexts.get(this.parent).storage.set({ [this.key]: values, });
 	}
 	reset() {
-		return Storage.get(this).remove(this.key);
+		return Contexts.get(this.parent).storage.remove(this.key);
 	}
 }
 
@@ -267,8 +266,9 @@ return class OptionsRoot {
 		this.children = this._shadow.children;
 		this.onChange = this.onChange.bind(this);
 		this._removeChangeListener = removeChangeListener;
+		this.keys = Array.from(this.options.keys()).map(path => prefix + path);
 
-		return storage.get(Array.from(options.keys()).map(path => prefix + path))
+		return storage.get(this.keys)
 		.then(data => inContext(this, () => {
 			const { hasOwnProperty, } = Object.prototype;
 			options.forEach(option => Values.set(option, new ValueList(
@@ -300,7 +300,7 @@ return class OptionsRoot {
 	}
 
 	resetAll() {
-		return this.storage.remove(Array.from(this.options.keys()));
+		return this.storage.remove(this.keys);
 	}
 
 	onAnyChange() {

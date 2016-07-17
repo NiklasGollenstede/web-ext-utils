@@ -114,7 +114,7 @@ pre {
 
 /* transitions */
 * {
-	transition-property: color, fill, background-color, border-color, box-shadow;
+	transition-property: color, fill, background-color, border-color, box-shadow, opacity;
 	transition-duration: 0.21s;
 }
 
@@ -149,4 +149,36 @@ input.toggle-switch ~ .toggle-target {
 input.toggle-switch:checked ~ .toggle-target {
 	max-height: 50000px;
 	transform: scaleY(1);
+}
+
+/* reset buttons */
+.pref-container:not(:hover)>.reset-values {
+	opacity: 0;
+	display: none; /* TODO: chrome only; */
+}
+.reset-values {
+	cursor: pointer;
+	transition-property: opacity;
+	transition-duration: 0.08s;
+    position: relative;
+    bottom: 0.35em;
+    left: 0.8em;
+    text-decoration: underline;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+}
+.reset-values::before {
+	content: '[';
+    left: -0.4em;
+}
+.reset-values::after {
+	content: ']';
+    right: -0.4em;
+}
+.reset-values::before,
+.reset-values::after {
+    position: absolute;
+    top: 0;
+    pointer-events: none;
 }
