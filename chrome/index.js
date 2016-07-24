@@ -5,18 +5,21 @@ const _chrome = (() => { try { return window.top.chrome; } catch (e) { try { ret
 const cache = new WeakMap;
 let storageShim, messageHandler;
 
-const urlPrefix = _chrome.extension.getURL('.').slice(0, -1);
-const gecko = urlPrefix.startsWith('moz');
-const chromium = urlPrefix.startsWith('chrome');
+const rootUrl = _chrome.extension.getURL('.').slice(0, -1);
+const gecko = rootUrl.startsWith('moz');
+const webkit = rootUrl.startsWith('chrome');
 
 const API = {
+	chrome: _chrome,
+	rootUrl, rootURL: rootUrl,
 	wrapApi: wrap,
 	applications: Object.freeze({
 		gecko, firefox: gecko,
-		chromium, chrome: chromium,
+		webkit, chrome: webkit, chromium: webkit, opera: webkit,
 		current: gecko ? 'firefox' : 'chrome',
 	}),
 	extension: _chrome.extension,
+	get browserAction() { return wrap(_chrome.browserAction); },
 	get messages() { return (messageHandler || (messageHandler = new MessageHandler)); },
 	get notifications() { return wrap(_chrome.notifications); },
 	get runtime() { return wrap(_chrome.runtime); },

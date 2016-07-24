@@ -25,7 +25,7 @@ class Option {
 		model.prefix && (this.prefix = model.prefix +'');
 		model.infix && (this.infix = model.infix +'');
 		model.suffix && (this.suffix = model.suffix +'');
-		model.addDefault && (this.addDefault = model.addDefault);
+		'addDefault' in model && (this.addDefault = model.addDefault);
 		model.expanded != null && (this.expanded = !!model.expanded);
 		model.placeholder && (this.placeholder = model.placeholder +'');
 		model.options && (this.options = Object.freeze(
@@ -168,17 +168,20 @@ class Restriction {
 			exp: restrict.match.exp ? new RegExp(restrict.match.exp) : new RegExp(restrict.match.source, restrict.match.flags),
 			message: restrict.match.message || 'This value must match '+ (restrict.match.exp || new RegExp(restrict.match.source, restrict.match.flags)),
 		});
+		const readOnly = this.readOnly = restrict.readOnly;
 		const type = this.type = restrict.type;
 		const isRegExp = this.isRegExp = restrict.isRegExp;
 		const unique = this.unique = Object.freeze(restrict.unique);
 		const checks = [ ];
+
+		readOnly && checks.push(() => 'This value is read only');
 		restrict.hasOwnProperty('from') && checks.push(value => value < from && ('This value must be at least '+ from));
 		restrict.hasOwnProperty('to') && checks.push(value => value > to && ('This value can be at most '+ to));
 		match && checks.push(value => !match.exp.test(value) && match.message);
 		type && checks.push(value => typeof value !== type && ('This value must be of type "'+ type +'" but is "'+ (typeof value) +'"'));
 		isRegExp && checks.push(value => void RegExp(value));
-		parent.type !== 'interval' && restrict.hasOwnProperty('unique') && (() => {
-			checks.push((value, values, option) => this._unique.map(other => {
+		parent.type !== 'interval' && restrict.hasOwnProperty('unique') && (_unique => {
+			checks.push((value, values, option) => (_unique || (_unique = getUniqueSet(unique, parent))).map(other => {
 				if (other === option) {
 					return values.filter(v => v === value).length > 1 && 'This value must be unique winthin this option';
 				}
@@ -186,6 +189,8 @@ class Restriction {
 			}).find(x => x));
 		})();
 		this.checks = Object.freeze(checks);
+		this.validate = this.validate;
+		this.validateAll = this.validateAll;
 		return Object.freeze(this);
 	}
 	validate(value, values, option) {
@@ -202,33 +207,30 @@ class Restriction {
 			throw error;
 		} });
 	}
-	get _unique() {
-		let options = _uniqueCache.get(this);
-		if (options) { return options; }
-		const paths = (typeof this.unique === 'string' ? [ this.unique, ] : this.unique || [ ]).map(path => path.split(/[\/\\]/));
-		const result = new Set;
-		paths.forEach(path => walk(this._parent, path));
-		options = Object.freeze(Array.from(result));
-		_uniqueCache.set(this, options);
-		return options;
+}
 
-		function walk(option, path) {
-			if (!path.length) { return result.add(option); }
-			const segment = path.shift();
-			switch (segment) {
-				case '.': {
-					walk(option, path);
-				} break;
-				case '..': {
-					walk(option.parent, path);
-				} break;
-				case '*': {
-					option.children.forEach(child => walk(child, path));
-				} break;
-				default: {
-					walk(option.children[segment], path);
-				} break;
-			}
+function getUniqueSet(unique, parent) {
+	const paths = (typeof unique === 'string' ? [ unique, ] : unique || [ ]).map(path => path.split(/[\/\\]/));
+	const result = new Set;
+	paths.forEach(path => walk(parent, path));
+	return Object.freeze(Array.from(result));
+
+	function walk(option, path) {
+		if (!path.length) { return result.add(option); }
+		const segment = path.shift();
+		switch (segment) {
+			case '.': {
+				walk(option, path);
+			} break;
+			case '..': {
+				walk(option.parent, path);
+			} break;
+			case '*': {
+				option.children.forEach(child => walk(child, path));
+			} break;
+			default: {
+				walk(option.children[segment], path);
+			} break;
 		}
 	}
 }
