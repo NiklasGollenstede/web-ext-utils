@@ -1,0 +1,23 @@
+
+.pref-title {
+	font-size: 120%;
+	font-weight: 400;
+}
+.pref-description {
+	font-size: 105%;
+	font-weight: 400;
+}
+
+.pref-children {
+	border: none;
+	padding: 0 0 0 12px;
+	margin: 0 0 0 12px;
+	border-left: 2px groove grey;
+}
+
+body {
+	max-width: 1000px;
+	margin-left: auto;
+	margin-right: auto;
+	padding: 0 8px;
+}

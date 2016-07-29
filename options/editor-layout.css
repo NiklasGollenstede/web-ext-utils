@@ -38,9 +38,6 @@ textarea:focus, input:active:focus, select:active:focus {
 textarea:active:focus, input:active:focus, select:active:focus {
 	transition-delay: 0.06s;
 }
-textarea[disabled], input[disabled], select[disabled] {
-	opacity: 0.65;
-}
 input[type="checkbox"] {
 	position: relative;
 	vertical-align: bottom;
@@ -70,12 +67,6 @@ input[type="checkbox"]:not(:checked)::after {
 }
 
 /* spacing */
-h1 {
-	margin: 8px 0   0   0;
-}
-h3 {
-	margin: 3px 0   8px 0;
-}
 pre {
 	margin: 0;
 }
@@ -93,6 +84,18 @@ pre {
 }
 
 /* sizes */
+.pref-title {
+	font-weight: 600;
+	font-size: 180%;
+	margin: 8px 0   3px 0;
+	display: inline-block;
+}
+.pref-description {
+	font-size: 117%;
+	font-weight: 500;
+	margin: 3px 0   8px 0;
+	display: inline-block;
+}
 textarea, input[type="text"]:not([data-type="keybordKey"]) {
 	min-width: 500px;
 }
@@ -126,9 +129,10 @@ input.toggle-switch ~ label.toggle-switch {
 	cursor: pointer;
 }
 .toggle-marker {
+	font-size: 165%;
 	padding-right: 5px;
 	transition: transform 0.12s;
-	transform-origin: 40% 50%;
+	transform-origin: 43% 57%;
 	user-select: none;
 	-moz-user-select: none;
 	-webkit-user-select: none;
@@ -161,7 +165,7 @@ input.toggle-switch:checked ~ .toggle-target {
 	transition-property: color;
 	transition-duration: 0.08s;
     position: relative;
-    bottom: 0.35em;
+    bottom: 0.1em;
     left: 0.8em;
     text-decoration: underline;
     user-select: none;

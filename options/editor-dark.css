@@ -51,6 +51,20 @@ input[type="button"]:not([disabled]):hover,
 button:not([disabled]):hover {
 	border-color: #7d7dff;
 }
+textarea[disabled], input[disabled], select[disabled] {
+	color: hsl(  0,  0%,  65%);
+	border-color: hsl(  0,  0%,  65%);
+	background-color: hsl(  0,  0%,  10%);
+	-webkit-user-select: none;
+	user-select: none;
+}
+select:not(:hover), _:-moz-tree-row(hover) { /* firefox only */
+    -moz-appearance: none;
+    padding-right: 25px;
+}
+input[type="number"]:not(:hover) { /* firefox only */
+	-moz-appearance: textfield;
+}
 
 /* context menu */
 .popup-menu, .submenu {

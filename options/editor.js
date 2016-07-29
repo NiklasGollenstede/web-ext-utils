@@ -272,11 +272,11 @@ function displayPreferences(prefs, host, parent = null) {
 			createElement('label', {
 				className: 'toggle-switch', htmlFor: labelId,
 			}, [
-				labelId && createElement('h1', {
+				labelId && createElement('span', {
 					textContent: '➤', className: 'toggle-marker',
 				}),
-				createElement('h1', {
-					textContent: pref.title || pref.name,
+				createElement('span', {
+					textContent: pref.title || pref.name, className: 'pref-title',
 				}),
 			]),
 			(pref.type !== 'label' && pref.type !== 'control' || pref.children.some(({ type, }) => type !== 'hidden' && type !== 'label' && type !== 'control'))
@@ -288,8 +288,8 @@ function displayPreferences(prefs, host, parent = null) {
 			}),
 
 			createElement('div', { className: 'toggle-target', }, [
-				pref.description && createElement('h3', {
-					innerHTML: sanatize(pref.description), classList: 'description',
+				pref.description && createElement('span', {
+					innerHTML: sanatize(pref.description), className: 'pref-description',
 				}),
 				valuesContainer = createElement('div', {
 					className: 'values-container',
