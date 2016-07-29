@@ -38,6 +38,9 @@ const styles = {
 			background-position: center center;
 			text-align: center;
 		}
+		.tab>.icon.missing {
+			display: none;
+		}
 		.tab>.title {
 		}
 	`,
@@ -86,6 +89,10 @@ const styles = {
 			}
 			.content {
 				width: calc(100% - 60px);
+			}
+			.tab .missing + .title {
+				left: 8px;
+				text-overflow: hidden;
 			}
 		}
 	`,
@@ -206,10 +213,13 @@ return class TabView {
 function setIcon(tab, icon) {
 	tab.icon.textContent = '';
 	tab.icon.style.backgroundImage = '';
+	tab.icon.classList.remove('missing');
 	if (typeof icon === 'string') {
 		tab.icon.style.backgroundImage = `url(${ icon })`;
 	} else if (icon instanceof Element) {
 		tab.icon.appendChild(icon);
+	} else {
+		tab.icon.classList.add('missing');
 	}
 }
 

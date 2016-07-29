@@ -153,12 +153,12 @@ input.toggle-switch:checked ~ .toggle-target {
 
 /* reset buttons */
 .pref-container:not(:hover)>.reset-values {
-	opacity: 0;
-	display: none; /* TODO: chrome only; */
+	color: transparent;
 }
 .reset-values {
 	cursor: pointer;
-	transition-property: opacity;
+	color: inherit;
+	transition-property: color;
 	transition-duration: 0.08s;
     position: relative;
     bottom: 0.35em;
