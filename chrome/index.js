@@ -62,14 +62,14 @@ function promisify(method, thisArg) {
 	};
 }
 
+// used in FF < 48
 function StorageShim() {
-	console.log('chrome.storage is unavailable (in this context), fall back to sending messages to the background script');
+	console.info('chrome.storage is unavailable (in this context), fall back to sending messages to the background script');
 	const sendMessage = promisify(_chrome.runtime.sendMessage, _chrome.runtime);
 	const proxy = (area, method) => (query) => sendMessage({ name: 'storage', args: [ area, method, query, ], })
-	.then(({ error, value, }) => { error = fromJson(error); console.log('storageShim', error, value); if (error) { throw error; } return value; });
+	.then(({ error, value, }) => { error = fromJson(error); if (error) { throw error; } return value; });
 	const listeners = new Set;
 	_chrome.runtime.onMessage.addListener(message => message && message.name === 'storage.onChanged' && listeners.forEach(listener => {
-		// console.log('got change', listener, message);
 		try { listener(message.change, message.area); } catch (error) { console.error('error in chrome.storage.onChanged', error); }
 	}));
 	return {

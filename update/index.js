@@ -68,7 +68,7 @@ const update = ({ path = 'update/', history = 'days', } = { }) => spawn(function
 			xhr.addEventListener('load', () => resolve(xhr.responseText));
 			xhr.addEventListener('error', () => resolve(null));
 			xhr.open('GET', chrome.extension.getURL(path + name));
-			xhr.send();
+			try { xhr.send(); } catch (_) { resolve(null); /* firefox bug */ }
 		});
 	}
 });

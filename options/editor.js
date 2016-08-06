@@ -21,7 +21,6 @@ return function loadEditor({ host, options, onCommand, }) {
 			} break;
 			case 'value-input': {
 				if (target.dataset.type !== 'control') { return; }
-				console.log('button clicked', target);
 				onCommand(target.parentNode.pref, target.dataset.value);
 			} break;
 			default: { return true; }

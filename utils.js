@@ -52,7 +52,7 @@ function attachAllContentScripts({ cleanup, } = { }) {
 					js && js.forEach(file => chrome.tabs.executeScript(id, { file, }));
 					return true;
 				})
-				.catch(error => console.log('skipped tab', error)); // not allowed to execute
+				.catch(error => console.warn('skipped tab', error)); // not allowed to execute
 			})).then(_=>_.filter(_=>_).length);
 		}));
 	});
