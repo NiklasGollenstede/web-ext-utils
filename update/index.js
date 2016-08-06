@@ -28,7 +28,8 @@ const update = ({ path = 'update/', history = 'days', } = { }) => spawn(function
 	if (+last === 0) { // newly installed
 		(yield runStep('installed', now)) && (ran.installed = true);
 	} else { // incremental updates
-		for (let version of versions.slice(versions.findIndex(_=>_ > last))) {
+		const startAt = versions.findIndex(_=>_ > last);
+		for (let version of versions.slice(startAt > 0 ? startAt : Infinity)) {
 			(yield runStep(version, version)) && ran.push(version);
 		}
 	}
