@@ -128,6 +128,10 @@ function spawn(generator) {
 	return Promise.resolve().then(next);
 }
 
+if (document.currentScript && document.currentScript.dataset.runUpdate) {
+	define('web-ext-utils/update/result', [ ], update);
+}
+
 return update;
 
 });
