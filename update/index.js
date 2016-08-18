@@ -40,7 +40,8 @@ const update = ({ path = 'update/', history = 'days', } = { }) => spawn(function
 	// write the new version
 	(yield Promise.all([
 		Storage.local.set({ '__update__.local.version': now +'', }),
-		history && Storage.local.set({ '__update__.history': ran.history = (yield update.getHistory()).concat({ version: now +'', date: circaDate(history), }), }),
+		history && history !== 'false'
+		&& Storage.local.set({ '__update__.history': ran.history = (yield update.getHistory()).concat({ version: now +'', date: circaDate(history), }), }),
 		now > synced && StorageSync.set({ '__update__.sync.version': now +'', }),
 	]));
 
@@ -128,8 +129,8 @@ function spawn(generator) {
 	return Promise.resolve().then(next);
 }
 
-if (document.currentScript && document.currentScript.dataset.runUpdate) {
-	define('web-ext-utils/update/result', [ ], update);
+if (document.currentScript && document.currentScript.dataset.runUpdate === 'true') {
+	define('web-ext-utils/update/result', [ ], update.bind(null, document.currentScript.dataset));
 }
 
 return update;

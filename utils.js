@@ -1,7 +1,7 @@
 'use strict'; define('web-ext-utils/utils', [ // license: MPL-2.0
 	'web-ext-utils/chrome'
 ], function(
-	{ Tabs, }
+	{ Tabs, Windows, }
 ) {
 
 /// escapes a string for usage in a regular expression
@@ -11,9 +11,9 @@ const escape = string => string.replace(/[\-\[\]\{\}\(\)\*\+\?\.\,\\\^\$\|\#]/g,
 const matchPattern = (/^(?:(\*|http|https|file|ftp):\/\/(\*|(?:\*\.)?[^\/\*]+|)\/(.*))$/);
 
 /**
- * Transforms a valid match pattern into a regular expression which matches all URLs included by that pattern
+ * Transforms a valid match pattern into a regular expression which matches all URLs included by that pattern.
  * @param  {string}  pattern  The pattern to transform.
- * @return {RegExp}           The patterns equivalent as a RegExp
+ * @return {RegExp}           The patterns equivalent as a RegExp.
  */
 function matchPatternToRegExp(pattern) {
 	if (pattern === '<all_urls>') { return (/./); }
@@ -38,7 +38,7 @@ function matchPatternToRegExp(pattern) {
  *                                      Note, that the content scripts themselves have not necessarily been executed yet.
  */
 function attachAllContentScripts({ cleanup, } = { }) {
-	if (typeof (cleanup = cleanup || (() => void 0)) !== 'function') { throw new TypeError('"Cleanup" paramter must be a function or falsey'); }
+	if (typeof (cleanup = cleanup || (() => void 0)) !== 'function') { throw new TypeError('"Cleanup" parameter must be a function or falsey'); }
 
 	return Tabs.query({ }).then(tabs => {
 		return Promise.all(chrome.runtime.getManifest().content_scripts.map(({ js, css, matches, exclude_matches, }) => {
@@ -58,9 +58,24 @@ function attachAllContentScripts({ cleanup, } = { }) {
 	});
 }
 
+/**
+ * Shows or opens a tab containing an extension page.
+ * Shows the fist tab whose .pathname equals 'match' and that has a window.tabId set, or opens a new tab containing 'url' if no such tab is found.
+ * To set a window.tabId, include ``chrome.tabs.getCurrent(tab => tab && (window.tabId = tab.id))`` in a script in the tabs that should be matchable.
+ * @param  {string}        url    The url to open in the new tab if no existing tab was found.
+ * @param  {string}        match  Optional value of window.location.pathname a existing tab must have to be focused.
+ * @return {Promise<Tab>}         The chrome.tabs.Tab that is now the active tab in the focused window.
+ */
+function showExtensionTab(url, match = url) {
+	const window = chrome.extension.getViews({ type: 'tab', }).find(window => window.location.pathname === match && window.tabId != null);
+	return (window ? Tabs.update(window.tabId, { active: true, }) : Tabs.create({ url: chrome.extension.getURL(url), }))
+	.then(tab => Windows.update(tab.windowId, { focused: true, }).then(() => tab));
+}
+
 return {
 	matchPatternToRegExp,
 	attachAllContentScripts,
+	showExtensionTab,
 };
 
 });
