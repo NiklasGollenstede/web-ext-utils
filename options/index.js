@@ -1,4 +1,5 @@
-define('web-ext-utils/options', function() { 'use strict';
+define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+}) {
 
 let context = null; // a OptionsRoot during its constrution
 
@@ -65,17 +66,19 @@ class Option {
 		const values = this.values;
 		let listeners = OnTrue.get(this) || new Set;
 		OnTrue.set(this, listeners);
-		const added = listeners.add(listener);
-		added && values.is && callAll([ listener, ], values.get(0), values, null, this.path);
-		return added;
+		if (listeners.has(listener)) { return false; }
+		listeners.add(listener);
+		values.is && callAll([ listener, ], values.get(0), values, null, this.path);
+		return true;
 	}
 	whenFalse(listener) {
 		const values = this.values;
 		let listeners = OnFalse.get(this) || new Set;
 		OnFalse.set(this, listeners);
-		const added = listeners.add(listener);
-		added && !values.is && callAll([ listener, ], values.get(0), values, null, this.path);
-		return added;
+		if (listeners.has(listener)) { return false; }
+		listeners.add(listener);
+		!values.is && callAll([ listener, ], values.get(0), values, null, this.path);
+		return true;
 	}
 	when(true_false) {
 		true_false && true_false.true && this.whenTrue(true_false.true);
@@ -85,9 +88,10 @@ class Option {
 		const values = this.values;
 		let listeners = OnChange.get(this) || new Set;
 		OnChange.set(this, listeners);
-		const added = listeners.add(listener);
-		added && callAll([ listener, ], values.get(0), values, null, this.path);
-		return added;
+		if (listeners.has(listener)) { return false; }
+		listeners.add(listener);
+		callAll([ listener, ], values.get(0), values, null, this.path);
+		return true;
 	}
 	onChange(listener) {
 		let listeners = OnChange.get(this) || new Set;

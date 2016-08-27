@@ -1,18 +1,15 @@
-'use strict'; define('web-ext-utils/update', [ // license: MPL-2.0
-	'web-ext-utils/chrome',
-], function(
-	{ Storage, }
-) {
+define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	'../chrome/': { extension, runtime, Storage, },
+}) {
 
-const StorageSync = Storage.sync || Storage.local;
-
-const update = ({ path = 'update/', history = 'days', } = { }) => spawn(function*() {
+const update = options => spawn(function*() {
+	const { path = 'update/', history = 'days', } = options || { };
 	const getJson = load('versions.json');
 	const getLast = Storage.local.get([ '__update__.local.version', ]);
-	const getSync = StorageSync.get([ '__update__.sync.version', ]);
+	const getSync = Storage.sync.get([ '__update__.sync.version', ]);
 	const last    = new Version((yield getLast)['__update__.local.version']);
 	const synced  = new Version((yield getSync)['__update__.sync.version']);
-	const now     = new Version(chrome.runtime.getManifest().version);
+	const now     = new Version(runtime.getManifest().version);
 
 	if (last > now) {
 		console.error(`Version was downgraded from ${ last } to ${ now }`);
@@ -42,7 +39,7 @@ const update = ({ path = 'update/', history = 'days', } = { }) => spawn(function
 		Storage.local.set({ '__update__.local.version': now +'', }),
 		history && history !== 'false'
 		&& Storage.local.set({ '__update__.history': ran.history = (yield update.getHistory()).concat({ version: now +'', date: circaDate(history), }), }),
-		now > synced && StorageSync.set({ '__update__.sync.version': now +'', }),
+		now > synced && Storage.sync.set({ '__update__.sync.version': now +'', }),
 	]));
 
 	return ran;
@@ -55,7 +52,7 @@ const update = ({ path = 'update/', history = 'days', } = { }) => spawn(function
 			script.return = resolve;
 			script.onload = () => setTimeout(resolve);
 			script.onerror = reject;
-			script.src = chrome.extension.getURL(path + file +'.js');
+			script.src = extension.getURL(path + file +'.js');
 			document.documentElement.appendChild(script).remove();
 		})
 		.catch(error => error instanceof Error && printError(error))
@@ -69,7 +66,7 @@ const update = ({ path = 'update/', history = 'days', } = { }) => spawn(function
 			const xhr = new XMLHttpRequest;
 			xhr.addEventListener('load', () => resolve(xhr.responseText));
 			xhr.addEventListener('error', () => resolve(null));
-			xhr.open('GET', chrome.extension.getURL(path + name));
+			xhr.open('GET', extension.getURL(path + name));
 			try { xhr.send(); } catch (_) { resolve(null); /* firefox bug */ }
 		});
 	}
@@ -127,10 +124,6 @@ function spawn(generator) {
 	}
 
 	return Promise.resolve().then(next);
-}
-
-if (document.currentScript && document.currentScript.dataset.runUpdate === 'true') {
-	define('web-ext-utils/update/result', [ ], update.bind(null, document.currentScript.dataset));
 }
 
 return update;

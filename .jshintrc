@@ -28,7 +28,6 @@
 	"devel": true, // console, alert, ...
 
 	"globals": {
-		"chrome": false,
 		"define": false,
 		"require": false
 	}

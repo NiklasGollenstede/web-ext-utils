@@ -1,6 +1,5 @@
-'use strict'; define('web-ext-utils/tabview', [
-], function(
-) {
+define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+}) {
 
 const styles = {
 	default: `
@@ -171,14 +170,14 @@ return class TabView {
 	}
 
 	set active(id) {
-		const old = this.tablist.querySelector('.active');
+		const old = this.tablist.querySelector(':scope>.tab.active');
 		old && old.classList.remove('active');
 		const now = this.get(id);
 		now.classList.add('active');
 		try { this.onSelect && this.onSelect(now); } catch (error) { console.error(error); }
 	}
 	get active() {
-		return this.tablist.querySelector('.active').id;
+		return this.tablist.querySelector(':scope>.tab.active').id;
 	}
 
 	add({ id, title, icon, position = Infinity, data, }) {
@@ -206,7 +205,7 @@ return class TabView {
 	}
 
 	get(id) {
-		return this.tablist.querySelector('.tab[data-id="'+ id +'"]');
+		return this.tablist.querySelector(':scope>.tab[data-id="'+ id +'"]');
 	}
 };
 

@@ -1,8 +1,6 @@
-'use strict'; define('web-ext-utils/utils', [ // license: MPL-2.0
-	'web-ext-utils/chrome'
-], function(
-	{ Tabs, Windows, }
-) {
+define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	'./chrome/': { runtime, extension, tabs, Tabs, Windows, },
+}) {
 
 /// escapes a string for usage in a regular expression
 const escape = string => string.replace(/[\-\[\]\{\}\(\)\*\+\?\.\,\\\^\$\|\#]/g, '\\$&');
@@ -40,16 +38,17 @@ function matchPatternToRegExp(pattern) {
 function attachAllContentScripts({ cleanup, } = { }) {
 	if (typeof (cleanup = cleanup || (() => void 0)) !== 'function') { throw new TypeError('"Cleanup" parameter must be a function or falsey'); }
 
-	return Tabs.query({ }).then(tabs => {
-		return Promise.all(chrome.runtime.getManifest().content_scripts.map(({ js, css, matches, exclude_matches, }) => {
+	return Tabs.query({ }).then(allTabs => {
+		const scripts = runtime.getManifest().content_scripts;
+		return Promise.all(scripts.map(({ js, css, matches, exclude_matches, }) => {
 			const includes = (matches || [ ]).map(matchPatternToRegExp);
 			const excludes = (exclude_matches || [ ]).map(matchPatternToRegExp);
-			return Promise.all(tabs.map(({ id, url, }) => {
+			return Promise.all(allTabs.map(({ id, url, }) => {
 				if (!url || !includes.some(exp => exp.test(url)) || excludes.some(exp => exp.test(url))) { return; }
 				return Tabs.executeScript(id, { code: `(${ cleanup })();`, })
 				.then(() => {
-					css && css.forEach(file => chrome.tabs.insertCSS(id, { file, }));
-					js && js.forEach(file => chrome.tabs.executeScript(id, { file, }));
+					css && css.forEach(file => tabs.insertCSS(id, { file, }));
+					js && js.forEach(file => tabs.executeScript(id, { file, }));
 					return true;
 				})
 				.catch(error => console.warn('skipped tab', error)); // not allowed to execute
@@ -67,8 +66,8 @@ function attachAllContentScripts({ cleanup, } = { }) {
  * @return {Promise<Tab>}         The chrome.tabs.Tab that is now the active tab in the focused window.
  */
 function showExtensionTab(url, match = url) {
-	const window = chrome.extension.getViews({ type: 'tab', }).find(window => window.location.pathname === match && window.tabId != null);
-	return (window ? Tabs.update(window.tabId, { active: true, }) : Tabs.create({ url: chrome.extension.getURL(url), }))
+	const window = extension.getViews({ type: 'tab', }).find(window => window.location.pathname === match && window.tabId != null);
+	return (window ? Tabs.update(window.tabId, { active: true, }) : Tabs.create({ url: extension.getURL(url), }))
 	.then(tab => Windows.update(tab.windowId, { focused: true, }).then(() => tab));
 }
 

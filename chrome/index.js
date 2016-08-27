@@ -1,26 +1,36 @@
-define('web-ext-utils/chrome', function() { 'use strict';
+define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	exports,
+}) {
 
-const _chrome = (() => { try { return window.top.chrome; } catch (e) { try { return window.parent.chrome; } catch (e) { } } })() || chrome; // for Firefox
+const _chrome = getTopGlobal('chrome');
+const _browser = getTopGlobal('browser');
+const _api = _browser || _chrome;
 
 const cache = new WeakMap;
 let messageHandler;
 
 const ua = navigator.userAgent;
-const rootUrl = _chrome.extension.getURL('.').slice(0, -1);
-const webkit = rootUrl.startsWith('chrome');
-const opera = webkit && (/ OPR\/\d+\./).test(ua);
-const vivaldi = webkit && (/ Vivaldi\/\d+\./).test(ua);
-const chromium = webkit && !opera && !vivaldi;
+const rootUrl = _api.extension.getURL('.').slice(0, -1);
+const blink = rootUrl.startsWith('chrome');
+const opera = blink && (/ OPR\/\d+\./).test(ua); // TODO: is this safe to do?
+const vivaldi = blink && (/ Vivaldi\/\d+\./).test(ua); // TODO: is this safe to do?
+const google = blink && !opera && !vivaldi; // TODO: thst for Google Chrome specific api
+const chromium = blink && !opera && !vivaldi && !google;
 
 const gecko = rootUrl.startsWith('moz');
-const fennec = gecko && !(chrome.browserAction && chrome.browserAction.setPopup); // can't use userAgent (may be faked) // TODO: test
+const fennec = gecko && !(_api.browserAction && _api.browserAction.setPopup); // can't use userAgent (may be faked) // TODO: test
 const firefox = gecko && !fennec;
+
+const edgeHTML = rootUrl.startsWith('ms-browser');
+const edge = edgeHTML;
 
 /**
  * This is a flat copy of the window.chrome API with the additional properties:
  *
- *     <any chrome API starting with a capital letter>: A deep clone of the original chrome API
- *                          with the difference that all methods of these objects are wrapped such that they automatically
+ *     <any browser/chrome API starting with a capital letter>:
+ *                          If a Promise capable version of the API exists, then that API.
+ *                          Otherwise a deep clone of the original chrome/browser API with the difference
+ *                          that all methods of these objects are wrapped such that they automatically
  *                          add a callback as the last parameter and return a promise instead.
  *                          Calling these wrapped functions with a callback parameter will not work,
  *                          because it would result in an invalid signature:
@@ -29,7 +39,7 @@ const firefox = gecko && !fennec;
  *                          so ``Chrome.Storage.onUpdate.addListener(function)`` still works.
  *
  *     Storage:             As described above, only that .Storage.sync === .Storage.local if chrome.storage.sync doesn't exist.
- *     <any chrome API>:    The original chrome API.
+ *     <any chrome API>:    The original chrome[API], or browser[API] if `chrome` doesn't exist.
  *
  *     messages/Messages:   A MessageHandler instance for more convenient message sending and receiving, @see MessageHandler.
  *
@@ -38,27 +48,30 @@ const firefox = gecko && !fennec;
  *                              gecko:          Any Mozilla browser.
  *                              firefox:        Firefox desktop.
  *                              fennec:         Firefox for Android. This is not extracted from the userAgent.
- *                              webkit/webKit:  Any webKit/chromium based browser.
- *                              chromium:       WebKit, but Neither opera nor Vivaldi.
- *                              opera:          Opera desktop (webKit).
- *                              vivaldi:        Vivaldi (webKit).
- *                              trident:        false
- *                              edge:           false
+ *                              blink:          Any blink/chromium based browser.
+ *                              chromium:       Chromium and not Google Chrome, Opera or Vivaldi.
+ *                              opera:          Opera desktop (Chromium).
+ *                              vivaldi:        Vivaldi (Chromium).
+ *                              google:         Google Chrome (Chromium).
+ *                              edgeHTML:       MS Edge
+ *                              edge:           MS Edge
  *
  *     rootUrl/rootURL:     The extensions file root URL, ends with '/'.
- *     chrome:              window.chrome, bug-fixed (see below)
+ *     chrome:              Non Promise-capable chrome/browser API, bug-fixed (see below)
+ *     browser:             Native Promise-capable chrome/browser API, or null, bug-fixed (see below)
  *
  * Furthermore this Chrome object (compared to window.chrome) fixes the Firefox bug that window.parent.chrome has more properties than window.chrome (in an iframe).
  */
 const Chrome = new Proxy(Object.freeze({
-	chrome: _chrome,
+	chrome: edgeHTML ? _browser : _chrome,
+	browser: gecko ? _browser : null,
 	rootUrl, rootURL: rootUrl,
 	get messages() { return new MessageHandler; },
 	get Messages() { return new MessageHandler; },
 	applications: new Proxy(Object.freeze({
 		gecko, firefox, fennec,
-		webkit, webKit: webkit, chromium, opera, vivaldi,
-		trident: false, edge: false,
+		blink, chromium, google, opera, vivaldi,
+		edgeHTML, edge,
 	}), { get(self, key) {
 		if (self.hasOwnProperty(key)) { return self[key]; }
 		throw new Error(`Unknown application "${ key }"`);
@@ -66,14 +79,13 @@ const Chrome = new Proxy(Object.freeze({
 }), { get(self, key) {
 	let value;
 	value = self[key]; if (value) { return value; }
-	value = _chrome[key]; if (value) { return value; }
-	value = _chrome[key.replace(/^./, s => s.toLowerCase())]; if (value) { return wrap(value); }
+	value = edgeHTML ? _browser[key] : _chrome[key]; if (value) { return value; }
+	key = key.replace(/^./, s => s.toLowerCase());
+	value = gecko ? _browser[key] : wrapAPI(_api[key]); if (value) { return value; }
 }, set() { }, });
 
 let mh_handlers = { };
 let mh_listener = null;
-let mh_sendMessage = promisify(_chrome.runtime.sendMessage, _chrome.runtime);
-let mh_sendMessageTab = _chrome.tabs ? promisify(_chrome.tabs.sendMessage, _chrome.tabs) : () => { throw new Error(`Can't send messages to tabs (from within a tab)`); };
 let mh_request, mh_post; // these functions are defined below
 
 /**
@@ -167,7 +179,7 @@ class MessageHandler {
 }
 
 // Deeply clones an object but replaces all functions with Promise-wrapped functions.
-function wrap(api) {
+function wrapAPI(api) {
 	if (!api) { return api; }
 	let clone = cache.get(api);
 	if (clone) { return clone; }
@@ -178,15 +190,15 @@ function wrap(api) {
 function promisifyAll(api) {
 	const clone = { };
 	Object.keys(api).forEach(key => {
-		const desc = Object.getOwnPropertyDescriptor(api, key);
-		if (typeof desc.value === 'function') {
-			desc.value = promisify(desc.value, api);
-		} else if (typeof desc.value === 'object' && !(/^on[A-Z]/).test(key)) {
-			desc.value = wrap(desc.value);
+		let value = api[key];
+		if (typeof value === 'function') {
+			value = promisify(value, api);
+		} else if (typeof value === 'object' && !(/^on[A-Z]/).test(key)) {
+			value = wrapAPI(value);
 		}
-		return Object.defineProperty(clone, key, desc);
+		clone[key] = value;
 	});
-	if (api === _chrome.storage && !api.sync) {
+	if (api === _api.storage && !api.sync) {
 		console.info('chrome.storage.sync is unavailable, fall back to chrome.storage.local');
 		clone.sync = clone.local;
 	}
@@ -197,7 +209,7 @@ function promisify(method, thisArg) {
 	return function() {
 		return new Promise((resolve, reject) => {
 			method.call(thisArg, ...arguments, function() {
-				const error = _chrome.runtime.lastError || _chrome.extension.lastError;
+				const error = _api.runtime.lastError || _api.extension.lastError;
 				return error ? reject(error) : resolve(...arguments);
 			});
 		});
@@ -205,13 +217,15 @@ function promisify(method, thisArg) {
 }
 
 mh_request = makeSendFunction(
-	promisify(_chrome.runtime.sendMessage, _chrome.runtime),
-	_chrome.tabs ? promisify(_chrome.tabs.sendMessage, _chrome.tabs) : () => { throw new Error(`Can't send messages to tabs (from within a tab)`); },
+	gecko ? _browser.runtime.sendMessage : promisify(_api.runtime.sendMessage, _api.runtime),
+	_api.tabs
+	? gecko ? _browser.tabs.sendMessage : promisify(_api.tabs.sendMessage, _api.tabs)
+	: () => { throw new Error(`Can't send messages to tabs (from within a tab)`); },
 	false
 );
 mh_post = makeSendFunction(
-	_chrome.runtime.sendMessage,
-	_chrome.tabs ? _chrome.tabs.sendMessage : () => { throw new Error(`Can't send messages to tabs (from within a tab)`); },
+	_api.runtime.sendMessage,
+	_api.tabs ? _api.tabs.sendMessage : () => { throw new Error(`Can't send messages to tabs (from within a tab)`); },
 	true
 );
 function makeSendFunction(send, sendTab, post) {
@@ -250,12 +264,12 @@ function mh_attach() {
 		} catch (error) { reply({ error: toJson(error), threw: true, }); }
 	};
 
-	_chrome.runtime.onMessage.addListener(mh_listener);
+	_api.runtime.onMessage.addListener(mh_listener);
 }
 
 function mh_detatch() {
 	if (!mh_listener || Object.keys(mh_handlers).length) { return; }
-	_chrome.runtime.onMessage.removeListener(mh_listener);
+	_api.runtime.onMessage.removeListener(mh_listener);
 	mh_listener = null;
 }
 
@@ -271,9 +285,20 @@ function fromJson(string) {
 	return JSON.parse(string, (key, value) => {
 		if (!value || typeof value !== 'string' || !value.startsWith('$_ERROR_$')) { return value; }
 		const object = JSON.parse(value.slice(9));
-		const constructor = object.name ? window[object.name] || Error : Error;
-		return Object.assign(new constructor, object);
+		const Constructor = object.name ? window[object.name] || Error : Error;
+		const error = gecko ? Object.create(Constructor.prototype) : new Constructor; // Firefox (49) won't log any properties of actual Error instances to the web pages console
+		Object.assign(error, object);
+		return error;
 	});
+}
+
+function getTopGlobal(name) { // for Firefox
+	try {
+		return window.top[name];
+	} catch (e) { try {
+		return window.parent[name];
+	} catch (e) { } }
+	return window[name];
 }
 
 return (Chrome);

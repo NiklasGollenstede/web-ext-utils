@@ -1,4 +1,17 @@
-define('web-ext-utils/options/editor', function() { 'use strict';
+define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+}) {
+
+const queryChild = (() => {
+	try { document.querySelector(':scope'); }
+	catch (error) {
+		return (element, ...selectors) =>
+		selectors.reduce((element, selector) => element && Array.prototype.find.call(
+			element.children,
+			child => child.msMatchesSelector(selector)
+		), element) || null;
+	}
+	return (element, ...selectors) => element.querySelector(':scope>'+ selectors.join('>'));
+})();
 
 return function loadEditor({ host, options, onCommand, }) {
 
@@ -52,8 +65,8 @@ function setButtonDisabled(element) {
 	if (element.pref.model.disabled) {
 		fieldsEnabled(element, 'model', false);
 	}
-	const container = element.querySelector(':scope>*>.values-container');
-	const add = element.querySelector(':scope>*>.add-value-entry');
+	const container = queryChild(element, '*', '.values-container');
+	const add       = queryChild(element, '*', '.add-value-entry');
 	if (!add) { return; }
 	const { min, max, } = element.pref.values, length = container.children.length;
 	fieldEnabled(add, 'count', length < max);
@@ -157,7 +170,7 @@ function createInput(pref) {
 }
 
 function setInputValue(input, value) {
-	const { pref, } = input, field = input.querySelector(':scope>.value-input');
+	const { pref, } = input, field = queryChild(input, '.value-input');
 	switch (pref.type) {
 		case "bool":
 			field.checked = value;
@@ -187,7 +200,7 @@ function setInputValue(input, value) {
 }
 
 function getInputValue(input) {
-	const { pref, } = input, field = input.querySelector(':scope>.value-input');
+	const { pref, } = input, field = queryChild(input, '.value-input');
 	switch (pref.type) {
 		case "control":
 			return field.dataset.value;
