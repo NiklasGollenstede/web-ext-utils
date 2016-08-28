@@ -1,9 +1,9 @@
-define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function() { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	exports,
 }) {
 
-const _chrome = getTopGlobal('chrome');
-const _browser = getTopGlobal('browser');
+const _chrome = typeof chrome !== 'undefined' && chrome; // getTopGlobal('chrome');
+const _browser = typeof browser !== 'undefined' && browser; // getTopGlobal('browser');
 const _api = _browser || _chrome;
 
 const cache = new WeakMap;
@@ -76,6 +76,7 @@ const Chrome = new Proxy(Object.freeze({
 		if (self.hasOwnProperty(key)) { return self[key]; }
 		throw new Error(`Unknown application "${ key }"`);
 	}, set() { }, }),
+	Storage: cloneLocal(gecko ? _browser.storage : wrapAPI(_api.storage))
 }), { get(self, key) {
 	let value;
 	value = self[key]; if (value) { return value; }
@@ -198,11 +199,15 @@ function promisifyAll(api) {
 		}
 		clone[key] = value;
 	});
-	if (api === _api.storage && !api.sync) {
-		console.info('chrome.storage.sync is unavailable, fall back to chrome.storage.local');
-		clone.sync = clone.local;
-	}
 	return Object.freeze(clone);
+}
+
+function cloneLocal(storage) {
+	if (storage.sync) { return storage; }
+	storage = Object.assign({ }, storage);
+	console.info('chrome.storage.sync is unavailable, fall back to chrome.storage.local');
+	storage.sync = storage.local;
+	return Object.freeze(storage);
 }
 
 function promisify(method, thisArg) {
@@ -303,4 +308,4 @@ function getTopGlobal(name) { // for Firefox
 
 return (Chrome);
 
-});
+}); })();

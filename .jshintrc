@@ -20,7 +20,7 @@
 	"sub": true, // allow headers['DNT'] instead of headers.DNT
 
 	"esversion": 6,
-	"strict": "implied", // 'use strict' is implicit for functions with non-simple parameter lists, but jshint doesn't get that
+	"strict": true, // 'use strict' is neither implicit nor allowed for functions with non-simple parameter lists, must be in outer function
 	"globalstrict": true,
 	"latedef": "nofunc",
 

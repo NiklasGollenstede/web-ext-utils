@@ -1,4 +1,4 @@
-define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(() => { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../chrome/': { extension, runtime, Storage, },
 }) {
 
@@ -70,7 +70,7 @@ const update = options => spawn(function*() {
 			try { xhr.send(); } catch (_) { resolve(null); /* firefox bug */ }
 		});
 	}
-});
+}).catch(error => { console.error(`Uncaught error during update:`, error); return Object.assign([ ], { failed: true, error, }); });
 
 update.getHistory = function() {
 	return Storage.local.get([ '__update__.history', ]).then(({ '__update__.history': history, }) => history || [ ]);
@@ -128,4 +128,4 @@ function spawn(generator) {
 
 return update;
 
-});
+}); })();
