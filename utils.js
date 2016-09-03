@@ -6,22 +6,22 @@
 const escape = string => string.replace(/[\-\[\]\{\}\(\)\*\+\?\.\,\\\^\$\|\#]/g, '\\$&');
 
 /// matches all valid match patterns (exept '<all_urls>') and extracts [ , sheme, host, path, ]
-const matchPattern = (/^(?:(\*|http|https|file|ftp):\/\/(\*|(?:\*\.)?[^\/\*]+|)\/(.*))$/);
+const matchPattern = (/^(?:(\*|http|https|file|ftp|app):\/\/(\*|(?:\*\.)?[^\/\*]+|)\/(.*))$/);
 
 /**
  * Transforms a valid match pattern into a regular expression which matches all URLs included by that pattern.
+ * Passes all examples and counter-examples listed here https://developer.mozilla.org/en-US/Add-ons/WebExtensions/Match_patterns#Examples
+ * The beahviour is undefined if the input is not a valid pattern.
  * @param  {string}  pattern  The pattern to transform.
  * @return {RegExp}           The patterns equivalent as a RegExp.
  */
 function matchPatternToRegExp(pattern) {
-	if (pattern === '<all_urls>') { return (/./); }
+	if (pattern === '<all_urls>') { return (/^(?:https?|file|ftp|app):\/\//); } // TODO: this is from mdn, check if chrome behaves the same
 	const [ , sheme, host, path, ] = matchPattern.exec(pattern);
-	return new RegExp('^(?:'+
-		(sheme === '*' ? 'https?' : escape(sheme))
-		+':\/\/'+
-		escape(host).replace(/\\\*/g, '[^\/]*')
-		+'\/'+
-		escape(path).replace(/\\\*/g, '.*')
+	return new RegExp('^(?:'
+		+ (sheme === '*' ? 'https?' : escape(sheme)) +':\/\/'
+		+ (host === '*' ? '[^\/]+?' : escape(host).replace(/\\\*\\./g, '(?:[^\/]*.)?'))
+		+ (path ? '\/'+ escape(path).replace(/\\\*/g, '.*') : '\/?')
 	+')$');
 }
 
@@ -60,7 +60,7 @@ function attachAllContentScripts({ cleanup, } = { }) {
 /**
  * Shows or opens a tab containing an extension page.
  * Shows the fist tab whose .pathname equals 'match' and that has a window.tabId set, or opens a new tab containing 'url' if no such tab is found.
- * To set a window.tabId, include ``chrome.tabs.getCurrent(tab => tab && (window.tabId = tab.id))`` in a script in the tabs that should be matchable.
+ * To set a window.tabId, include ``(window.browser || window.chrome).tabs.getCurrent(tab => tab && (window.tabId = tab.id))`` in a script in the tabs that should be matchable.
  * @param  {string}        url    The url to open in the new tab if no existing tab was found.
  * @param  {string}        match  Optional value of window.location.pathname a existing tab must have to be focused.
  * @return {Promise<Tab>}         The chrome.tabs.Tab that is now the active tab in the focused window.

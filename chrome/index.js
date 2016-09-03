@@ -24,8 +24,18 @@ const firefox = gecko && !fennec;
 const edgeHTML = rootUrl.startsWith('ms-browser');
 const edge = edgeHTML;
 
+const currentApp = (() => { switch (true) {
+	case (firefox):         return 'firefox';
+	case (fennec):          return 'fennec';
+	case (chromium):        return 'chromium';
+	case (opera):           return 'opera';
+	case (vivaldi):         return 'vivaldi';
+	case (google):          return 'chrome';
+	case (edge):            return 'edge';
+} })();
+
 /**
- * This is a flat copy of the window.chrome API with the additional properties:
+ * This is a flat copy of the window.chrome / window.browser API with the additional properties:
  *
  *     <any browser/chrome API starting with a capital letter>:
  *                          If a Promise capable version of the API exists, then that API.
@@ -38,7 +48,7 @@ const edge = edgeHTML;
  *                          The methods of objects starting with /^on[A-Z]/ (event listeners) are not wrapped,
  *                          so ``Chrome.Storage.onUpdate.addListener(function)`` still works.
  *
- *     Storage:             As described above, only that .Storage.sync === .Storage.local if chrome.storage.sync doesn't exist.
+ *     Storage:             As described above, only that .Storage.sync === .Storage.local if .storage.sync doesn't exist.
  *     <any chrome API>:    The original chrome[API], or browser[API] if `chrome` doesn't exist.
  *
  *     messages/Messages:   A MessageHandler instance for more convenient message sending and receiving, @see MessageHandler.
@@ -53,8 +63,10 @@ const edge = edgeHTML;
  *                              opera:          Opera desktop (Chromium).
  *                              vivaldi:        Vivaldi (Chromium).
  *                              google:         Google Chrome (Chromium).
+ *                              chrome:         Google Chrome (Chromium) (alias).
  *                              edgeHTML:       MS Edge
  *                              edge:           MS Edge
+ *                              current:        String naming the current browser, one of [ 'firefox', 'fennec', 'chromium', 'opera', 'vivaldi', 'chrome', 'edge', ].
  *
  *     rootUrl/rootURL:     The extensions file root URL, ends with '/'.
  *     chrome:              Non Promise-capable chrome/browser API, bug-fixed (see below)
@@ -70,8 +82,9 @@ const Chrome = new Proxy(Object.freeze({
 	get Messages() { return new MessageHandler; },
 	applications: new Proxy(Object.freeze({
 		gecko, firefox, fennec,
-		blink, chromium, google, opera, vivaldi,
+		blink, chromium, google, chrome: google, opera, vivaldi,
 		edgeHTML, edge,
+		current: currentApp,
 	}), { get(self, key) {
 		if (self.hasOwnProperty(key)) { return self[key]; }
 		throw new Error(`Unknown application "${ key }"`);
@@ -137,7 +150,7 @@ class MessageHandler {
 			if (name === prefix) { throw new TypeError(`Handler names must be non-empty strings`); }
 			if (mh_handlers[name]) { throw new Error(`Duplicate message handler for "${ name }"`); }
 		});
-		add.forEach(([ name, handler, ]) => mh_handlers[name] = handler);
+		add.forEach(([ name, handler, ]) => mh_handlers[prefix + name] = handler);
 		mh_attach();
 		return messageHandler;
 	}
@@ -205,7 +218,7 @@ function promisifyAll(api) {
 function cloneLocal(storage) {
 	if (storage.sync) { return storage; }
 	storage = Object.assign({ }, storage);
-	console.info('chrome.storage.sync is unavailable, fall back to chrome.storage.local');
+	// console.info('chrome.storage.sync is unavailable, fall back to chrome.storage.local');
 	storage.sync = storage.local;
 	return Object.freeze(storage);
 }
