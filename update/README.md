@@ -26,27 +26,25 @@ the error may be logged and the update will continue as if the script hadn't exi
 The update scripts are run in the extensions background page and have full access to the chrome[] APIs.
 
 ## Running the framework:
-There are two ways to run the update framework:
-### 1.) Include this file in a normal script tag and run
+Set the key `"run_update"` in the `manifest.json` to the options object (see below) and
+require the update framework from at least on included module:
 ```JS
-require('web-ext-utils/update')(options).then(result => { /* extension logic */ });
+const updateResult = (yield require('node_modules/web-ext-utils/update/'));
 ```
-### 2.) Add the attribute data-run-update="true" to the script tag that includes this file.
-This will run the update scripts automatically.
-Options can be specified as data-&lt;name>="&lt;value>"; the result can be asynchronously required as 'web-ext-utils/update/result',
-```HTML
-<script src="/node_modules/web-ext-utils/update/index.js" data-run-update="true" data-history="false"></script>
-```
-```JavaScript
-define('main', [ 'web-ext-utils/update/result', ], result => { /* extension logic */ })
+or
+```JS
+define(({
+    'node_modules/web-ext-utils/update/': updateResult,
+}) => ...);
 ```
 
 ## Options:
 An object with the properties:
 ```
-path:     {string}  Optional prefix (path) to the update scripts. Default: 'update/'.
-history:  {string}  Optional granularity of the new records in the update history, a falsy value or 'false' will disable the history.
-                    Values: 'days', 'minutes', 'seconds' and 'ms'. Default: 'days'.
+base_path:        {string}               Optional prefix (path) to the update scripts. Default: 'update/'.
+history_epsilon:  {false|string|number}  Optional granularity of the new records in the update history.
+                                         A value of `false` (bool) will disable the history, a number will be interpreted as milliseconds,
+                                         `1` is the best precision. Sring values: 'day', 'minute', 'second'. Default: 'day'.
 ```
 
 ## Result:
