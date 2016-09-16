@@ -244,9 +244,3 @@ describe('The `matchPatternToRegExp` of', function() {
 		});
 	});
 });
-
-
-
-
-
-

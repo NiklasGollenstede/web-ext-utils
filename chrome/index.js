@@ -34,6 +34,26 @@ const currentApp = (() => { switch (true) {
 	case (edge):            return 'edge';
 } })();
 
+const appVersion = (() => { switch (true) {
+	case (edge):            return           (/Edge\/((?:\d+.)*\d+)/).exec(ua)[1];
+	case (vivaldi):         return        (/Vivaldi\/((?:\d+.)*\d+)/).exec(ua)[1];
+	case (opera):           return            (/OPR\/((?:\d+.)*\d+)/).exec(ua)[1];
+	case (blink):           return (/Chrom(?:e|ium)\/((?:\d+.)*\d+)/).exec(ua)[1];
+	case (fennec): switch (false) {
+		case !(_api.pageAction && _api.pageAction.show): return '50.0';
+		default: return '48.0';
+	} break;
+	case (firefox): switch (false) {
+		case !(_api.runtime.connectNative || _api.history && _api.history.getVisits): return '50.0'; // these require permissions
+		case !(_api.tabs.removeCSS): return '49.0';
+		case !(_api.commands.getAll): return '48.0';
+		case !(_api.tabs.insertCSS): return '47.0';
+		case !(_api.tabs.move): return '46.0';
+		default: return '45.0';
+	}
+	return '0';
+} })();
+
 /**
  * This is a flat copy of the window.chrome / window.browser API with the additional properties:
  *
@@ -67,6 +87,7 @@ const currentApp = (() => { switch (true) {
  *                              edgeHTML:       MS Edge
  *                              edge:           MS Edge
  *                              current:        String naming the current browser, one of [ 'firefox', 'fennec', 'chromium', 'opera', 'vivaldi', 'chrome', 'edge', ].
+ *                              version:        String version of the current browser, as read from the UserAgent string. For gecko browsers it is feature-detected.
  *
  *     rootUrl/rootURL:     The extensions file root URL, ends with '/'.
  *     chrome:              Non Promise-capable chrome/browser API, bug-fixed (see below)
@@ -84,7 +105,7 @@ const Chrome = new Proxy(Object.freeze({
 		gecko, firefox, fennec,
 		blink, chromium, google, chrome: google, opera, vivaldi,
 		edgeHTML, edge,
-		current: currentApp,
+		current: currentApp, version: appVersion,
 	}), { get(self, key) {
 		if (self.hasOwnProperty(key)) { return self[key]; }
 		throw new Error(`Unknown application "${ key }"`);

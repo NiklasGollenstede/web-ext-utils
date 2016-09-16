@@ -1,74 +1,104 @@
 (() => { 'use strict'; define(function*({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../chrome/': { extension, runtime, Storage, },
+	'../chrome/': { extension: getURL, runtime, Storage, applications: { current: currentBrowser, version: browserVersion, }, },
+	require,
 }) {
 
 const Version = createVersionClass();
 
 const manifest = runtime.getManifest();
+let inProgress = { version: null, component: null, };
 
 // load options
 const options = manifest.run_update;
 if (typeof options !== 'object') { throw new Error(`The manifest.json entry "run_update" must be an object`); }
-const { base_path = 'update/', history_epsilon = 'day', } = options;
-const currentDate = circaDate(history_epsilon);
+const base_path = (options.base_path +'' || 'update/').replace(/^\/|^\\/, '');
 
 // load data
-const getJson    = loadFile('versions.json');
-const getLocal   = Storage.local.get([ '__update__.local.version', '__update__.history', ]);
-const getSync    = Storage.sync.get([ '__update__.sync.version', ]);
-const last       = new Version((yield getLocal)['__update__.local.version']);
-const synced     = new Version((yield getSync)['__update__.sync.version']);
-const history    = (yield getLocal)['__update__.history'] || [ ];
-const now        = new Version(manifest.version);
-const arg        = { from: last, to: now, synced, };
-const updated    = Object.assign([ ], arg, { history, });
+const getLocal   = Storage.local.get([ '__update__.local.version', '__update__.browser.version', ]);
+const getSync    = Storage.sync !== Storage.local ? Storage.sync.get([ '__update__.sync.version', ]) : { '__update__.sync.version': null, };
 
-if (last === now) { return updated; } // no update
-if (last > now) { // downgrade
-	console.error(`Version was downgraded from ${ last } to ${ now }`);
-	updated.downgraded = true;
-	return updated;
+const extension  = ({ from: new Version((yield getLocal)[`__update__.local.version`]),               to: new Version(manifest.version), });
+const browser    = ({ from: new Version((yield getLocal)[`__update__.${ currentBrowser }.version`]), to: new Version(browserVersion), });
+const synced     = ({ from: new Version((yield getSync )[`__update__.sync.version`]),                to: new Version(Storage.sync !== Storage.local ? manifest.version : null), });
+const _updated   = ({ extension, browser, synced, });
+
+for (let component of Object.keys(_updated)) {
+	const updated = _updated[component];
+	const path = component === 'browser' ? currentBrowser : component;
+
+	define(base_path + path +'/current', {
+		get component() { return component; },
+		get from     () { return updated.from; },
+		get to       () { return updated.to; },
+		get now      () { return inProgress.component === component ? inProgress.version : null; },
+	});
 }
 
-const versions = JSON.parse((yield getJson) || '[]').map(Version.create).sort(numeric);
+for (let component of Object.keys(_updated)) {
+	const updated = _updated[component];
+	const { from: last, to: now, } = updated;
+	inProgress.component = component;
 
-if (+last === 0) { // newly installed
-	(yield runStep('installed', now)) && (updated.installed = true);
-} else { // incremental updates
-	const startAt = versions.findIndex(_=>_ > last);
-	for (let version of versions.slice(startAt > 0 ? startAt : Infinity)) {
-		(yield runStep(version, version)) && updated.push(version);
+	const path = component === 'browser' ? currentBrowser : component;
+
+	if (last === now || +now === 0) {
+		// no update / no current version
+		Object.freeze(updated); continue;
 	}
+	if (last > now) {
+		// downgrade
+		console.error(`${ path } version was downgraded from ${ last } to ${ now }`);
+		updated.downgraded = true;
+		Object.freeze(updated); continue;
+	}
+
+	const _versions = JSON.parse((yield loadFile(path +'/versions.json')) || '[]');
+	const hasInstalled = _versions.includes('installed');
+	const hasUpdated   = _versions.includes('updated');
+
+	if (+last === 0 && hasInstalled) {
+		// newly installed
+		if ((yield runStep(path +'/installed', now))) {
+			updated.installed = true;
+		}
+	} else {
+		// incremental updates
+		hasInstalled && _versions.splice(_versions.indexOf('installed'), 1);
+		hasUpdated   && _versions.splice(_versions.indexOf('updated'),   1);
+		const versions = _versions.map(Version.create).sort(numeric);
+		const startAt = versions.findIndex(_=>_ > last);
+		const ran = updated.ran = [ ];
+		for (let version of versions.slice(startAt > 0 ? startAt : Infinity)) {
+			if ((yield runStep(path +'/'+ version, version))) {
+				ran.push(version);
+			}
+		}
+		Object.freeze(ran);
+
+		if (hasUpdated && (yield runStep(path +'/updated', now))) {
+			updated.updated = true;
+		}
+	}
+
+	// write the new version
+	switch (component) {
+		case 'extension': (yield Storage.local.set({ [`__update__.local.version`]:               now +'', })); break;
+		case 'browser'  : (yield Storage.local.set({ [`__update__.${ currentBrowser }.version`]: now +'', })); break;
+		case 'synced'   : (yield Storage.sync .set({ [`__update__.sync.version`]:                now +'', })); break;
+	}
+
+	Object.freeze(updated);
 }
-
-// finishing steps
-(yield runStep('updated', now)) && (updated.updated = true);
-(yield runStep('started', now)) && (updated.started = true);
-
-// write the new version
-currentDate && history.push({ version: now +'', date: currentDate, });
-(yield Promise.all([
-	Storage.local.set({ '__update__.local.version': now +'', '__update__.history': history, }),
-	now > synced && Storage.sync.set({ '__update__.sync.version': now +'', }),
-]));
 
 // done
-return updated;
+inProgress = { };
+return Object.freeze(_updated);
 
 /// does one step of the update process, returns true iff the step ran successfully
 function runStep(file, version) {
-	const printError = error => void console.error(`Update step for file "${ file  +'.js' }" failed with`, error);
-	return new Promise((resolve, reject) => {
-		const script = document.createElement('script');
-		script.return = resolve;
-		script.onload = () => setTimeout(resolve);
-		script.onerror = reject;
-		script.src = extension.getURL(base_path + file +'.js');
-		document.documentElement.appendChild(script).remove();
-	})
-	.catch(error => error instanceof Error && printError(error))
-	.then(step => typeof step === 'function' && Promise.resolve(step(Object.assign({ now: version, }, arg))).then(() => true))
-	.catch(printError);
+	inProgress.version = version;
+	return require(base_path + file).then(() => true)
+	.catch(error => void console.error(`Update step for file "${ file  +'.js' }" failed with`, error));
 }
 
 /// loads a file from the update folder as a string or null
@@ -77,7 +107,7 @@ function loadFile(name) {
 		const xhr = new XMLHttpRequest;
 		xhr.addEventListener('load', () => resolve(xhr.responseText));
 		xhr.addEventListener('error', () => resolve(null));
-		xhr.open('GET', extension.getURL(base_path + name));
+		xhr.open('GET', '/'+ base_path + name);
 		try { xhr.send(); } catch (_) { resolve(null); /* firefox bug */ }
 	});
 }
@@ -99,20 +129,5 @@ function createVersionClass(versions = { }) { return class Version {
 
 /// numeric sorter
 function numeric(a, b) { return a - b; }
-
-function circaDate(eps) {
-	if (eps === false) { return 0; }
-	if (typeof eps === 'number' && eps > 0) { return Math.floor(Date.now() / eps) * eps || 0; }
-	const date = new Date;
-	switch (eps) {
-		case 'day':    date.setHours(0);   /* falls through */
-		case 'hour':   date.setMinutes(0); /* falls through */
-		case 'minute': date.setSeconds(0); /* falls through */
-		case 'second': date.setMilliseconds(0);
-		break;
-		default: throw new Error(`Invalid value for "history_epsilon": ${ eps } (${ typeof eps })`);
-	}
-	return +date;
-}
 
 }); })();
