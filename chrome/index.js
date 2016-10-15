@@ -2,8 +2,8 @@
 	exports,
 }) {
 
-const _chrome = typeof chrome !== 'undefined' && chrome; // getTopGlobal('chrome');
-const _browser = typeof browser !== 'undefined' && browser; // getTopGlobal('browser');
+const _chrome = typeof chrome !== 'undefined' && chrome;
+const _browser = typeof browser !== 'undefined' && browser;
 const _api = _browser || _chrome;
 
 const cache = new WeakMap;
@@ -191,7 +191,7 @@ class MessageHandler {
 	 *                         or optionally a single frame in the tab if frameId is set.
 	 * @param  {string}  name  Name of the remote handler to call.
 	 * @param  {...any}  args  Additional arguments whose JSON-clones are passed to the remote handler.
-	 * @return {Promise}       Promise that rejects if the request wasn't handled my any context
+	 * @return {Promise}       Promise that rejects if the request wasn't handled by any context
 	 *                         or if the handler threw and otherwise resolves to the handlers return value.
 	 */
 	request(/* arguments */) {
@@ -271,8 +271,7 @@ function makeSendFunction(send, sendTab, post) {
 	return function() {
 		const tab = arguments[0];
 		if (typeof tab === 'object') {
-			const tabId = tab.tabId;
-			const frameId = tab.frameId;
+			const { tabId, frameId, } = tab;
 			const [ , name, ...args ] = arguments;
 			if (!name || typeof name !== 'string') { throw new TypeError(`Handler names must be non-empty strings`); }
 			return sendTab(tabId, { name, args, post, }, frameId ? { frameId, } : { });
@@ -329,15 +328,6 @@ function fromJson(string) {
 		Object.assign(error, object);
 		return error;
 	});
-}
-
-function getTopGlobal(name) { // for Firefox
-	try {
-		return window.top[name];
-	} catch (e) { try {
-		return window.parent[name];
-	} catch (e) { } }
-	return window[name];
 }
 
 return (Chrome);

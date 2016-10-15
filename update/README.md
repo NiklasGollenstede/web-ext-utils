@@ -29,7 +29,7 @@ The update scripts are run in the extensions background page and have full acces
 Set the key `"run_update"` in the `manifest.json` to the options object (see below) and
 require the update framework from at least on included module:
 ```JS
-const updateResult = (yield require('node_modules/web-ext-utils/update/'));
+const updateResult = (yield require.async('node_modules/web-ext-utils/update/'));
 ```
 or
 ```JS
@@ -56,11 +56,6 @@ history:     {[]<object>}  Optional. The update history so far, including the cu
 downgraded:  {bool}        Optional. true iff the version number decreased. No update scripts were run.
 ```
 
-## History:
-The history is an chronologically ordered array of { date: number, version: string, } objects.
-Each object represents thee time (with options.history precision) at which the manifest.json's 'version' increased to that version.
-It can be requested with ``require('web-ext-utils/update').getHistory().then(history => ...);``
-
 ## Version (numbers):
 This framework expects the manifests 'version' key and the names of all update scripts to be semantic version numbers (see: http://semver.org/).
 To allow correct ordering (e.g. 1.9.0 < 1.11.0) the version strings are wrapped in Version objects
@@ -73,9 +68,9 @@ The update framework stores the last installed version of the extension in chrom
 If chrome.storage.sync is not available, it will write everything to the .local storage.
 The following keys are used:
 ```
-   local: '__update__.local.version'
-   sync:  '__update__.sync.version'
-   local: '__update__.history'
+   local: `__update__.local.version`
+   sync:  `__update__.sync.version`
+   local: `__update__.${chrome.applications.current}.version`
 ```
 Important: If the '__update__.local.version' key is deleted, the framework will run as if the extension was freshly installed.
            So make sure not to delete any of these storage entries and restore them if you .clear() a storage compartment.

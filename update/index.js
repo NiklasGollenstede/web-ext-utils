@@ -97,7 +97,7 @@ return Object.freeze(_updated);
 /// does one step of the update process, returns true iff the step ran successfully
 function runStep(file, version) {
 	inProgress.version = version;
-	return require(base_path + file).then(() => true)
+	return require.async(base_path + file).then(() => true)
 	.catch(error => void console.error(`Update step for file "${ file  +'.js' }" failed with`, error));
 }
 

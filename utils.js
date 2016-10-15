@@ -66,7 +66,7 @@ function attachAllContentScripts({ cleanup, } = { }) {
  * @return {Promise<Tab>}         The chrome.tabs.Tab that is now the active tab in the focused window.
  */
 function showExtensionTab(url, match = url) {
-	const window = extension.getViews({ type: 'tab', }).find(window => window.location.pathname === match && window.tabId != null);
+	const window = extension.getViews({ type: 'tab', }).find(window => window && window.location.pathname === match && window.tabId != null);
 	return (window ? Tabs.update(window.tabId, { active: true, }) : Tabs.create({ url: extension.getURL(url), }))
 	.then(tab => Windows.update(tab.windowId, { focused: true, }).then(() => tab));
 }
