@@ -1,6 +1,4 @@
-(function() { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	exports,
-}) {
+(function(global) { 'use strict'; const factory = function webExtUtils_chrome(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 const _chrome = typeof chrome !== 'undefined' && chrome;
 const _browser = typeof browser !== 'undefined' && browser;
@@ -18,7 +16,7 @@ const google = blink && !opera && !vivaldi; // TODO: thst for Google Chrome spec
 const chromium = blink && !opera && !vivaldi && !google;
 
 const gecko = rootUrl.startsWith('moz');
-const fennec = gecko && !(_api.browserAction && _api.browserAction.setPopup); // can't use userAgent (may be faked) // TODO: test
+const fennec = gecko && !(_api.browserAction && _api.browserAction.setPopup); // can't use userAgent (may be faked) // TODO: this may be added in the future
 const firefox = gecko && !fennec;
 
 const edgeHTML = rootUrl.startsWith('ms-browser');
@@ -40,10 +38,12 @@ const appVersion = (() => { switch (true) {
 	case (opera):           return            (/OPR\/((?:\d+.)*\d+)/).exec(ua)[1];
 	case (blink):           return (/Chrom(?:e|ium)\/((?:\d+.)*\d+)/).exec(ua)[1];
 	case (fennec): switch (false) {
+		// TODO: keep up to date
 		case !(_api.pageAction && _api.pageAction.show): return '50.0';
 		default: return '48.0';
 	} break;
 	case (firefox): switch (false) {
+		// TODO: keep up to date
 		case !(_api.runtime.connectNative || _api.history && _api.history.getVisits): return '50.0'; // these require permissions
 		case !(_api.tabs.removeCSS): return '49.0';
 		case !(_api.commands.getAll): return '48.0';
@@ -71,7 +71,8 @@ const appVersion = (() => { switch (true) {
  *     Storage:             As described above, only that .Storage.sync === .Storage.local if .storage.sync doesn't exist.
  *     <any chrome API>:    The original chrome[API], or browser[API] if `chrome` doesn't exist.
  *
- *     messages/Messages:   A MessageHandler instance for more convenient message sending and receiving, @see MessageHandler.
+ *     messages/Messages:   An es6lib/Port that wrapps the runtime/tabs.on/sendMessage API for more convenient message sending and receiving.
+ *                          'es6lib/port.js' to be loaded at the time of accessing. @see https://github.com/NiklasGollenstede/es6lib/blob/master/port.js
  *
  *     applications:        An object of booleans indicating the browser this WebExtension is running in
  *                          Accessing any other property than those listed above will throw:
@@ -90,17 +91,15 @@ const appVersion = (() => { switch (true) {
  *                              version:        String version of the current browser, as read from the UserAgent string. For gecko browsers it is feature-detected.
  *
  *     rootUrl/rootURL:     The extensions file root URL, ends with '/'.
- *     chrome:              Non Promise-capable chrome/browser API, bug-fixed (see below)
- *     browser:             Native Promise-capable chrome/browser API, or null, bug-fixed (see below)
- *
- * Furthermore this Chrome object (compared to window.chrome) fixes the Firefox bug that window.parent.chrome has more properties than window.chrome (in an iframe).
+ *     chrome:              Non Promise-capable chrome/browser API.
+ *     browser:             Native Promise-capable chrome/browser API, or null.
  */
 const Chrome = new Proxy(Object.freeze({
 	chrome: edgeHTML ? _browser : _chrome,
 	browser: gecko ? _browser : null,
 	rootUrl, rootURL: rootUrl,
-	get messages() { return new MessageHandler; },
-	get Messages() { return new MessageHandler; },
+	get messages() { return getGlobalPort(); },
+	get Messages() { return getGlobalPort(); },
 	applications: new Proxy(Object.freeze({
 		gecko, firefox, fennec,
 		blink, chromium, google, chrome: google, opera, vivaldi,
@@ -119,98 +118,20 @@ const Chrome = new Proxy(Object.freeze({
 	value = gecko ? _browser[key] : wrapAPI(_api[key]); if (value) { return value; }
 }, set() { }, });
 
-let mh_handlers = { };
-let mh_listener = null;
-let mh_request, mh_post; // these functions are defined below
 
-/**
- * The MessageHandler singleton wraps chrome.runtime/tabs.sendMessage and chrome.runtime.onMessage with the following benefits:
- *  - Promises: the send function returns promises instead of taking callbacks, all handlers can return Promises to return asynchronously
- *  - Proper error handling: all Error objects thrown by the handlers (also in rejected promises) are encoded properly and will reject the Promise on the sending side
- *  - Simpler API, especially for multiple (named) handlers -> no more switches in a single huge message handler
- */
-class MessageHandler {
-	/// singleton: calling this will return the existing instance
-	constructor() {
-		if (messageHandler) { return messageHandler; }
-		return (messageHandler = this);
-	}
-	static get instance() { return new MessageHandler; }
-	set isExclusiveMessageHandler(_) { console.trace('MessageHandler.isExclusiveMessageHandler is deprecated'); }
+function getGlobalPort() {
+	if (messageHandler) { return messageHandler; }
 
-	/**
-	 * Adds a named message handler.
-	 * @param  {string}    name     Optional. Non-empty name of this handler which can me used
-	 *                              by .request() and .post() to call this handler. defaults to `handler`.name.
-	 * @param  {function}  handler  The handler function. It will be called with JSON-clones of all additional arguments
-	 *                              provided to .request() or .post() and may return a Promise to asynchronously return a value.
-	 * @return {MessageHandler}     `this` for chaining.
-	 * @throws {Error}              If there is already a handler registered for `name`.
-	 */
-	addHandler(name, handler) {
-		if (arguments.length === 1) { handler = name; name = handler.name; }
-		if (!name || typeof name !== 'string') { throw new TypeError(`Handler names must be non-empty strings`); }
-		if (typeof handler !== 'function') { throw new TypeError(`Message handlers must be functions`); }
-		if (mh_handlers[name]) { throw new Error(`Duplicate message handler for "${ name }"`); }
-		mh_handlers[name] = handler;
-		mh_attach();
-		return messageHandler;
-	}
-	/**
-	 * Adds multiple named message handlers.
-	 * @param  {string}        prefix    Optional. Prefix to prepend to all handler names specified in `handlers`. Defaults to ''.
-	 * @param  {object|array}  handlers  Ether an array of named functions or an object with methods. Array entries / object properties that are no functions will be ignores.
-	 * @return {MessageHandler}          `this` for chaining.
-	 * @throws {Error}                   If there is already a handler registered for any `prefix` + handler.name; no handlers have been added.
-	 */
-	addHandlers(prefix, handlers) {
-		if (arguments.length === 1) { handlers = prefix; prefix = ''; }
-		if (typeof prefix !== 'string') { throw new TypeError(`Handler name prefixes must be strings (or omitted)`); }
-		const add = (Array.isArray(handlers) ? handlers.map(f => [ f.name, f, ]) : Object.keys(handlers).map(k => [ k, handlers[k], ])).filter(([ , f, ]) => typeof f === 'function');
-		add.forEach(([ name, handler, ]) => {
-			if (name === prefix) { throw new TypeError(`Handler names must be non-empty strings`); }
-			if (mh_handlers[name]) { throw new Error(`Duplicate message handler for "${ name }"`); }
-		});
-		add.forEach(([ name, handler, ]) => mh_handlers[prefix + name] = handler);
-		mh_attach();
-		return messageHandler;
-	}
-	/**
-	 * Removes a named handler.
-	 * @param  {string}  name  The name of the handler to be removed.
-	 * @return {bool}          true iff a handler existed and has been removed.
-	 */
-	removeHandler(name) {
-		const ret = delete mh_handlers[name];
-		ret && mh_detatch();
-		return ret;
-	}
-	/**
-	 * Calls a handler in a different context and returns a Promise to its return value.
-	 * @param  {object}  tab   Optional. Object of { tabId, frameId, } to send a message to all frames in a tab
-	 *                         or optionally a single frame in the tab if frameId is set.
-	 * @param  {string}  name  Name of the remote handler to call.
-	 * @param  {...any}  args  Additional arguments whose JSON-clones are passed to the remote handler.
-	 * @return {Promise}       Promise that rejects if the request wasn't handled by any context
-	 *                         or if the handler threw and otherwise resolves to the handlers return value.
-	 */
-	request(/* arguments */) {
-		return mh_request.apply(null, arguments).then(arg => {
-			if (!arg) { throw new Error(`No message handler found for "${ name }"`); }
-			if (arg.threw) { throw fromJson(arg.error); }
-			return arg.value;
-		});
-	}
-	/**
-	 * Calls a handler in a different context without waiting for its return value and without guarantee that a handler has in fact been called.
-	 * @param  {object}  tab   Optional. Object of { tabId, frameId, } to send a message to all frames in a tab
-	 *                         or optionally a single frame in the tab if frameId is set.
-	 * @param  {string}  name  Name of the remote handler to call.
-	 * @param  {...any}  args  Additional arguments whose JSON-clones are passed to the remote handler.
-	 */
-	post(/* arguments */) {
-		return mh_post.apply(null, arguments);
-	}
+	const Port = global.es6lib_port || require('node_modules/es6lib/port');
+
+	const port = new Port(
+		{ runtime: Chrome.Runtime, tabs: Chrome.Tabs, },
+		Port.web_ext_Runtime
+	);
+	[ 'addHandler', 'addHandlers', 'removeHandler', 'hasHandler', 'request', 'post', 'destroy', ]
+	.forEach(key => port[key] = port[key].bind(port));
+
+	return (messageHandler = port);
 }
 
 // Deeply clones an object but replaces all functions with Promise-wrapped functions.
@@ -255,81 +176,7 @@ function promisify(method, thisArg) {
 	};
 }
 
-mh_request = makeSendFunction(
-	gecko ? _browser.runtime.sendMessage : promisify(_api.runtime.sendMessage, _api.runtime),
-	_api.tabs
-	? gecko ? _browser.tabs.sendMessage : promisify(_api.tabs.sendMessage, _api.tabs)
-	: () => { throw new Error(`Can't send messages to tabs (from within a tab)`); },
-	false
-);
-mh_post = makeSendFunction(
-	_api.runtime.sendMessage,
-	_api.tabs ? _api.tabs.sendMessage : () => { throw new Error(`Can't send messages to tabs (from within a tab)`); },
-	true
-);
-function makeSendFunction(send, sendTab, post) {
-	return function() {
-		const tab = arguments[0];
-		if (typeof tab === 'object') {
-			const { tabId, frameId, } = tab;
-			const [ , name, ...args ] = arguments;
-			if (!name || typeof name !== 'string') { throw new TypeError(`Handler names must be non-empty strings`); }
-			return sendTab(tabId, { name, args, post, }, frameId ? { frameId, } : { });
-		} else {
-			const [ name, ...args ] = arguments;
-			if (!name || typeof name !== 'string') { throw new TypeError(`Handler names must be non-empty strings`); }
-			return send({ name, args, post, });
-		}
-	};
-}
-
-function mh_attach() {
-	if (mh_listener) { return; }
-	mh_listener = ({ name, args, post, }, sender, reply) => {
-		if (!mh_handlers[name]) { return; }
-		if (post) { mh_handlers[name].apply(sender, args); return; }
-		try {
-			const value = mh_handlers[name].apply(sender, args);
-			if (value instanceof Promise) {
-				Promise.prototype.then.call(value,
-					value => reply({ value, }),
-					error => reply({ error: toJson(error), threw: true, })
-				);
-				return true;
-			} else {
-				reply({ value, });
-			}
-		} catch (error) { reply({ error: toJson(error), threw: true, }); }
-	};
-
-	_api.runtime.onMessage.addListener(mh_listener);
-}
-
-function mh_detatch() {
-	if (!mh_listener || Object.keys(mh_handlers).length) { return; }
-	_api.runtime.onMessage.removeListener(mh_listener);
-	mh_listener = null;
-}
-
-function toJson(value) {
-	return JSON.stringify(value, (key, value) => {
-		if (!value || typeof value !== 'object') { return value; }
-		if (value instanceof Error) { return '$_ERROR_$'+ JSON.stringify({ name: value.name, message: value.message, stack: value.stack, }); }
-		return value;
-	});
-}
-function fromJson(string) {
-	if (typeof string !== 'string') { return string; }
-	return JSON.parse(string, (key, value) => {
-		if (!value || typeof value !== 'string' || !value.startsWith('$_ERROR_$')) { return value; }
-		const object = JSON.parse(value.slice(9));
-		const Constructor = object.name ? window[object.name] || Error : Error;
-		const error = gecko ? Object.create(Constructor.prototype) : new Constructor; // Firefox (49) won't log any properties of actual Error instances to the web pages console
-		Object.assign(error, object);
-		return error;
-	});
-}
 
 return (Chrome);
 
-}); })();
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; } } })((function() { return this; })());
