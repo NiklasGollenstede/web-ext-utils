@@ -22,35 +22,36 @@ html, body {
 }
 
 /* inputs */
-textarea, input, select {
+textarea, input, select, .checkbox-wrapper>label {
 	color: white;
 	border-color: white;
 	background-color: black;
 }
-textarea:focus, input:focus, select:focus {
+textarea:focus, input:focus, select:focus, .checkbox-wrapper>input:focus ~ label {
 	border-color: #7d7dff;
 	box-shadow: 0 0 6px 0 #4444ff;
 }
-textarea:active:focus, input:active:focus, select:active:focus {
+textarea:active:focus, input:active:focus, select:active:focus, .checkbox-wrapper>input:active:focus ~ label {
 	border-color: #0000f0;
 	box-shadow: 0 0 2px 1px blue;
 }
-textarea::selection, input::selection, select::selection {
+textarea::selection, input::selection {
 	background-color: #39f;
 	color: white;
 }
-input[type="checkbox"]::after {
+.checkbox-wrapper>label::after {
 	text-shadow: 0 0 5px green, 0 0 5px green, 0 0 5px green;
 }
-input[type="checkbox"]:not(:checked)::after {
+.checkbox-wrapper>input:not(:checked) ~ label::after {
 	color: black;
 	text-shadow: 0 0 5px red, 0 0 5px red, 0 0 5px red;
 }
-input[type="checkbox"]:not([disabled]):hover,
+.checkbox-wrapper>input:not([disabled]) ~ label:hover,
 input[type="button"]:not([disabled]):hover,
 button:not([disabled]):hover {
 	border-color: #7d7dff;
 }
+.checkbox-wrapper>input[disabled] ~ label,
 textarea[disabled], input[disabled], select[disabled] {
 	color: hsl(  0,  0%,  65%);
 	border-color: hsl(  0,  0%,  65%);
@@ -59,8 +60,8 @@ textarea[disabled], input[disabled], select[disabled] {
 	user-select: none;
 }
 select:not(:hover), _:-moz-tree-row(hover) { /* firefox only */
-    -moz-appearance: none;
-    padding-right: 25px;
+	-moz-appearance: none;
+	padding-right: 25px;
 }
 input[type="number"]:not(:hover) { /* firefox only */
 	-moz-appearance: textfield;
@@ -86,16 +87,14 @@ select.invalid, .invalid select {
 }
 
 /* special elements */
-code {
+.pref-description code {
 	background-color: #111;
 	color: #ebf5ff;
-    box-shadow: 0 0 1px 0px white inset;
-    padding: 0 5px;
-    border-radius: 2px;
+	box-shadow: 0 0 1px 0px white inset;
 }
-a[href] {
+.pref-description a[href] {
 	color: #c5ffc7;
 }
-a[href]:visited {
+.pref-description a[href]:visited {
 	color: #ebf5ff;
 }

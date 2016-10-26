@@ -131,20 +131,26 @@ function createInput(pref) {
 			input = createElement('textarea', inputProps);
 		} break;
 		default: {
-			input = createElement('input', Object.assign(inputProps, {
-				step: pref.type === 'integer' ? 1 : 'any',
-				type: {
-					control: 'button',
-					bool: 'checkbox',
-					boolInt: 'checkbox',
-					integer: 'number',
-					string: 'text',
-					keybordKey: 'text',
-					color: 'color',
-					label: 'hidden',
-				}[pref.type] || pref.type,
-			}));
+			input = createElement('input', inputProps);
+			input.type = ({
+				control: 'button',
+				bool: 'checkbox',
+				boolInt: 'checkbox',
+				integer: 'number',
+				string: 'text',
+				keybordKey: 'text',
+				color: 'color',
+				label: 'hidden',
+			})[pref.type] || pref.type;
 		}
+	}
+	if (pref.type === 'number') { input.step === 'any'; }
+	if (input.type === 'checkbox') {
+		input.id = 'l'+ Math.random().toString(36).slice(2);
+		input = createElement('div', { className: 'checkbox-wrapper value-input', }, [
+			input,
+			createElement('label', { htmlFor: input.id, }),
+		]);
 	}
 	return Object.assign(createElement('div', {
 		className: 'value-container',
@@ -173,10 +179,10 @@ function setInputValue(input, value) {
 	const { pref, } = input, field = queryChild(input, '.value-input');
 	switch (pref.type) {
 		case "bool":
-			field.checked = value;
+			field.firstChild.checked = value;
 			break;
 		case "boolInt":
-			field.checked = (value === pref.on);
+			field.firstChild.checked = (value === pref.on);
 			break;
 		case "menulist": {
 			field.selectedIndex = (pref.options || []).findIndex(option => option.value === value);
@@ -205,9 +211,9 @@ function getInputValue(input) {
 		case "control":
 			return field.dataset.value;
 		case "bool":
-			return field.checked;
+			return field.firstChild.checked;
 		case "boolInt":
-			return field.checked ? pref.on : pref.off;
+			return field.firstChild.checked ? pref.on : pref.off;
 		case "menulist":
 			return pref.options && pref.options[field.selectedIndex].value;
 		case "number":
@@ -292,12 +298,11 @@ function displayPreferences(prefs, host, parent = null) {
 				}),
 			]),
 			(pref.type !== 'label' && pref.type !== 'control' || pref.children.some(({ type, }) => type !== 'hidden' && type !== 'label' && type !== 'control'))
-			&& createElement('a', {
-				className: 'reset-values',
+			&& createElement('div', { className: 'reset-values', }, [ createElement('a', {
 				textContent: 'reset',
 				title: `Double click to reset this option and all it's children to their default values`,
 				ondblclick: ({ button, }) => !button && pref.resetAll(),
-			}),
+			}), ]),
 
 			createElement('div', { className: 'toggle-target', }, [
 				pref.description && createElement('span', {

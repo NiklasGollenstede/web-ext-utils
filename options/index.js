@@ -16,11 +16,11 @@ const Contexts = new WeakMap;
 const _uniqueCache = new WeakMap;
 
 class Option {
-	constructor(model, parent) {
+	constructor(model, parent, name = model.name || '') {
 		this.model = model;
 		this.parent = parent;
-		this.path = (parent ? parent.path +'.' : '') + (model.name || '');
-		model.name && (this.name = model.name +'');
+		this.name = name +'';
+		this.path = (parent ? parent.path +'.' : '') + this.name;
 		model.type && (this.type = model.type +'');
 		model.title && (this.title = model.title +'');
 		model.description && (this.description = model.description +'');
@@ -46,7 +46,7 @@ class Option {
 
 		model.restrict && (this.restrict = model.restrict === 'inherit' ? parent.restrict : new Restriction(this, model.restrict));
 
-		this.children = new OptionList((model.children || [ ]).map(model => new Option(model, this)), this);
+		this.children = new OptionList(model.children || [ ], this);
 
 		context.options.set(this.path, this);
 		Contexts.set(this, context);
@@ -115,7 +115,11 @@ class OptionList extends Array {
 	constructor(items, parent) {
 		super();
 		Object.defineProperty(this, 'parent', { value: parent, });
-		items.forEach((item, index, array) => this[item.name] = this[index] = item);
+		if (Array.isArray(items)) {
+			items.forEach((item, index) => this[item.name] = this[index] = new Option(item, parent));
+		} else {
+			Object.keys(items).forEach((key, index) => this[key] = this[index] = new Option(items[key], parent, key));
+		}
 		return Object.freeze(this);
 	}
 	static get [Symbol.species]() { return Array; }
@@ -269,7 +273,7 @@ return class OptionsRoot {
 	constructor({ model, prefix, storage, addChangeListener, removeChangeListener, }) {
 		const options = this.options = new Map;
 		this.prefix = prefix; this.storage = storage;
-		inContext(this, () => this._shadow = new Option({ children: Array.isArray(model) ? model : [ model, ], }, null));
+		inContext(this, () => this._shadow = new Option({ children: model, }, null));
 		this.children = this._shadow.children;
 		this.onChange = this.onChange.bind(this);
 		this._removeChangeListener = removeChangeListener;
