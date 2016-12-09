@@ -87,14 +87,14 @@ select.invalid, .invalid select {
 }
 
 /* special elements */
-.pref-description code {
+code {
 	background-color: #111;
 	color: #ebf5ff;
 	box-shadow: 0 0 1px 0px white inset;
 }
-.pref-description a[href] {
+a[href] {
 	color: #c5ffc7;
 }
-.pref-description a[href]:visited {
+a[href]:visited {
 	color: #ebf5ff;
 }
