@@ -281,13 +281,12 @@ return class OptionsRoot {
 
 		return storage.get(this.keys)
 		.then(data => inContext(this, () => {
-			const { hasOwnProperty, } = Object.prototype;
+			if (Array.isArray(data) && data.length === 1) { data = data[0]; } // some weird Firefox bug
 			options.forEach(option => Values.set(option, new ValueList(
 				option,
-				hasOwnProperty.call(data, prefix + option.path) ? data[prefix + option.path] : option.defaults
+				data.hasOwnProperty(prefix + option.path) ? data[prefix + option.path] : option.defaults
 			)));
 			addChangeListener && addChangeListener.call(this, this.onChange);
-
 			return this;
 		}));
 	}
@@ -301,8 +300,8 @@ return class OptionsRoot {
 		const old = Values.get(list);
 		Values.set(list, values);
 
-		const is = values.find(x => x);
-		const was = old.find(x => x);
+		const is = !!values.find(x => x);
+		const was = !!old.find(x => x);
 
 		callAll(OnChange.get(option), values[0], list, old, path);
 		climbUp(option, option => callAll(OnAnyChange.get(option), values[0], list, old, path));
