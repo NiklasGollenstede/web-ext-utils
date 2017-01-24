@@ -1,5 +1,6 @@
-(() => { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'./chrome/': { runtime, extension, tabs, Tabs, Windows, },
+(function(global) { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	'./chrome/': { runtime, extension, tabs, Tabs, Windows, rootURL, },
+	require,
 }) {
 
 /// escapes a string for usage in a regular expression
@@ -71,10 +72,83 @@ function showExtensionTab(url, match = url) {
 	.then(tab => Windows.update(tab.windowId, { focused: true, }).then(() => tab));
 }
 
+/**
+ * Attaches or removes a MessageHandler that dynamically loads content script files into tabs when requested by es6lib/require.js.
+ * @param  {Boolean}  enable Whether to enable (true, default) or disable (false) the handler.
+ */
+function handleRequireRequests(enable = true) {
+	const { Messages, } = require('./chrome/');
+	enable
+	? Messages.addHandler('require.loadScript', function(url) {
+		if (!url.startsWith(rootURL)) { throw new Error('Can only load local resources'); }
+		url = url.slice(rootURL.length - 1);
+		return Tabs.executeScript(this.tab.id, { file: url, }).then(() => null); // requests to bas urls should be filtered by the extensions CSP
+	})
+	: Messages.removeHandler('require.loadScript');
+}
+
+/**
+ * Dynamically executes content scripts.
+ * @param  {natural}       tabId    The id of tab to run in.
+ * @param  {...string}     files    Files to load before executing `script`.
+ * @param  {function}      script   A function that will be decompiled and run as content script.
+ * @param  {...any}        args     JSON-arguments to the function.
+ * @return {Promise(any)}           Promise to the value (or the value of the promise) returned by 'script'.
+ */
+const runInTab = (tabId, ...args) => Promise.resolve().then(() => {
+	const files = [ ];
+	let i = 0; while (typeof args[i] !== 'function' && i < args.length) {
+		if (!(/^\//).test(args[i])) { throw new TypeError('URLs must be absolute'); }
+		files.push(args[i++]);
+	}
+
+	const script = args[i];
+	if (!script) { throw new TypeError(`Can't find 'script' parameter`); }
+	args.splice(0, i + 1);
+
+	return Promise.all(
+		files.map(file => Tabs.executeScript(tabId, { file, }))
+		.concat(require.async('node_modules/es6lib/port'))
+	).then(() => {
+
+	const { Messages, } = require('node_modules/web-ext-utils/chrome/');
+	const id = 'runInTab.'+ Math.random().toString(36).slice(2);
+	let resolve, reject, promise = new Promise((y,n) => ((resolve = y), (reject = n)));
+
+	Messages.addHandler(id, ({ threw, value, error, }) => {
+		Messages.removeHandler(id);
+		if (!threw) { return resolve(value); }
+		if (typeof error === 'string' && error.startsWith('$_ERROR_$')) {
+			const object = JSON.parse(error.slice(9));
+			error = Object.create((object.name ? global[object.name] || Error : Error).prototype);
+			Object.assign(error, object);
+		}
+		return reject(error);
+	});
+
+	return Tabs.executeScript(tabId, { code: `(`+ ((global, id, script, args) => {
+		// args = JSON.parse(args);
+		const runtime = (global.browser || global.chrome).runtime;
+		Promise.resolve().then(() => script.apply(global, args))
+		.then(value => runtime.sendMessage(id, { value, }))
+		.catch(error => {
+			if (error instanceof Error) {
+				error = '$_ERROR_$'+ JSON.stringify({ name: error.name, message: error.message, stack: error.stack, });
+			}
+			runtime.sendMessage(id, { threw: true, error, });
+		});
+		return id;
+	}) +`)(this, "${ id }", ${ script }, ${ JSON.stringify(args) }) //# sourceURL=${ require.toUrl('eval') }`, }).then(() => {
+
+	return promise;
+}); }); });
+
 return {
 	matchPatternToRegExp,
 	attachAllContentScripts,
 	showExtensionTab,
+	handleRequireRequests,
+	runInTab,
 };
 
-}); })();
+}); })((function() { /* jshint strict: false */ return this; })());

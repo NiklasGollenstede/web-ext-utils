@@ -8,7 +8,7 @@ const cache = new WeakMap;
 let messageHandler;
 
 const ua = navigator.userAgent;
-const rootUrl = _api.extension.getURL('.').slice(0, -1);
+const rootUrl = _api.extension.getURL('');
 const blink = rootUrl.startsWith('chrome');
 const opera = blink && (/ OPR\/\d+\./).test(ua); // TODO: is this safe to do?
 const vivaldi = blink && (/ Vivaldi\/\d+\./).test(ua); // TODO: is this safe to do?
@@ -39,20 +39,22 @@ const appVersion = (() => { switch (true) {
 	case (blink):           return (/Chrom(?:e|ium)\/((?:\d+.)*\d+)/).exec(ua)[1];
 	case (fennec): switch (true) {
 		// TODO: keep up to date
-		case (global.CSS.supports('display', 'grid')): return '52.0'; // should use some _api key instead
-		case (_api.management && _api.management.getSelf): return '51.0';
-		case (_api.pageAction && _api.pageAction.show): return '50.0';
+		case !!(_api.sessions && _api.sessions.onChanged): return '53.0'; // TODO:  test
+		case !!(_api.runtime.onInstalled): return '52.0'; // TODO: test
+		case !!(_api.management && _api.management.getSelf): return '51.0';
+		case !!(_api.pageAction && _api.pageAction.show): return '50.0';
 		default: return '48.0';
 	} break;
 	case (firefox): switch (true) {
 		// TODO: keep up to date
-		case (global.CSS.supports('display', 'grid')): return '52.0'; // should use some _api key instead
-		case (_api.management && _api.management.getSelf): return '51.0';
-		case (_api.runtime.connectNative || _api.history && _api.history.getVisits): return '50.0'; // these require permissions
-		case (_api.tabs.removeCSS): return '49.0';
-		case (_api.commands.getAll): return '48.0';
-		case (_api.tabs.insertCSS): return '47.0';
-		case (_api.tabs.move): return '46.0';
+		case !!(_api.sessions && _api.sessions.onChanged): return '53.0'; // TODO:  test
+		case !!(_api.runtime.onInstalled): return '52.0'; // TODO: test
+		case !!(_api.management && _api.management.getSelf): return '51.0';
+		case !!(_api.runtime.connectNative || _api.history && _api.history.getVisits): return '50.0'; // these require permissions
+		case !!(_api.tabs.removeCSS): return '49.0';
+		case !!(_api.commands.getAll): return '48.0';
+		case !!(_api.tabs.insertCSS): return '47.0';
+		case !!(_api.tabs.move): return '46.0';
 		default: return '45.0';
 	}
 	return '0';
