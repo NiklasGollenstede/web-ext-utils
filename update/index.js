@@ -1,7 +1,7 @@
-(() => { 'use strict'; define(function*({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../chrome/': { extension: getURL, runtime, Storage, applications: { current: currentBrowser, version: browserVersion, }, },
+(function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	'../browser/': { runtime, Storage, applications: { current: currentBrowser, version: browserVersion, }, },
 	require,
-}) {
+}) => {
 
 const Version = createVersionClass();
 
@@ -17,12 +17,12 @@ const base_path = (options.base_path +'' || 'update/').replace(/^\/|^\\/, '');
 const getLocal   = Storage.local.get([ '__update__.local.version', '__update__.browser.version', ]);
 const getSync    = Storage.sync !== Storage.local ? Storage.sync.get([ '__update__.sync.version', ]) : { '__update__.sync.version': null, };
 
-const extension  = ({ from: new Version((yield getLocal)[`__update__.local.version`]),               to: new Version(manifest.version), });
-const browser    = ({ from: new Version((yield getLocal)[`__update__.${ currentBrowser }.version`]), to: new Version(browserVersion), });
-const synced     = ({ from: new Version((yield getSync )[`__update__.sync.version`]),                to: new Version(Storage.sync !== Storage.local ? manifest.version : null), });
+const extension  = ({ from: new Version((await getLocal)[`__update__.local.version`]),               to: new Version(manifest.version), });
+const browser    = ({ from: new Version((await getLocal)[`__update__.${ currentBrowser }.version`]), to: new Version(browserVersion), });
+const synced     = ({ from: new Version((await getSync )[`__update__.sync.version`]),                to: new Version(Storage.sync !== Storage.local ? manifest.version : null), });
 const _updated   = ({ extension, browser, synced, });
 
-for (let component of Object.keys(_updated)) {
+for (const component of Object.keys(_updated)) {
 	const updated = _updated[component];
 	const path = component === 'browser' ? currentBrowser : component;
 
@@ -34,7 +34,7 @@ for (let component of Object.keys(_updated)) {
 	});
 }
 
-for (let component of Object.keys(_updated)) {
+for (const component of Object.keys(_updated)) {
 	const updated = _updated[component];
 	const { from: last, to: now, } = updated;
 	inProgress.component = component;
@@ -52,13 +52,13 @@ for (let component of Object.keys(_updated)) {
 		Object.freeze(updated); continue;
 	}
 
-	const _versions = JSON.parse((yield loadFile(path +'/versions.json')) || '[]');
+	const _versions = JSON.parse((await loadFile(path +'/versions.json')) || '[]');
 	const hasInstalled = _versions.includes('installed');
 	const hasUpdated   = _versions.includes('updated');
 
 	if (+last === 0 && hasInstalled) {
 		// newly installed
-		if ((yield runStep(path +'/installed', now))) {
+		if ((await runStep(path +'/installed', now))) {
 			updated.installed = true;
 		}
 	} else {
@@ -68,23 +68,23 @@ for (let component of Object.keys(_updated)) {
 		const versions = _versions.map(Version.create).sort(numeric);
 		const startAt = versions.findIndex(_=>_ > last);
 		const ran = updated.ran = [ ];
-		for (let version of versions.slice(startAt > 0 ? startAt : Infinity)) {
-			if ((yield runStep(path +'/'+ version, version))) {
+		for (const version of versions.slice(startAt > 0 ? startAt : Infinity)) {
+			if ((await runStep(path +'/'+ version, version))) {
 				ran.push(version);
 			}
 		}
 		Object.freeze(ran);
 
-		if (hasUpdated && (yield runStep(path +'/updated', now))) {
+		if (hasUpdated && (await runStep(path +'/updated', now))) {
 			updated.updated = true;
 		}
 	}
 
 	// write the new version
 	switch (component) {
-		case 'extension': (yield Storage.local.set({ [`__update__.local.version`]:               now +'', })); break;
-		case 'browser'  : (yield Storage.local.set({ [`__update__.${ currentBrowser }.version`]: now +'', })); break;
-		case 'synced'   : (yield Storage.sync .set({ [`__update__.sync.version`]:                now +'', })); break;
+		case 'extension': (await Storage.local.set({ [`__update__.local.version`]:               now +'', })); break;
+		case 'browser'  : (await Storage.local.set({ [`__update__.${ currentBrowser }.version`]: now +'', })); break;
+		case 'synced'   : (await Storage.sync .set({ [`__update__.sync.version`]:                now +'', })); break;
 	}
 
 	Object.freeze(updated);
@@ -103,7 +103,7 @@ function runStep(file, version) {
 
 /// loads a file from the update folder as a string or null
 function loadFile(name) {
-	return new Promise((resolve, reject) => {
+	return new Promise(resolve => {
 		const xhr = new XMLHttpRequest;
 		xhr.addEventListener('load', () => resolve(xhr.responseText));
 		xhr.addEventListener('error', () => resolve(null));
@@ -115,9 +115,15 @@ function loadFile(name) {
 /// normalized representation of semantic version strings, can be sorted numerically
 function createVersionClass(versions = { }) { return class Version {
 	constructor(input) {
-		const [ major, minor, patch, ] = (input || '0.0.0').split('.').concat(NaN, NaN).map(s => +s);
-		const number = this.number = (major << 24) + (minor << 16) + (patch << 0);
-		const string = this.string = `${ major }.${ minor }.${ patch }`;
+		const array = (/^\s*(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:([A-Za-z_-]+)(\d*))?/).exec(input);
+		if (!array) { this.number = -1; this.string = '<invalid>'; return this; }
+		const major = +array[1];
+		const minor = +array[2] || 0;
+		const patch = +array[3] || 0;
+		const channel = array[4] ? array[4][0].toLowerCase() : '';
+		const build = array[4] && +array[5] || 0;
+		this.number = (major * 0x1000000000) + (minor * 0x1000000) + (patch * 0x10000) + ((parseInt(channel, 36) || 36) * 0x400) + (build * 0x1);
+		const string = this.string = `${ major }.${ minor }.${ patch }${ channel }${ build || '' }`;
 		if (versions[string]) { return versions[string]; }
 		return (versions[string] = Object.freeze(this));
 	}
@@ -130,4 +136,4 @@ function createVersionClass(versions = { }) { return class Version {
 /// numeric sorter
 function numeric(a, b) { return a - b; }
 
-}); })();
+}); })(this);

@@ -1,7 +1,7 @@
-(function(global) { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'./chrome/': { runtime, extension, tabs, Tabs, Windows, rootURL, },
+(function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	'./browser/': { runtime, extension, tabs, Tabs, Windows, rootUrl, },
 	require,
-}) {
+}) => {
 
 /// escapes a string for usage in a regular expression
 const escape = string => string.replace(/[\-\[\]\{\}\(\)\*\+\?\.\,\\\^\$\|\#]/g, '\\$&');
@@ -12,7 +12,7 @@ const matchPattern = (/^(?:(\*|http|https|file|ftp|app):\/\/(\*|(?:\*\.)?[^\/\*]
 /**
  * Transforms a valid match pattern into a regular expression which matches all URLs included by that pattern.
  * Passes all examples and counter-examples listed here https://developer.mozilla.org/en-US/Add-ons/WebExtensions/Match_patterns#Examples
- * The behaviour is undefined if the input is not a valid pattern.
+ * The behavior is undefined if the input is not a valid pattern.
  * @param  {string}  pattern  The pattern to transform.
  * @return {RegExp}           The patterns equivalent as a RegExp.
  */
@@ -36,26 +36,25 @@ function matchPatternToRegExp(pattern) {
  * @return {Promise([ natural, ])}      Promise that resolves once the cleanup function ran in all included tabs. The numbers are the number of tabs each content script is applied to.
  *                                      Note, that the content scripts themselves have not necessarily been executed yet.
  */
-function attachAllContentScripts({ cleanup, } = { }) {
+async function attachAllContentScripts({ cleanup, } = { }) {
 	if (typeof (cleanup = cleanup || (() => void 0)) !== 'function') { throw new TypeError('"Cleanup" parameter must be a function or falsey'); }
+	const allTabs = (await Tabs.query({ }));
+	const scripts = runtime.getManifest().content_scripts;
 
-	return Tabs.query({ }).then(allTabs => {
-		const scripts = runtime.getManifest().content_scripts;
-		return Promise.all(scripts.map(({ js, css, matches, exclude_matches, }) => {
-			const includes = (matches || [ ]).map(matchPatternToRegExp);
-			const excludes = (exclude_matches || [ ]).map(matchPatternToRegExp);
-			return Promise.all(allTabs.map(({ id, url, }) => {
-				if (!url || !includes.some(exp => exp.test(url)) || excludes.some(exp => exp.test(url))) { return; }
-				return Tabs.executeScript(id, { code: `(${ cleanup })();`, })
-				.then(() => {
-					css && css.forEach(file => tabs.insertCSS(id, { file, }));
-					js && js.forEach(file => tabs.executeScript(id, { file, }));
-					return true;
-				})
-				.catch(error => console.warn('skipped tab', error)); // not allowed to execute
-			})).then(_=>_.filter(_=>_).length);
-		}));
-	});
+	return Promise.all(scripts.map(({ js, css, matches, exclude_matches, }) => {
+		const includes = (matches || [ ]).map(matchPatternToRegExp);
+		const excludes = (exclude_matches || [ ]).map(matchPatternToRegExp);
+		return Promise.all(allTabs
+			.filter(({ url, }) => url && includes.some(exp => exp.test(url)) && !excludes.some(exp => exp.test(url)))
+			.map(async ({ id, }) => {
+				(await Tabs.executeScript(id, { code: `(${ cleanup })();`, }));
+				css && css.forEach(file => tabs.insertCSS(id, { file, }));
+				js && js.forEach(file => tabs.executeScript(id, { file, }));
+				return true;
+			})
+			.catch(error => console.warn('skipped tab', error)) // not allowed to execute
+		).then(_=>_.filter(_=>_).length);
+	}));
 }
 
 /**
@@ -66,38 +65,25 @@ function attachAllContentScripts({ cleanup, } = { }) {
  * @param  {string}        match  Optional value of window.location.pathname a existing tab must have to be focused.
  * @return {Promise<Tab>}         The chrome.tabs.Tab that is now the active tab in the focused window.
  */
-function showExtensionTab(url, match = url) {
+async function showExtensionTab(url, match = url) {
 	const window = extension.getViews({ type: 'tab', }).find(window => window && window.location.pathname === match && window.tabId != null);
-	return (window ? Tabs.update(window.tabId, { active: true, }) : Tabs.create({ url: extension.getURL(url), }))
-	.then(tab => Windows.update(tab.windowId, { focused: true, }).then(() => tab));
-}
-
-/**
- * Attaches or removes a MessageHandler that dynamically loads content script files into tabs when requested by es6lib/require.js.
- * @param  {Boolean}  enable Whether to enable (true, default) or disable (false) the handler.
- */
-function handleRequireRequests(enable = true) {
-	const { Messages, } = require('./chrome/');
-	enable
-	? Messages.addHandler('require.loadScript', function(url) {
-		if (!url.startsWith(rootURL)) { throw new Error('Can only load local resources'); }
-		url = url.slice(rootURL.length - 1);
-		return Tabs.executeScript(this.tab.id, { file: url, }).then(() => null); // requests to bas urls should be filtered by the extensions CSP
-	})
-	: Messages.removeHandler('require.loadScript');
+	const tab = (await (window ? Tabs.update(window.tabId, { active: true, }) : Tabs.create({ url: extension.getURL(url), })));
+	(await Windows.update(tab.windowId, { focused: true, }));
+	return tab;
 }
 
 /**
  * Dynamically executes content scripts.
  * @param  {natural}       tabId    The id of tab to run in.
- * @param  {...string}     files    Files to load before executing `script`.
+ * @param  {...string}     files    Absolute URLs to local script files to load before executing `script`.
  * @param  {function}      script   A function that will be decompiled and run as content script.
  * @param  {...any}        args     JSON-arguments to the function.
  * @return {Promise(any)}           Promise to the value (or the value of the promise) returned by 'script'.
  */
-const runInTab = (tabId, ...args) => Promise.resolve().then(() => {
+async function runInTab(tabId, ...args) {
 	const files = [ ];
 	let i = 0; while (typeof args[i] !== 'function' && i < args.length) {
+		if (args[i].startsWith(rootUrl)) { args[i] = args[i].replace(rootUrl, '/'); }
 		if (!(/^\//).test(args[i])) { throw new TypeError('URLs must be absolute'); }
 		files.push(args[i++]);
 	}
@@ -106,14 +92,14 @@ const runInTab = (tabId, ...args) => Promise.resolve().then(() => {
 	if (!script) { throw new TypeError(`Can't find 'script' parameter`); }
 	args.splice(0, i + 1);
 
-	return Promise.all(
+	(await Promise.all(
 		files.map(file => Tabs.executeScript(tabId, { file, }))
-		.concat(require.async('node_modules/es6lib/port'))
-	).then(() => {
+		.concat(require.async('../es6lib/port'))
+	));
 
-	const { Messages, } = require('node_modules/web-ext-utils/chrome/');
+	const { Messages, } = require('./browser/');
 	const id = 'runInTab.'+ Math.random().toString(36).slice(2);
-	let resolve, reject, promise = new Promise((y,n) => ((resolve = y), (reject = n)));
+	let resolve, reject; const promise = new Promise((y,n) => ((resolve = y), (reject = n)));
 
 	Messages.addHandler(id, ({ threw, value, error, }) => {
 		Messages.removeHandler(id);
@@ -126,29 +112,25 @@ const runInTab = (tabId, ...args) => Promise.resolve().then(() => {
 		return reject(error);
 	});
 
-	return Tabs.executeScript(tabId, { code: `(`+ ((global, id, script, args) => {
-		// args = JSON.parse(args);
-		const runtime = (global.browser || global.chrome).runtime;
+	const [ alsoId, ] = (await Tabs.executeScript(tabId, { code: `(`+ ((global, id, script, args) => {
+		const reply = arg => (global.browser || global.chrome).runtime.sendMessage([ id, 0, [ arg, ], ]);
 		Promise.resolve().then(() => script.apply(global, args))
-		.then(value => runtime.sendMessage(id, { value, }))
-		.catch(error => {
-			if (error instanceof Error) {
-				error = '$_ERROR_$'+ JSON.stringify({ name: error.name, message: error.message, stack: error.stack, });
-			}
-			runtime.sendMessage(id, { threw: true, error, });
-		});
+		.then(value => reply({ value, }))
+		.catch(error => reply({ threw: true, error: error instanceof Error ? '$_ERROR_$'+ JSON.stringify({
+			name: error.name, message: error.message, stack: error.stack,
+		}) : error, }));
 		return id;
-	}) +`)(this, "${ id }", ${ script }, ${ JSON.stringify(args) }) //# sourceURL=${ require.toUrl('eval') }`, }).then(() => {
+	}) +`)(this, "${ id }", ${ script }, ${ JSON.stringify(args) })\n//# sourceURL=${ require.toUrl('eval') }\n`, }));
 
+	if (alsoId !== id) { throw new Error(`Failed to execute script in tab`); }
 	return promise;
-}); }); });
+}
 
 return {
 	matchPatternToRegExp,
 	attachAllContentScripts,
 	showExtensionTab,
-	handleRequireRequests,
 	runInTab,
 };
 
-}); })((function() { /* jshint strict: false */ return this; })());
+}); })(this);

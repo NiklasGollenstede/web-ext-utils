@@ -1,6 +1,6 @@
-(() => { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	exports,
-}) {
+}) => {
 
 let context = null; // a OptionsRoot during its constrution
 
@@ -13,7 +13,6 @@ const OnAnyChange = new WeakMap;
 const callbackMaps = [ OnTrue, OnFalse, OnChange, OnAnyChange, ];
 
 const Contexts = new WeakMap;
-const _uniqueCache = new WeakMap;
 
 class Option {
 	constructor(model, parent, name = model.name || '') {
@@ -41,7 +40,7 @@ class Option {
 			this.default = model.default[0];
 		} else {
 			this.default = Object.freeze(model.default);
-			this.defaults = Object.freeze([ this.default ]);
+			this.defaults = Object.freeze([ this.default, ]);
 		}
 
 		model.restrict && (this.restrict = model.restrict === 'inherit' ? parent.restrict : new Restriction(this, model.restrict));
@@ -65,7 +64,7 @@ class Option {
 
 	whenTrue(listener) {
 		const values = this.values;
-		let listeners = OnTrue.get(this) || new Set;
+		const listeners = OnTrue.get(this) || new Set;
 		OnTrue.set(this, listeners);
 		if (listeners.has(listener)) { return false; }
 		listeners.add(listener);
@@ -74,7 +73,7 @@ class Option {
 	}
 	whenFalse(listener) {
 		const values = this.values;
-		let listeners = OnFalse.get(this) || new Set;
+		const listeners = OnFalse.get(this) || new Set;
 		OnFalse.set(this, listeners);
 		if (listeners.has(listener)) { return false; }
 		listeners.add(listener);
@@ -87,7 +86,7 @@ class Option {
 	}
 	whenChange(listener) {
 		const values = this.values;
-		let listeners = OnChange.get(this) || new Set;
+		const listeners = OnChange.get(this) || new Set;
 		OnChange.set(this, listeners);
 		if (listeners.has(listener)) { return false; }
 		listeners.add(listener);
@@ -95,17 +94,17 @@ class Option {
 		return true;
 	}
 	onChange(listener) {
-		let listeners = OnChange.get(this) || new Set;
+		const listeners = OnChange.get(this) || new Set;
 		OnChange.set(this, listeners);
 		return listeners.add(listener);
 	}
 	onAnyChange(listener) {
-		let listeners = OnAnyChange.get(this) || new Set;
+		const listeners = OnAnyChange.get(this) || new Set;
 		OnAnyChange.set(this, listeners);
 		return listeners.add(listener);
 	}
 	offAnyChange(listener) {
-		let listeners = OnAnyChange.get(this);
+		const listeners = OnAnyChange.get(this);
 		return listeners && listeners.delete(listener);
 	}
 
@@ -116,9 +115,9 @@ class OptionList extends Array {
 		super();
 		Object.defineProperty(this, 'parent', { value: parent, });
 		if (Array.isArray(items)) {
-			items.forEach((item, index) => this[item.name] = this[index] = new Option(item, parent));
+			items.forEach((item, index) => (this[item.name] = (this[index] = new Option(item, parent))));
 		} else {
-			Object.keys(items).forEach((key, index) => this[key] = this[index] = new Option(items[key], parent, key));
+			Object.keys(items).forEach((key, index) => (this[key] = (this[index] = new Option(items[key], parent, key))));
 		}
 		return Object.freeze(this);
 	}
@@ -225,7 +224,7 @@ function getUniqueSet(unique, parent) {
 	return Object.freeze(Array.from(result));
 
 	function walk(option, path) {
-		if (!path.length) { return result.add(option); }
+		if (!path.length) { return void result.add(option); }
 		const segment = path.shift();
 		switch (segment) {
 			case '.': {
@@ -273,7 +272,7 @@ return class OptionsRoot {
 	constructor({ model, prefix, storage, addChangeListener, removeChangeListener, }) {
 		const options = this.options = new Map;
 		this.prefix = prefix; this.storage = storage;
-		inContext(this, () => this._shadow = new Option({ children: model, }, null));
+		inContext(this, () => (this._shadow = new Option({ children: model, }, null)));
 		this.children = this._shadow.children;
 		this.onChange = this.onChange.bind(this);
 		this._removeChangeListener = removeChangeListener;
@@ -325,4 +324,4 @@ return class OptionsRoot {
 };
 
 
-}); })();
+}); })(this);

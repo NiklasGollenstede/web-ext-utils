@@ -1,5 +1,5 @@
-(() => { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-}) {
+(function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+}) => {
 
 const queryChild = (() => {
 	try { document.querySelector(':scope'); }
@@ -15,7 +15,7 @@ const queryChild = (() => {
 
 return function loadEditor({ host, options, onCommand, }) {
 
-	host.addEventListener('click', function({ target, button, }) {
+	host.addEventListener('click', ({ target, button, }) => {
 		if (button || !target.matches) { return; }
 		target.className.split(/\s+/).every(_class => { switch (_class) {
 			case 'remove-value-entry': {
@@ -33,14 +33,14 @@ return function loadEditor({ host, options, onCommand, }) {
 				saveInput(row.querySelector('.value-input'));
 			} break;
 			case 'value-input': {
-				if (target.dataset.type !== 'control') { return; }
+				if (target.dataset.type !== 'control') { return false; }
 				onCommand(target.parentNode.pref, target.dataset.value);
 			} break;
 			default: { return true; }
-		} });
+		} return false; });
 	});
 
-	host.addEventListener('keypress', function(event) {
+	host.addEventListener('keypress', (event) => {
 		const { target, } = event;
 		if (!target.matches || !target.matches('.value-input') || target.dataset.type !== 'keybordKey') { return; }
 		event.stopPropagation(); event.preventDefault();
@@ -48,7 +48,7 @@ return function loadEditor({ host, options, onCommand, }) {
 		target.value = key;
 		saveInput(target);
 	});
-	host.addEventListener('change', function({ target, }) {
+	host.addEventListener('change', ({ target, }) => {
 		if (!target.matches || !target.matches('.value-input, .value-input *')) { return; }
 		saveInput(getParent(target, '.value-input'));
 	});
@@ -75,7 +75,7 @@ function setButtonDisabled(element) {
 
 function fieldEnabled(field, reason, enabled) {
 	const exp = new RegExp(String.raw`${ reason };|$`);
-	let reasons = (field.getAttribute('disabled') || '').replace(exp, () => enabled ? '' : reason +';');
+	const reasons = (field.getAttribute('disabled') || '').replace(exp, () => enabled ? '' : reason +';');
 	field[(reasons ? 'set' : 'remove') +'Attribute']('disabled', reasons);
 }
 
@@ -122,7 +122,7 @@ function createInput(pref) {
 				createElement('input', { type: 'number', step: 'any', }),
 				createElement('span', {
 					innerHTML: sanatize(pref.infix || '  -  '),
-					className: 'value-infix'
+					className: 'value-infix',
 				}),
 				createElement('input', { type: 'number', step: 'any', }),
 			]);
@@ -144,7 +144,7 @@ function createInput(pref) {
 			})[pref.type] || pref.type;
 		}
 	}
-	if (pref.type === 'number') { input.step === 'any'; }
+	if (pref.type === 'number') { input.step = 'any'; }
 	if (input.type === 'checkbox') {
 		input.id = 'l'+ Math.random().toString(36).slice(2);
 		input = createElement('div', { className: 'checkbox-wrapper value-input', }, [
@@ -163,12 +163,12 @@ function createInput(pref) {
 		}),
 		pref.prefix && createElement('span', {
 			innerHTML: sanatize(pref.prefix),
-			className: 'value-prefix'
+			className: 'value-prefix',
 		}),
 		input,
 		pref.suffix && createElement('span', {
 			innerHTML: sanatize(pref.suffix),
-			className: 'value-suffix'
+			className: 'value-suffix',
 		}),
 	]), {
 		pref,
@@ -219,11 +219,10 @@ function getInputValue(input) {
 		case "number":
 		case "integer":
 			return +field.value;
-		case "interval": {
+		case "interval":
 			return { from: +field.firstChild.value, to: +field.lastChild.value, };
-		} break;
 		case "label":
-			return undefined;
+			return null;
 		default:
 			return field.value;
 	}
@@ -241,17 +240,17 @@ function getParent(element, selector) {
 }
 
 function createElement(tagName, properties, childList) {
-	const element = (this || window).document.createElement(tagName);
+	const element = document.createElement(tagName);
 	if (Array.isArray(properties)) { childList = properties; properties = null; }
 	properties && copyProperties(element, properties);
-	for (var i = 0; childList && i < childList.length; ++i) {
+	for (let i = 0; childList && i < childList.length; ++i) {
 		childList[i] && element.appendChild(childList[i]);
 	}
 	return element;
 }
 
 function copyProperties(target, source) {
-	source && Object.keys(source).forEach(function(key) {
+	source && Object.keys(source).forEach(key => {
 		if (Object.prototype.toString.call(source[key]) === '[object Object]') {
 			!target[key] && (target[key] = { });
 			copyProperties(target[key], source[key]);
@@ -273,7 +272,7 @@ function sanatize(html) {
 	);
 }
 
-function displayPreferences(prefs, host, parent = null) {
+function displayPreferences(prefs, host) {
 	prefs.forEach(pref => {
 		if (pref.type === 'hidden') { return; }
 
@@ -323,8 +322,7 @@ function displayPreferences(prefs, host, parent = null) {
 				}),
 				childrenContainer = pref.children.filter(({ type, }) => type !== 'hidden').length && displayPreferences(
 					pref.children,
-					createElement('fieldset', { className: 'pref-children', }),
-					pref
+					createElement('fieldset', { className: 'pref-children', })
 				),
 			]),
 		])), { pref, input, });
@@ -346,4 +344,4 @@ function displayPreferences(prefs, host, parent = null) {
 	return host;
 }
 
-}); })();
+}); })(this);

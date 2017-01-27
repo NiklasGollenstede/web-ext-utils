@@ -3,7 +3,7 @@
 /**
  * Synchronously executes a function in the page context.
  * Note: The function is executed in a completely untrusted context.
- * If the page removes/replaces any of the global values this `inject` function uses, the behaviour is undefined.
+ * If the page removes/replaces any of the global values this `inject` function uses, the behavior is undefined.
  * `inject` does not necessarily notice such modifications and can not ensure that the return value is trustworthy,
  * or that `_function` was called at all.
  * Besides that, the calling overhead is considerable.
@@ -12,6 +12,7 @@
  *                                The global context the function is executed in is that of the page, and thus untrusted.
  *                                The `this` in the function is the pages window (untrusted).
  * @param  {...any}    args       Any number of JSONable args the function will be called with.
+ * @this   {Window}               Optional. To inject into the scope of an iframe, call with that iframe as `this`.
  * @return {any}                  JSON clone of `_function`s return value.
  * @throws {EvalError}            If `_function` could not be evaluated, for example due to iframe sandboxing or the pages CSP.
  * @throws {any}                  If `_function` throws, a JSON clone of the thrown value is thrown.
@@ -35,7 +36,7 @@ function inject(_function, ...args) {
 			? '$_ERROR_$'+ JSON.stringify({ name: error.name, message: error.message, stack: error.stack, })
 			: JSON.stringify(error);
 		} catch (_) { throw error; }
-		throw error; // will log the exeption in the page context
+		throw error; // will log the exception in the page context
 	} } +`).call(this, document.currentScript)`);
 	document.documentElement.appendChild(script).remove(); // evaluates .textContent synchronously in the page context
 
@@ -50,6 +51,7 @@ function inject(_function, ...args) {
  * Same as `inject`, only that it executes `_function` asynchronously,
  * allows `_function` to return a Promise, and that it returns a Promise to that value.
  * The calling overhead is even greater than that of the synchronous `inject`.
+ * @this   {Window}
  */
 function injectAsync(_function, ...args) { return new Promise((resolve, reject) => {
 	if (typeof _function !== 'function') { throw new TypeError('Injecting a string is a form of eval()'); }
@@ -62,7 +64,7 @@ function injectAsync(_function, ...args) { return new Promise((resolve, reject) 
 		const args = JSON.parse(script.dataset.args);
 		const _function = new Function('return ('+ script.dataset.source +').apply(this, arguments);');
 		script.dataset.done = true;
-		Promise.resolve().then(() => _function.apply(this, args))
+		Promise.resolve().then(() => _function.apply(self, args))
 		.then(value => report('value', value))
 		.catch(error => report('error', error));
 		function report(type, value) {
@@ -140,4 +142,4 @@ return {
 	injectAsync,
 };
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; if (typeof QueryInterface === 'function') { global.exports = result; global.EXPORTED_SYMBOLS = [ 'exports', ]; } } } })((function() { /* jshint strict: false */ return this; })());
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { /* eslint-disable */ module.exports = result; /* eslint-enable */ } else { global[factory.name] = result; if (typeof QueryInterface === 'function') { global.exports = result; global.EXPORTED_SYMBOLS = [ 'exports', ]; } } } })(this);
