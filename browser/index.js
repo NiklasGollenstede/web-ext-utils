@@ -12,11 +12,11 @@ const rootUrl = _api.extension.getURL('');
 const gecko = rootUrl.startsWith('moz');
 const edgeHTML = rootUrl.startsWith('ms-browser');
 
-const Storage = gecko ? _browser.storage : wrapAPI(_api.storage);
+let Storage = gecko ? _browser.storage : wrapAPI(_api.storage);
 if (!Storage.sync || (await Storage.sync.get('some_key').then(() => false, () => true))) { // if storage.sync is unavailable or broken, use storage.local instead
 	const clone = Object.assign({ }, Storage);
 	clone.sync = Storage.local;
-	Object.freeze(clone);
+	Storage = Object.freeze(clone);
 }
 
 /**
