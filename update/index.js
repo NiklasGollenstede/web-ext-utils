@@ -1,5 +1,6 @@
 (function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { runtime, Storage, applications: { current: currentBrowser, version: browserVersion, }, },
+	'../browser/': { runtime, Storage, },
+	'../browser/version': { current: currentBrowser, version: browserVersion, },
 	require,
 }) => {
 
@@ -115,12 +116,12 @@ function loadFile(name) {
 /// normalized representation of semantic version strings, can be sorted numerically
 function createVersionClass(versions = { }) { return class Version {
 	constructor(input) {
-		const array = (/^\s*(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:([A-Za-z_-]+)(\d*))?/).exec(input);
+		const array = (/^\s*(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:([A-Za-z_.-]+)(\d*))?/).exec(input);
 		if (!array) { this.number = -1; this.string = '<invalid>'; return this; }
 		const major = +array[1];
 		const minor = +array[2] || 0;
 		const patch = +array[3] || 0;
-		const channel = array[4] ? array[4][0].toLowerCase() : '';
+		const channel = array[4] ? array[4][0].toLowerCase().replace(/-|_/, '.') : '';
 		const build = array[4] && +array[5] || 0;
 		this.number = (major * 0x1000000000) + (minor * 0x1000000) + (patch * 0x10000) + ((parseInt(channel, 36) || 36) * 0x400) + (build * 0x1);
 		const string = this.string = `${ major }.${ minor }.${ patch }${ channel }${ build || '' }`;
