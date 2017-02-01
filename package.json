@@ -15,7 +15,7 @@
 	},
 	"scripts": {
 		"start": "node --harmony-async-await build.js",
-		"test": "mocha",
+		"test": "mocha --harmony-async-await",
 		"lint": "eslint --ignore-path .gitignore ."
 	},
 	"eslintConfig": {

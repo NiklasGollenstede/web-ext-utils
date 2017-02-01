@@ -20,7 +20,7 @@ function matchPatternToRegExp(pattern) {
 	const [ , scheme, host, path, ] = matchPattern.exec(pattern);
 	return new RegExp('^(?:'
 		+ (scheme === '*' ? 'https?' : escape(scheme)) +':\/\/'
-		+ (host === '*' ? '[^\/]+?' : escape(host).replace(/\\\*\\./g, '(?:[^\/]*.)?'))
+		+ (host === '*' ? '[^\/]+?' : escape(host).replace(/^\\\*\\./g, '(?:[^\/]+.)?'))
 		+ (path ? '\/'+ escape(path).replace(/\\\*/g, '.*') : '\/?')
 	+')$');
 }
@@ -46,12 +46,12 @@ async function attachAllContentScripts({ cleanup, } = { }) {
 		return Promise.all(allTabs
 			.filter(({ url, }) => url && includes.some(exp => exp.test(url)) && !excludes.some(exp => exp.test(url)))
 			.map(async ({ id, }) => {
-				(await Tabs.executeScript(id, { code: `(${ cleanup })();`, }));
+				try { (await Tabs.executeScript(id, { code: `(${ cleanup })();`, })); }
+				catch (error) { console.warn('skipped tab', error); return false; } // not allowed to execute
 				css && css.forEach(file => tabs.insertCSS(id, { file, }));
 				js && js.forEach(file => tabs.executeScript(id, { file, }));
 				return true;
 			})
-			.catch(error => console.warn('skipped tab', error)) // not allowed to execute
 		).then(_=>_.filter(_=>_).length);
 	}));
 }

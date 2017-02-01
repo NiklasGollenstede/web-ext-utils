@@ -1,6 +1,6 @@
 'use strict'; /* globals describe, it, assert */
 
-const file = require('fs').readFileSync('utils.js', 'utf8').split((/\r?\n|\r/g)).slice(4, -3).join('\n');
+const file = require('fs').readFileSync('utils/index.js', 'utf8').split((/\r?\n|\r/g)).slice(4, -3).join('\n');
 
 const { matchPatternToRegExp, } = eval(`(() => { ${ file } })();`);
 

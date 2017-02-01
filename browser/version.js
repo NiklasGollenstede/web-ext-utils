@@ -11,7 +11,7 @@ const google = blink && !opera && !vivaldi; // TODO: test for Google Chrome spec
 const chromium = blink && !opera && !vivaldi && !google;
 
 const gecko = rootUrl.startsWith('moz');
-const fennec = gecko && !(_api.browserAction && _api.browserAction.setPopup); // can't use userAgent (may be faked) // TODO: this may be added in the future
+const fennec = gecko && !(_api.windows); // can't use userAgent (may be faked) // TODO: this may be added in the future
 const firefox = gecko && !fennec;
 
 const edgeHTML = rootUrl.startsWith('ms-browser');
