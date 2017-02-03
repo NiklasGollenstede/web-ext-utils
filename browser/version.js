@@ -3,7 +3,7 @@
 const _api = global.chrome || global.browser;
 
 const ua = navigator.userAgent;
-const rootUrl = (_api).extension.getURL('');
+const rootUrl = _api.extension.getURL('');
 const blink = rootUrl.startsWith('chrome');
 const opera = blink && (/ OPR\/\d+\./).test(ua); // TODO: is this safe to do?
 const vivaldi = blink && (/ Vivaldi\/\d+\./).test(ua); // TODO: is this safe to do?

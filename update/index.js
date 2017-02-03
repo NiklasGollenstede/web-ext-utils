@@ -1,21 +1,16 @@
 (function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../browser/': { runtime, Storage, },
 	'../browser/version': { current: currentBrowser, version: browserVersion, },
+	'../utils/semver': Version,
+	'../utils/files': { readDir, },
 	require,
 }) => {
-
-const Version = createVersionClass();
 
 const manifest = runtime.getManifest();
 let inProgress = { version: null, component: null, };
 
-// load options
-const options = manifest.run_update;
-if (typeof options !== 'object') { throw new Error(`The manifest.json entry "run_update" must be an object`); }
-const base_path = (options.base_path +'' || 'update/').replace(/^\/|^\\/, '');
-
 // load data
-const getLocal   = Storage.local.get([ '__update__.local.version', '__update__.browser.version', ]);
+const getLocal   = Storage.local.get([ `__update__.local.version`, `__update__.${ currentBrowser }.version`, ]);
 const getSync    = Storage.sync !== Storage.local ? Storage.sync.get([ '__update__.sync.version', ]) : { '__update__.sync.version': null, };
 
 const extension  = ({ from: new Version((await getLocal)[`__update__.local.version`]),               to: new Version(manifest.version), });
@@ -27,7 +22,7 @@ for (const component of Object.keys(_updated)) {
 	const updated = _updated[component];
 	const path = component === 'browser' ? currentBrowser : component;
 
-	define(base_path + path +'/current', {
+	define('update/' + path +'/current', {
 		get component() { return component; },
 		get from     () { return updated.from; },
 		get to       () { return updated.to; },
@@ -42,7 +37,7 @@ for (const component of Object.keys(_updated)) {
 
 	const path = component === 'browser' ? currentBrowser : component;
 
-	if (last === now || +now === 0) {
+	if (last === now || now === Version.invalid) {
 		// no update / no current version
 		Object.freeze(updated); continue;
 	}
@@ -53,13 +48,13 @@ for (const component of Object.keys(_updated)) {
 		Object.freeze(updated); continue;
 	}
 
-	const _versions = JSON.parse((await loadFile(path +'/versions.json')) || '[]');
+	const _versions = (await readDir('update/'+ path).catch(() => [ ])).filter(_=>_.endsWith('.js')).map(_=>_.slice(0, -3));
 	const hasInstalled = _versions.includes('installed');
 	const hasUpdated   = _versions.includes('updated');
 
-	if (+last === 0 && hasInstalled) {
+	if (last === Version.invalid) {
 		// newly installed
-		if ((await runStep(path +'/installed', now))) {
+		if (hasInstalled && (await runStep(path +'/installed', now))) {
 			updated.installed = true;
 		}
 	} else {
@@ -67,9 +62,9 @@ for (const component of Object.keys(_updated)) {
 		hasInstalled && _versions.splice(_versions.indexOf('installed'), 1);
 		hasUpdated   && _versions.splice(_versions.indexOf('updated'),   1);
 		const versions = _versions.map(Version.create).sort(numeric);
-		const startAt = versions.findIndex(_=>_ > last);
 		const ran = updated.ran = [ ];
-		for (const version of versions.slice(startAt > 0 ? startAt : Infinity)) {
+		for (const version of versions) {
+			if (version <= last || version > now) { continue; }
 			if ((await runStep(path +'/'+ version, version))) {
 				ran.push(version);
 			}
@@ -98,41 +93,9 @@ return Object.freeze(_updated);
 /// does one step of the update process, returns true iff the step ran successfully
 function runStep(file, version) {
 	inProgress.version = version;
-	return require.async(base_path + file).then(() => true)
+	return require.async('update/' + file).then(() => true)
 	.catch(error => void console.error(`Update step for file "${ file  +'.js' }" failed with`, error));
 }
-
-/// loads a file from the update folder as a string or null
-function loadFile(name) {
-	return new Promise(resolve => {
-		const xhr = new XMLHttpRequest;
-		xhr.addEventListener('load', () => resolve(xhr.responseText));
-		xhr.addEventListener('error', () => resolve(null));
-		xhr.open('GET', '/'+ base_path + name);
-		try { xhr.send(); } catch (_) { resolve(null); /* firefox bug */ }
-	});
-}
-
-/// normalized representation of semantic version strings, can be sorted numerically
-function createVersionClass(versions = { }) { return class Version {
-	constructor(input) {
-		const array = (/^\s*(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:([A-Za-z_.-]+)(\d*))?/).exec(input);
-		if (!array) { this.number = -1; this.string = '<invalid>'; return this; }
-		const major = +array[1];
-		const minor = +array[2] || 0;
-		const patch = +array[3] || 0;
-		const channel = array[4] ? array[4][0].toLowerCase().replace(/-|_/, '.') : '';
-		const build = array[4] && +array[5] || 0;
-		this.number = (major * 0x1000000000) + (minor * 0x1000000) + (patch * 0x10000) + ((parseInt(channel, 36) || 36) * 0x400) + (build * 0x1);
-		const string = this.string = `${ major }.${ minor }.${ patch }${ channel }${ build || '' }`;
-		if (versions[string]) { return versions[string]; }
-		return (versions[string] = Object.freeze(this));
-	}
-	[Symbol.toPrimitive](type) {
-		return this.hasOwnProperty(type) ? this[type] : this.string;
-	}
-	static create(s) { return new Version(s); }
-}; }
 
 /// numeric sorter
 function numeric(a, b) { return a - b; }

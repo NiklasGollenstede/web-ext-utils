@@ -14,7 +14,6 @@
 		"eslintrc": "NiklasGollenstede/eslintrc"
 	},
 	"scripts": {
-		"start": "node --harmony-async-await build.js",
 		"test": "mocha --harmony-async-await",
 		"lint": "eslint --ignore-path .gitignore ."
 	},
