@@ -9,8 +9,8 @@ const cache = new WeakMap;
 let messageHandler;
 
 const rootUrl = _api.extension.getURL('');
-const gecko = rootUrl.startsWith('moz');
-const edgeHTML = rootUrl.startsWith('ms-browser');
+const gecko = rootUrl.startsWith('moz-');
+const edgeHTML = rootUrl.startsWith('ms-browser-');
 
 let Storage = gecko ? _browser.storage : wrapAPI(_api.storage);
 if (!Storage.sync || (await Storage.sync.get('some_key').then(() => false, () => true))) { // if storage.sync is unavailable or broken, use storage.local instead

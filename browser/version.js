@@ -35,7 +35,7 @@ const appVersion = (() => { switch (true) {
 	case (fennec): switch (true) {
 		// TODO: keep up to date
 		case !!(_api.sessions && _api.sessions.onChanged): return '53.0'; // TODO:  test
-		case !!(_api.runtime.onInstalled): return '52.0'; // TODO: test
+		case !!(_api.runtime.onInstalled): return '52.0';
 		case !!(_api.management && _api.management.getSelf): return '51.0';
 		case !!(_api.pageAction && _api.pageAction.show): return '50.0';
 		default: return '48.0';
@@ -43,7 +43,7 @@ const appVersion = (() => { switch (true) {
 	case (firefox): switch (true) {
 		// TODO: keep up to date
 		case !!(_api.sessions && _api.sessions.onChanged): return '53.0'; // TODO:  test
-		case !!(_api.runtime.onInstalled): return '52.0'; // TODO: test
+		case !!(_api.runtime.onInstalled): return '52.0';
 		case !!(_api.management && _api.management.getSelf): return '51.0';
 		case !!(_api.runtime.connectNative || _api.history && _api.history.getVisits): return '50.0'; // these require permissions
 		case !!(_api.tabs.removeCSS): return '49.0';

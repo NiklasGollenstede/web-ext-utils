@@ -48,7 +48,9 @@ for (const component of Object.keys(_updated)) {
 		Object.freeze(updated); continue;
 	}
 
-	const _versions = (await readDir('update/'+ path).catch(() => [ ])).filter(_=>_.endsWith('.js')).map(_=>_.slice(0, -3));
+	let _versions; try {
+		_versions = readDir('update/'+ path).filter(_=>_.endsWith('.js')).map(_=>_.slice(0, -3));
+	} catch(_) { _versions = [ ]; }
 	const hasInstalled = _versions.includes('installed');
 	const hasUpdated   = _versions.includes('updated');
 

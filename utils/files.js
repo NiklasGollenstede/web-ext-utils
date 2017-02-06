@@ -1,8 +1,9 @@
-(function(global) { 'use strict'; const factory = function webExtUtils_files(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+}) => {
 
 const browser = (global.browser || global.chrome);
 
-let files; const getFiles = readFile('files.json', 'utf-8').then(json => JSON.parse(json));
+const files = JSON.parse((await readFile('files.json', 'utf-8')));
 
 function split(path) {
 	const parts = path.split(/\/|\\/g);
@@ -10,8 +11,7 @@ function split(path) {
 	return parts.filter(_=>_ && _ !== '.');
 }
 
-async function find(path) {
-	if (!files) { files = (await getFiles); }
+function find(path) {
 	let node = files; const parts = split(path);
 	for (const part of parts) { node = node[part]; }
 	return node;
@@ -21,16 +21,16 @@ function resolve(...fragments) {
 	return [].concat(...fragments.map(split)).join('');
 }
 
-async function exsists(path) {
-	try { return !!(await find(path)); } catch (_) { return false; }
+function exsists(path) {
+	try { return !!find(path); } catch (_) { return false; }
 }
 
-async function readDir(path) { try {
-	const dir = (await find(path));
+function readDir(path) { try {
+	const dir = find(path);
 	if (!dir || dir === true) { throw null; } // eslint-disable-line no-throw-literal
 	return Object.keys(dir);
 } catch (_) {
-	throw new Error(`"path" is not a directory`);
+	throw new Error(`"${ path }" is not a directory`);
 } }
 
 /**
@@ -59,4 +59,4 @@ return {
 	readFile,
 };
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { /* eslint-disable */ module.exports = result; /* eslint-enable */ } else { global[factory.name] = result; } } })(this);
+}); })(this);

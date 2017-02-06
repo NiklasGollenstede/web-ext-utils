@@ -17,7 +17,7 @@ return ({
 
 const element = createElement;
 const _ = html => element('span', { innerHTML: sanatize(html), });
-const makeLink = entry => typeof entry === 'object' ? element('a', { href: entry.url || '', target: '_blank', }, [ _(entry.name || entry.url), ]) : _(entry);
+const makeLink = entry => entry.url ? element('a', { href: entry.url, target: '_blank', }, [ _(entry.name || entry.url), ]) : _(entry.name || entry);
 const makePerson = entry => {
 	let { name, url, email, } = entry;
 	if (typeof entry === 'string') {
