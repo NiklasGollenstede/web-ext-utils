@@ -6,27 +6,30 @@
 const escape = string => string.replace(/[\-\[\]\{\}\(\)\*\+\?\.\,\\\^\$\|\#]/g, '\\$&');
 
 /// matches all valid match patterns (except '<all_urls>') and extracts [ , scheme, host, path, ]
-const matchPattern = (/^(?:(\*|http|https|file|ftp|app):\/\/(\*|(?:\*\.)?[^\/\*]+|)\/(.*))$/);
+const matchPattern = (/^(?:(\*|http|https|file|ftp|app):\/\/(\*|(?:\*\.)?[^\/\*]+|)\/(.*))$/i);
 
 /**
  * Transforms a valid match pattern into a regular expression which matches all URLs included by that pattern.
  * Passes all examples and counter-examples listed here https://developer.mozilla.org/en-US/Add-ons/WebExtensions/Match_patterns#Examples
- * The behavior is undefined if the input is not a valid pattern.
  * @param  {string}  pattern  The pattern to transform.
  * @return {RegExp}           The patterns equivalent as a RegExp.
+ * @throws {TypeError}        If the pattern string is not a valid MatchPattern
  */
 function matchPatternToRegExp(pattern) {
 	if (pattern === '<all_urls>') { return (/^(?:https?|file|ftp|app):\/\//); } // TODO: this is from mdn, check if chrome behaves the same
-	const [ , scheme, host, path, ] = matchPattern.exec(pattern);
+	const match = matchPattern.exec(pattern);
+	if (!match) { throw new TypeError(`"${ pattern }" is not a valid MatchPattern`); }
+	const [ , scheme, host, path, ] = match;
 	return new RegExp('^(?:'
 		+ (scheme === '*' ? 'https?' : escape(scheme)) +':\/\/'
-		+ (host === '*' ? '[^\/]+?' : escape(host).replace(/^\\\*\\./g, '(?:[^\/]+.)?'))
+		+ (host === '*' ? '[^\/]+?' : escape(host).replace(/^\\\*\\./g, '(?:[^\/]+?.)?'))
 		+ (path ? '\/'+ escape(path).replace(/\\\*/g, '.*') : '\/?')
 	+')$');
 }
 
 /**
- * Can be called during the extension startup to immediately attach all content scripts as they are specified in the 'manifest.json'.
+ * Can be called during the extension startup to immediately attach all content scripts as they are specified in the 'manifest.json',
+ * which does not happen automatically in chromium browsers. In firefox it is not necessary to call this function.
  * Supported keys for each content script are 'js', 'css', 'matches' and 'exclude_matches'. Globs are not supported.
  * Note: If this function is called during the browser startup, it may attach the content scripts to tabs that already have them running (usually just for the active tab, all others will not be visible yet).
  *       To avoid this (and to have a clean update when the extension is reloaded) your content scripts should set global destroy() functions that can be called by the options.cleanup function.
