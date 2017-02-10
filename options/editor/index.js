@@ -13,6 +13,8 @@ const queryChild = (() => {
 	return (element, ...selectors) => element.querySelector(':scope>'+ selectors.join('>'));
 })();
 
+const propsMap = new Map/*<id, props>*/;
+
 return function loadEditor({ host, options, onCommand, }) {
 
 	host.classList.add('options-host');
@@ -30,11 +32,12 @@ return function loadEditor({ host, options, onCommand, }) {
 				const element = getParent(target, '.pref-container');
 				const container = element.querySelector('.values-container');
 				const row = container.appendChild(cloneInput(element.input));
-				element.pref.hasOwnProperty('addDefault') && setInputValue(row, element.pref.addDefault);
+				const props = element.pref.model.input;
+				setInputRowValues(row, Array.isArray(props) ? props.map(_=>_.default) : props.default);
 				setButtonDisabled(element);
-				saveInput(row.querySelector('.value-input'));
+				saveInput(row.querySelector('.input-field'));
 			} break;
-			case 'value-input': {
+			case 'input-field': {
 				if (target.dataset.type !== 'control') { return false; }
 				onCommand(target.parentNode.pref, target.dataset.value);
 			} break;
@@ -44,15 +47,15 @@ return function loadEditor({ host, options, onCommand, }) {
 
 	host.addEventListener('keypress', (event) => {
 		const { target, } = event;
-		if (!target.matches || !target.matches('.value-input') || target.dataset.type !== 'keybordKey') { return; }
+		if (!target.matches || !target.matches('.input-field') || target.dataset.type !== 'keybordKey') { return; }
 		event.stopPropagation(); event.preventDefault();
 		const key = (event.ctrlKey ? 'Ctrl+' : '') + (event.altKey ? 'Alt+' : '') + (event.shiftKey ? 'Shift+' : '') + event.code;
 		target.value = key;
 		saveInput(target);
 	});
 	host.addEventListener('change', ({ target, }) => {
-		if (!target.matches || !target.matches('.value-input, .value-input *')) { return; }
-		saveInput(getParent(target, '.value-input'));
+		if (!target.matches || !target.matches('.input-field, .input-field *')) { return; }
+		saveInput(getParent(target, '.input-field'));
 	});
 
 	if (!Array.isArray(options)) {
@@ -88,7 +91,7 @@ function fieldsEnabled(root, reason, enabled) {
 function saveInput(target) {
 	const element = getParent(target, '.pref-container');
 	const { pref, } = element;
-	const values = Array.prototype.map.call(element.querySelector('.values-container').children, getInputValue);
+	const values = Array.from(element.querySelector('.values-container').children, getInputRowValues);
 	try {
 		pref.values = values;
 		Array.from(element.querySelectorAll('.invalid')).concat(element).forEach(invalid => {
@@ -96,38 +99,60 @@ function saveInput(target) {
 			invalid.title = '';
 		});
 	} catch (error) {
-		'index' in error && (target = element.querySelectorAll('.value-input')[error.index]);
+		'index' in error && (target = element.querySelectorAll('.input-field')[error.index]);
 		target.title = error && error.message || error;
 		target.classList.add('invalid');
 		throw error;
 	}
 }
 
-function createInput(pref) {
+function createInputRow(pref) {
+	const { model, } = pref;
+
+	return Object.assign(createElement('div', {
+		className: 'input-row'+ (Array.isArray(model.input) ? '' : ' row-single'),
+	}, [
+		pref.values.max > pref.values.min && createElement('input', {
+			title: 'remove this value',
+			type: 'button',
+			value: '-',
+			className: 'remove-value-entry',
+		}),
+		createElement('div', {
+			className: 'inputs-wrapper',
+		}, (Array.isArray(model.input) ? model.input : [ model.input, ]).map(props => createElement('span', {
+			className: 'input-wrapper', style: props.style || { },
+		}, [
+			props.prefix && createElement('span', {
+				innerHTML: sanatize(props.prefix),
+				className: 'value-prefix',
+			}),
+			createInput(props),
+			props.suffix && createElement('span', {
+				innerHTML: sanatize(props.suffix),
+				className: 'value-suffix',
+			}),
+		]))),
+	]), {
+		pref,
+	});
+}
+
+/// returns a single .input-field field of a given type
+function createInput(props) {
 	const inputProps = {
-		name: pref.name,
-		className: 'value-input',
+		className: 'input-field',
 		dataset: {
-			type: pref.type,
+			type: props.type,
 		},
-		placeholder: pref.placeholder || '',
+		placeholder: props.placeholder || '',
 	};
-	let input; switch (pref.type) {
+	let input; switch (props.type) {
 		case 'menulist': {
-			input = createElement('select', inputProps, (pref.options || [ ]).map(option => createElement('option', {
+			input = createElement('select', inputProps, (props.options || [ ]).map(option => createElement('option', {
 				value: option.value,
 				textContent: option.label,
 			})));
-		} break;
-		case 'interval': {
-			input = createElement('span', inputProps, [
-				createElement('input', { type: 'number', step: 'any', }),
-				createElement('span', {
-					innerHTML: sanatize(pref.infix || '  -  '),
-					className: 'value-infix',
-				}),
-				createElement('input', { type: 'number', step: 'any', }),
-			]);
 		} break;
 		case 'text': {
 			input = createElement('textarea', inputProps);
@@ -143,90 +168,56 @@ function createInput(pref) {
 				keybordKey: 'text',
 				color: 'color',
 				label: 'hidden',
-			})[pref.type] || pref.type;
+			})[props.type] || props.type;
 		}
 	}
-	if (pref.type === 'number') { input.step = 'any'; }
+	if (props.type === 'number') { input.step = 'any'; }
 	if (input.type === 'checkbox') {
+		input.className = '';
 		input.id = 'l'+ Math.random().toString(36).slice(2);
-		input = createElement('div', { className: 'checkbox-wrapper value-input', }, [
+		input = createElement('div', { className: 'checkbox-wrapper input-field', }, [
 			input,
 			createElement('label', { htmlFor: input.id, }),
 		]);
 	}
-	return Object.assign(createElement('div', {
-		className: 'value-container',
-	}, [
-		pref.values.max > pref.values.min && createElement('input', {
-			title: 'remove this value',
-			type: 'button',
-			value: '-',
-			className: 'remove-value-entry',
-		}),
-		pref.prefix && createElement('span', {
-			innerHTML: sanatize(pref.prefix),
-			className: 'value-prefix',
-		}),
-		input,
-		pref.suffix && createElement('span', {
-			innerHTML: sanatize(pref.suffix),
-			className: 'value-suffix',
-		}),
-	]), {
-		pref,
-	});
-}
-
-function setInputValue(input, value) {
-	const { pref, } = input, field = queryChild(input, '.value-input');
-	switch (pref.type) {
-		case "bool":
-			field.firstChild.checked = value;
-			break;
-		case "boolInt":
-			field.firstChild.checked = (value === pref.on);
-			break;
-		case "menulist": {
-			field.selectedIndex = (pref.options || []).findIndex(option => option.value === value);
-		} break;
-		case "interval": {
-			const from = value && value.from || 0;
-			from !== field.firstChild.value && (field.firstChild.value = from);
-			const to = value && value.to || 0;
-			to !== field.lastChild.value && (field.lastChild.value = to);
-		} break;
-		case "label":
-			break;
-		case "control":
-			field.dataset.value = value;
-			/* falls through */
-		default:
-			value !== field.value && (field.value = value);
-			break;
-	}
+	input.id = 'i'+ Math.random().toString(36).slice(2);
+	propsMap.set(input.id, props);
 	return input;
 }
 
+function setInputRowValues(row, values) {
+	if (row.matches('.row-single')) { values = [ values, ]; }
+	row.querySelectorAll('.input-field').forEach((input, index) => setInputValue(input, values[index]));
+}
+
+function setInputValue(input, value) {
+	const props = propsMap.get(input.id);
+	switch (props.type) {
+		case 'checkbox':
+		case 'bool':    input.firstChild.checked = value; break;
+		case 'boolInt': input.firstChild.checked = (value === props.on); break;
+		case 'menulist':input.selectedIndex = (props.options || []).findIndex(option => option.value === value); break;
+		case 'control': input.dataset.value = value; /* falls through */
+		default:        input.value !== value && (input.value = value); break;
+	}
+}
+
+function getInputRowValues(row) {
+	const values = Array.from(row.querySelectorAll('.input-field'), getInputValue);
+	return row.matches('.row-single') ? values[0] : values;
+}
+
 function getInputValue(input) {
-	const { pref, } = input, field = queryChild(input, '.value-input');
-	switch (pref.type) {
-		case "control":
-			return field.dataset.value;
-		case "bool":
-			return field.firstChild.checked;
-		case "boolInt":
-			return field.firstChild.checked ? pref.on : pref.off;
-		case "menulist":
-			return pref.options && pref.options[field.selectedIndex].value;
-		case "number":
-		case "integer":
-			return +field.value;
-		case "interval":
-			return { from: +field.firstChild.value, to: +field.lastChild.value, };
-		case "label":
-			return null;
-		default:
-			return field.value;
+	const props = propsMap.get(input.id);
+	switch (props.type) {
+		case 'checkbox':
+		case 'bool':      return input.firstChild.checked;
+		case 'boolInt':   return input.firstChild.checked ? props.on : props.off;
+		case 'menulist':  return props.options && props.options[input.selectedIndex].value;
+		case 'number':    return +input.value;
+		case 'integer':   return Math.round(+input.value);
+		case 'control':   return input.dataset.value;
+		default:          return input.value;
 	}
 }
 
@@ -274,76 +265,74 @@ function sanatize(html) {
 	);
 }
 
-function displayPreferences(prefs, host) {
-	prefs.forEach(pref => {
-		if (pref.type === 'hidden') { return; }
+function displayPreferences(prefs, host) { prefs.forEach(pref => {
+	const { model, } = pref;
+	if (model.hidden) { return; }
 
-		const input = createInput(pref);
-		const labelId = pref.expanded != null && 'l'+ Math.random().toString(36).slice(2);
+	const input = createInputRow(pref);
+	const labelId = pref.expanded != null && 'l'+ Math.random().toString(36).slice(2);
 
-		let valuesContainer, childrenContainer;
-		const element = Object.assign(host.appendChild(createElement('div', {
-			className: 'pref-container type-'+ pref.type +' pref-name-'+ pref.name,
+	let valuesContainer, childrenContainer;
+	const element = host.appendChild(createElement('div', {
+		className: 'pref-container pref-name-'+ pref.name,
+	}, [
+		labelId && createElement('input', {
+			type: 'checkbox', className: 'toggle-switch', id: labelId, checked: model.expanded,
+		}),
+		createElement('label', {
+			className: 'toggle-switch', htmlFor: labelId,
 		}, [
-			labelId && createElement('input', {
-				type: 'checkbox', className: 'toggle-switch', id: labelId, checked: pref.expanded,
+			labelId && createElement('span', {
+				textContent: '➤', className: 'toggle-marker',
 			}),
-			createElement('label', {
-				className: 'toggle-switch', htmlFor: labelId,
-			}, [
-				labelId && createElement('span', {
-					textContent: '➤', className: 'toggle-marker',
-				}),
-				createElement('span', {
-					textContent: pref.title || pref.name, className: 'pref-title',
-				}),
-			]),
-			(pref.type !== 'label' && pref.type !== 'control' || pref.children.some(({ type, }) => type !== 'hidden' && type !== 'label' && type !== 'control'))
-			&& createElement('div', { className: 'reset-values', }, [ createElement('a', {
-				textContent: 'reset',
-				title: `Double click to reset this option and all it's children to their default values`,
-				ondblclick: ({ button, }) => !button && pref.resetAll(),
-			}), ]),
+			createElement('span', {
+				textContent: model.title || pref.name, className: 'pref-title',
+			}),
+		]),
+		createElement('div', { className: 'reset-values', }, [ createElement('a', {
+			textContent: 'reset',
+			title: `Double click to reset this option and all it's children to their default values`,
+			ondblclick: ({ button, }) => !button && pref.resetAll(),
+		}), ]),
 
-			createElement('div', { className: 'toggle-target', }, [
-				pref.description && createElement('span', {
-					innerHTML: sanatize(pref.description), className: 'pref-description',
-				}),
-				valuesContainer = createElement('div', {
-					className: 'values-container',
-				}),
-				pref.values.max > pref.values.min && createElement('input', {
-					title: 'add a value',
-					type: 'button',
-					value: '+',
-					className: 'add-value-entry',
-					dataset: {
-						maxLength: pref.maxLength,
-						minLength: pref.minLength || 0,
-					},
-				}),
-				childrenContainer = pref.children.filter(({ type, }) => type !== 'hidden').length && displayPreferences(
-					pref.children,
-					createElement('fieldset', { className: 'pref-children', })
-				),
-			]),
-		])), { pref, input, });
+		createElement('div', { className: 'toggle-target', }, [
+			model.description && createElement('span', {
+				innerHTML: sanatize(model.description), className: 'pref-description',
+			}),
+			valuesContainer = createElement('div', {
+				className: 'values-container',
+			}),
+			pref.values.max > pref.values.min && createElement('input', {
+				title: 'add a value',
+				type: 'button',
+				value: '+',
+				className: 'add-value-entry',
+				dataset: {
+					maxLength: model.maxLength,
+					minLength: model.minLength || 0,
+				},
+			}),
+			childrenContainer = pref.children.filter(({ type, }) => type !== 'hidden').length && displayPreferences(
+				pref.children,
+				createElement('fieldset', { className: 'pref-children', })
+			),
+		]),
+	]));
+	Object.assign(element, { pref, input, });
 
-		pref.whenChange((_, { current: values, }) => {
-			while (valuesContainer.children.length < values.length) { valuesContainer.appendChild(cloneInput(input)); }
-			while (valuesContainer.children.length > values.length) { valuesContainer.lastChild.remove(); }
-			values.forEach((value, index) => setInputValue(valuesContainer.children[index], value));
-			setButtonDisabled(element);
-		});
-
-		childrenContainer && pref.when({
-			true: () => fieldsEnabled(childrenContainer, pref.path, true),
-			false: () => fieldsEnabled(childrenContainer, pref.path, false),
-		});
-
+	pref.whenChange((_, { current: values, }) => {
+		while (valuesContainer.children.length < values.length) { valuesContainer.appendChild(cloneInput(input)); }
+		while (valuesContainer.children.length > values.length) { valuesContainer.lastChild.remove(); }
+		values.forEach((value, index) => setInputRowValues(valuesContainer.children[index], value));
 		setButtonDisabled(element);
 	});
-	return host;
-}
+
+	childrenContainer && pref.when({
+		true: () => fieldsEnabled(childrenContainer, pref.path, true),
+		false: () => fieldsEnabled(childrenContainer, pref.path, false),
+	});
+
+	setButtonDisabled(element);
+}); return host; }
 
 }); })(this);

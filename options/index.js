@@ -1,5 +1,5 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	exports,
+	'../browser/': { runtime, Storage, },
 }) => {
 
 let context = null; // a OptionsRoot during its constrution
@@ -18,32 +18,19 @@ class Option {
 	constructor(model, parent, name = model.name || '') {
 		this.model = model;
 		this.parent = parent;
-		this.name = name +'';
+		this.name = name;
 		this.path = (parent ? parent.path +'.' : '') + this.name;
-		model.type && (this.type = model.type +'');
-		model.title && (this.title = model.title +'');
-		model.description && (this.description = model.description +'');
-		model.prefix && (this.prefix = model.prefix +'');
-		model.infix && (this.infix = model.infix +'');
-		model.suffix && (this.suffix = model.suffix +'');
-		'addDefault' in model && (this.addDefault = model.addDefault);
-		model.expanded != null && (this.expanded = !!model.expanded);
-		model.placeholder && (this.placeholder = model.placeholder +'');
-		model.options && (this.options = Object.freeze(
-			Array.prototype.filter.call(model.options, option => option && option.label)
-			.map(({ label, value, }) => Object.freeze({ label, value, }))
-		));
+
 		if (!model.hasOwnProperty('default')) {
 			this.defaults = Object.freeze([ ]);
 		} else if (Array.isArray(model.default)) {
-			this.defaults = Object.freeze(model.default.map(Object.freeze));
-			this.default = model.default[0];
+			this.defaults = model.default;
 		} else {
-			this.default = Object.freeze(model.default);
-			this.defaults = Object.freeze([ this.default, ]);
+			this.defaults = Object.freeze([ model.default, ]);
 		}
+		this.default = this.defaults[0];
 
-		model.restrict && (this.restrict = model.restrict === 'inherit' ? parent.restrict : new Restriction(this, model.restrict));
+		this.restrict = model.restrict === 'inherit' ? parent.restrict : model.restrict ? new Restriction(this, model.restrict) : null;
 
 		this.children = new OptionList(model.children || [ ], this);
 
@@ -107,8 +94,7 @@ class Option {
 		const listeners = OnAnyChange.get(this);
 		return listeners && listeners.delete(listener);
 	}
-
-}
+} Object.freeze(Option.prototype);
 
 class OptionList extends Array {
 	constructor(items, parent) {
@@ -122,7 +108,7 @@ class OptionList extends Array {
 		return Object.freeze(this);
 	}
 	static get [Symbol.species]() { return Array; }
-}
+} Object.freeze(OptionList.prototype);
 
 class ValueList {
 	constructor(parent, values) {
@@ -165,21 +151,38 @@ class ValueList {
 	reset() {
 		return Contexts.get(this.parent).storage.remove(this.key);
 	}
-}
+} Object.freeze(ValueList.prototype);
 
-class Restriction {
+class RestrictionBase {
+	validate(value, values, option) {
+		const message = this.checks.map(check => check(value, values, option)).find(x => x);
+		if (message) { throw new Error(message); }
+	}
+	validateAll(values, option, offset = 0) {
+		values.forEach((value, index) => { try {
+			this.validate(value, values, option);
+		} catch (error) {
+			try { error.index = index + offset; } catch (e) { }
+			throw error;
+		} });
+	}
+} Object.freeze(RestrictionBase.prototype);
+
+class Restriction extends RestrictionBase {
 	constructor(parent, restrict) {
+		if (Array.isArray(restrict)) { return new TupelRestriction(parent, restrict); }
+		super();
 		this._parent = parent;
-		const from = this.from = restrict.from;
-		const to = this.to = restrict.to;
-		const match = this.match = restrict.match && Object.freeze({
+		const from = restrict.from;
+		const to = restrict.to;
+		const match = restrict.match && Object.freeze({
 			exp: restrict.match.exp ? new RegExp(restrict.match.exp) : new RegExp(restrict.match.source, restrict.match.flags),
 			message: restrict.match.message || 'This value must match '+ (restrict.match.exp || new RegExp(restrict.match.source, restrict.match.flags)),
 		});
-		const readOnly = this.readOnly = restrict.readOnly;
-		const type = this.type = restrict.type;
-		const isRegExp = this.isRegExp = restrict.isRegExp;
-		const unique = this.unique = Object.freeze(restrict.unique);
+		const readOnly = restrict.readOnly;
+		const type = restrict.type;
+		const isRegExp = restrict.isRegExp;
+		const unique = Object.freeze(restrict.unique);
 		const checks = [ ];
 
 		readOnly && checks.push(() => 'This value is read only');
@@ -191,31 +194,32 @@ class Restriction {
 		parent.type !== 'interval' && restrict.hasOwnProperty('unique') && (_unique => {
 			checks.push((value, values, option) => (_unique || (_unique = getUniqueSet(unique, parent))).map(other => {
 				if (other === option) {
-					return values.filter(v => v === value).length > 1 && 'This value must be unique winthin this option';
+					return values.filter(v => v === value).length > 1 && 'This value must be unique within this option';
 				}
 				return other && other.values.current.indexOf(value) !== -1 && 'This value must be unique, but it is already used in "'+ other.title +'"';
 			}).find(x => x));
 		})();
 		this.checks = Object.freeze(checks);
-		this.validate = this.validate;
-		this.validateAll = this.validateAll;
 		return Object.freeze(this);
 	}
-	validate(value, values, option) {
-		const message = this._parent.type === 'interval'
-		? this.checks.map(check => typeof value === 'object' && (check(value.from) || check(value.to))).find(x => x)
-		: this.checks.map(check => check(value, values, option)).find(x => x);
-		if (message) { throw new Error(message); }
+} Object.freeze(Restriction.prototype);
+
+class TupelRestriction extends RestrictionBase {
+	constructor(parent, restricts) {
+		super();
+		const children = this.children = Object.freeze(restricts.map(_ => new Restriction(parent, _)));
+		this.checks = Object.freeze([
+			tuple => tuple.length > children.length && `Tuple contains to many entries`,
+			tuple => {
+				for (let i = 0; i < children.length; ++i) {
+					const error = children[i].validate(tuple[i], null, null);
+					if (error) { return error; }
+				} return null;
+			},
+		]);
+		return Object.freeze(this);
 	}
-	validateAll(values, option, offset = 0) {
-		values.forEach((value, index) => { try {
-			this.validate(value, values, option);
-		} catch (error) {
-			try { error.index = index + offset; } catch (e) { }
-			throw error;
-		} });
-	}
-}
+} Object.freeze(TupelRestriction);
 
 function getUniqueSet(unique, parent) {
 	const paths = (typeof unique === 'string' ? [ unique, ] : unique || [ ]).map(path => path.split(/[\/\\]/));
@@ -269,32 +273,34 @@ function inContext(ctx, callback) {
 }
 
 return class OptionsRoot {
-	constructor({ model, prefix, storage, addChangeListener, removeChangeListener, }) {
-		const options = this.options = new Map;
-		this.prefix = prefix; this.storage = storage;
+	constructor({ model, prefix, storage, onChanged, }) {
+		this.model = deepFreeze(model);
+		this.options = new Map;
+		this.prefix = prefix = prefix == null ? 'options' : prefix;
+		this.storage = storage = storage || Storage.sync;
+		this._onChanged = onChanged = onChanged || (storage === Storage.sync || storage === Storage.local ? Storage.onChanged : null);
 		inContext(this, () => (this._shadow = new Option({ children: model, }, null)));
 		this.children = this._shadow.children;
-		this.onChange = this.onChange.bind(this);
-		this._removeChangeListener = removeChangeListener;
+		this.onChanged = this.onChanged.bind(this);
 		this.keys = Array.from(this.options.keys()).map(path => prefix + path);
 
 		return storage.get(this.keys)
 		.then(data => inContext(this, () => {
 			if (Array.isArray(data) && data.length === 1) { data = data[0]; } // some weird Firefox bug
-			options.forEach(option => Values.set(option, new ValueList(
+			this.options.forEach(option => Values.set(option, new ValueList(
 				option,
 				data.hasOwnProperty(prefix + option.path) ? data[prefix + option.path] : option.defaults
 			)));
-			addChangeListener && addChangeListener.call(this, this.onChange);
+			onChanged && onChanged.addListener(this.onChanged);
 			return this;
 		}));
 	}
 
-	onChange(key, values) {
+	onChanged(changes) { Object.keys(changes).forEach(key => {
 		if (!key.startsWith(this.prefix) || this.destroyed) { return; }
 		const path = key.slice(this.prefix.length);
 		const option = this.options.get(path);
-		!values && (values = option.defaults);
+		const values = changes[key].newValue || option.defaults;
 		const list = option.values;
 		const old = Values.get(list);
 		Values.set(list, values);
@@ -306,7 +312,7 @@ return class OptionsRoot {
 		climbUp(option, option => callAll(OnAnyChange.get(option), values[0], list, old, path));
 		is && !was && callAll(OnTrue.get(option), values[0], list, old, path);
 		!is && was && callAll(OnFalse.get(option), values[0], list, old, path);
-	}
+	}); }
 
 	resetAll() {
 		return this.storage.remove(this.keys);
@@ -319,9 +325,19 @@ return class OptionsRoot {
 	destroy() {
 		this.destroyed = true;
 		crawlDown(this._shadow, option => callbackMaps.forEach(map => map.delete(option)));
-		this._removeChangeListener && this._removeChangeListener(this.onChange);
+		this._onChanged && this._onChanged.removeListener(this.onChanged);
 	}
 };
 
+function deepFreeze(object) {
+	const done = new WeakSet;
+	(function doIt(object) {
+		if (typeof object !== 'object' || object === null || done.has(object)) { return; }
+		done.add(object);
+		Object.freeze(object);
+		Object.keys(object).forEach(key => doIt(object[key]));
+	})(object);
+	return object;
+}
 
 }); })(this);

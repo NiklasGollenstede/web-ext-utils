@@ -81,13 +81,16 @@ textarea:active:focus, input:active:focus, select:active:focus {
 	padding: 0 3px;
 	border-radius: 2px;
 }
-.value-container, .add-value-entry {
+.input-row, .add-value-entry {
 	margin-bottom: 5px;
 }
-.value-prefix {
-	padding: 0 6px;
+.input-row {
+	display: table;
 }
-.value-infix {
+.remove-value-entry, .inputs-wrapper {
+	display: table-cell;
+}
+.value-prefix {
 	padding: 0 6px;
 }
 .value-suffix {
@@ -116,9 +119,6 @@ textarea {
 }
 pre {
 	white-space: pre-wrap;
-}
-.value-input[data-type="interval"] input {
-	width: 100px;
 }
 .add-value-entry, .remove-value-entry {
 	width: 25px;
@@ -170,6 +170,7 @@ input.toggle-switch:checked ~ .toggle-target {
 .reset-values {
 	display: inline-block;
 	padding-right: 16px;
+	opacity: 0.7;
 }
 input.toggle-switch:not(:checked) ~ .reset-values,
 .pref-container:not(:hover)>.reset-values {
