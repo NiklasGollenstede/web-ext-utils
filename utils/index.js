@@ -1,5 +1,6 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { runtime, extension, tabs, Tabs, Windows, },
+	'../browser/': { runtime, extension, tabs, Tabs, Windows, Notifications, },
+	Files,
 }) => {
 
 /// escapes a string for usage in a regular expression
@@ -74,10 +75,35 @@ async function showExtensionTab(url, match = url) {
 	return tab;
 }
 
+/**
+ * Uses a Notification to report a critical error to the user. falls back to console.error if Notifications are unavailable.
+ * @param  {string?}  message  A static error message, the Notification title.
+ * @param  {Error?}   error    The error that was thrown.
+ */
+function reportError(message, error) {
+	if (!error) { error = message; message = ''; }
+	if (!Notifications) { return void console.error(message || `Critical error:`, error); }
+	Notifications.create('web-ext-utils:error', {
+		type: 'basic', iconUrl: require.toUrl([ 'error.svg', 'error.png', 'icon.svg', 'icon.png', ].find(Files.exsists)),
+		title: message || `That didn't work ...`,
+		message: error && (error.message || error.name) || error || 'at all',
+	});
+	clearErrorSoon();
+}
+const clearErrorSoon = debounce(() => Notifications.clear('web-ext-utils:error'), 5000);
+function debounce(callback, time) {
+	let timer = null;
+	return function() {
+		clearTimeout(timer);
+		timer = setTimeout(() => callback.apply(this, arguments), time); // eslint-disable-line no-invalid-this
+	};
+}
+
 return {
 	matchPatternToRegExp,
 	attachAllContentScripts,
 	showExtensionTab,
+	reportError,
 };
 
 }); })(this);

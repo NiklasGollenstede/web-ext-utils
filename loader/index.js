@@ -10,9 +10,8 @@ const resolved = Promise.resolve();
 const rootUrl = chrome.extension.getURL('');
 const contentPath = require.toUrl('./content.js').replace(rootUrl, '/');
 const requirePath = config.requireScript || '/node_modules/es6lib/require.js';
-const getScource = (() => {
-	const { toString, } = () => 0;
-	return func => toString.call(func);
+const getScource = (() => { const { toString, } = (() => 0);
+	return func => { if (typeof func !== 'function') { throw new Error(`'script' must be a function`); } return toString.call(func); };
 })();
 const callChrome = (api, method, ...args) => new Promise((y, n) => api[method](...args, value => n(chrome.runtime.lastError || y(value))));
 
@@ -129,7 +128,6 @@ function getPort(tabId, frameId) {
  */
 async function runInTab(tabId, frameId, script, ...args) {
 	if (typeof frameId !== 'number') { args.unshift(script); script = frameId; frameId = 0; }
-	if (typeof script !== 'function') { throw new Error(`The script parameter must be a function`); }
 	return request(tabId, frameId, 'run', getScource(script), args);
 }
 
@@ -143,56 +141,68 @@ async function runInTab(tabId, frameId, script, ...args) {
  */
 function requireInTab(tabId, frameId, paths) {
 	if (typeof frameId !== 'number') { paths = frameId; frameId = 0; }
-	return request(tabId, frameId, 'require', [ paths, ]);
+	return request(tabId, frameId, 'require', paths);
 }
 
 const Self = new Map();
 
 class ContentScript {
 	constructor(options) {
-		const self = { runAt: 'document_end', matches: [ ], }; Self.set(this, self);
-		Object.assign(self, options);
+		const self = {
+			include: [ ],
+			exclude: [ ],
+			frames: 'top',
+			runAt: 'document_end',
+			modules: null,
+			script: null,
+			args: [ ],
+		};
+		Self.set(this, self);
+		Object.assign(this, options);
 		options.matches && (this.matches = options.matches);
 	}
 
-	set matches(patterns) {
-		!chrome.webNavigation && console.warn(`Using ContentScripts without "webNavigation"!`);
-		const self = Self.get(this);
-		!Array.isArray(patterns) && (patterns = [ patterns, ]);
-		self.matches = patterns.map(pattern => typeof pattern === 'string' ? matchPatternToRegExp(pattern) : pattern);
-	} get matches() { return Self.get(this).matches.slice(); }
-
-	set allFrames(v)  { Self.get(this).allFrames = v; }  get allFrames() { return Self.get(this).allFrames; }
-	set runAt(v)      { Self.get(this).runAt = v; }      get runAt()     { return Self.get(this).runAt; }
-	set modules(v)    { Self.get(this).modules = v; }    get modules()   { return Self.get(this).modules; }
-	set script(v)     { Self.get(this).script = v; }     get script()    { return Self.get(this).script; }
-	set args(v)       { Self.get(this).args = v; }       get args()      { return Self.get(this).args; }
+	set include(v)  { Self.get(this).include = parsePatterns(v); }
+	get include()   { return Self.get(this).include.slice(); }
+	set exclude(v)  { Self.get(this).exclude = parsePatterns(v); }
+	get exclude()   { return Self.get(this).exclude.slice(); }
+	set frames(v)    { Self.get(this).frames = checkEnum([ 'top', 'matching', /*'children', 'all',*/ ], v); }
+	get frames()     { return Self.get(this).frames; }
+	set runAt(v)     { Self.get(this).runAt = checkEnum([ 'document_end', 'document_idle', 'document_start', ], v); }
+	get runAt()      { return Self.get(this).runAt; }
+	set modules(v)   { if (typeof v !== 'object') { throw new Error(`'modules' must be an Array, object or null`); } Self.get(this).modules = v; }
+	get modules()    { return Self.get(this).modules; }
+	set script(v)    { Self.get(this).script = v == null ? v : getScource(v); }
+	get script()     { return Self.get(this).script; }
+	set args(v)      { Self.get(this).args = Array.from(v); }
+	get args()       { return Self.get(this).args; }
 
 	async applyNow() {
 		const self = Self.get(this);
 		const tabs = (await callChrome(chrome.tabs, 'query', { }));
 		return [ ].concat(...(await Promise.all(tabs.map(async ({ id: tabId, }) => {
 			return Promise.all((await callChrome(chrome.webNavigation, 'getAllFrames', { tabId, })).map(async ({ frameId, url, }) => {
-				if (!ContentScript.prototype.matchesTab.call(self, tabId, frameId, url)) { return 0; }
-				(await ContentScript.prototype.applyToTab.call(self, tabId, frameId));
+				if (!ContentScript.prototype.matchesFrame.call(self, tabId, frameId, url)) { return 0; }
+				try { (await ContentScript.prototype.applyToFrame.call(self, tabId, frameId)); } catch (error) { console.error(error); return 0; }
 				return { tabId, frameId, url, };
 			}));
 		})))).filter(_=>_);
 	}
 
-	async applyToTab(tabId, frameId = 0) {
+	async applyToFrame(tabId, frameId = 0) {
 		if (this.runAt === 'document_idle' || this.runAt === 'document_end') { (await request(tabId, frameId, 'waitFor', {
 			document_end: 'interactive', document_idle: 'complete',
 		}[this.runAt])); }
 		(await getPort(tabId, frameId));
 		this.modules && (await requireInTab(tabId, frameId, this.modules));
-		this.script && (await runInTab(tabId, frameId, this.script, ...(this.args || [ ])));
+		this.script && (await request(tabId, frameId, 'run', this.script, this.args));
 	}
 
-	matchesTab(tabId, frameId, url) {
+	matchesFrame(tabId, frameId, url) {
 		return (
-			(this.allFrames || frameId < 1) // TODO: this should actually check something else
-			&& this.matches.some(_=>_.test(url))
+			(this.frames !== 'top' || frameId < 1)
+			&& this.include.some(_=>_.test(url))
+			&& !this.exclude.some(_=>_.test(url))
 		);
 	}
 
@@ -201,7 +211,27 @@ class ContentScript {
 	}
 }
 
-function onNavigation({ tabId, frameId, url, }) {
+function parsePatterns(patterns) {
+	!chrome.webNavigation && console.warn(`Using ContentScripts without "webNavigation"!`);
+	!Array.isArray(patterns) && (patterns = [ patterns, ]);
+	return patterns.map(pattern => {
+		if (typeof pattern === 'object' && typeof pattern.test === 'function') { return pattern; }
+		if (typeof pattern === 'string') { switch (pattern[0]) {
+			case '/': return new RegExp(pattern.slice(1), 'i');
+			case '^': return new RegExp(pattern, 'i');
+		} }
+		try { return matchPatternToRegExp(pattern); }
+		catch (_) { throw new Error(`Expected (Array of) RegExp objects, MatchPattern strings or regexp strings starting with '/' or '^', got "${ pattern }"`); }
+	});
+}
+
+function checkEnum(choices, value) {
+	if (value == null) { return choices[0]; }
+	if (choices.includes(value)) { return value; }
+	throw new Error(`This value must be one of: '`+ choices.join(`', `) +`'`);
+}
+
+async function onNavigation({ tabId, frameId, url, }) {
 	const frames = tabs.get(tabId);
 	const frame = frames && frames.get(frameId);
 	frame && frame.doDicsonnect && frame.doDicsonnect();

@@ -15,6 +15,8 @@ const queryChild = (() => {
 
 return function loadEditor({ host, options, onCommand, }) {
 
+	host.classList.add('options-host');
+
 	host.addEventListener('click', ({ target, button, }) => {
 		if (button || !target.matches) { return; }
 		target.className.split(/\s+/).every(_class => { switch (_class) {

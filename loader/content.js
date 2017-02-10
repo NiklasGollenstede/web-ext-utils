@@ -1,5 +1,6 @@
-(function(global) { 'use strict'; define([ 'require', ], (require) => { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict';  // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+const require = global.require;
 const chrome = (global.browser || global.chrome);
 const resolved = Promise.resolve();
 const port = chrome.runtime.connect({ name: 'require.scriptLoader', });
@@ -70,25 +71,26 @@ function loadScript(url) {
 }
 
 const listeners = new Set; let unloaded = false;
-function doUnload() {
+function doUnload(event) {
 	if (unloaded) { return; } unloaded = true;
 	delete global.require; delete global.define;
 
-	listeners.forEach(listener => { try { listener(); } catch (error) { console.error(error); } });
+	(!event || event.type !== 'unload') && listeners.forEach(listener => { try { listener(); } catch (error) { console.error(error); } });
 	listeners.clear();
 
 	port.onDisconnect.removeListener(doUnload);
 	port.onMessage.removeListener(onMessage);
 	gecko && window.removeEventListener('unload', doUnload);
-	gecko && window.removeEventListener(rootUrl +'unload', onDisconnect.probe);
-	gecko && window.removeEventListener('focus', onDisconnect.probe);
+	gecko && window.removeEventListener(rootUrl +'unload', onUnload.probe);
+	gecko && window.removeEventListener('focus', onUnload.probe);
 	port.disconnect();
 }
 
-const onDisconnect = Object.freeze({
+const onUnload = Object.freeze({
 	addListener(listener) { listeners.add(listener); },
+	hasListener(listener) { listeners.has(listener); },
 	removeListener(listener) { listeners.delete(listener); },
-	/// tests whether the background page that created this content script is still alive, and emits onDisconnect if it is not
+	/// tests whether the background page that created this content script is still alive, and emits onUnload if it is not
 	probe() {
 		try { post('ping'); return false; }
 		catch (_) { resolved.then(doUnload); return true; }
@@ -103,13 +105,13 @@ if (gecko) {
 	window.addEventListener('unload', doUnload); // TODO: this disables the BF-cache ==> use pagehide instead? and reconnect on pageshow?
 	// firefox doesn't fire onDisconnect if a port becomes unusable because the other side is gone, which happens when the extension is reloaded via 'about:debugging' and probably when updating
 	window.dispatchEvent(new CustomEvent(rootUrl +'unload')); // so tell a potential previous content to check if its port is still working, and disconnect if it is not
-	window.addEventListener(rootUrl +'unload', onDisconnect.probe); // if the page content knows this, it can only ping
-	window.addEventListener('focus', onDisconnect.probe); // and to update the view when the extension was disabled, also probe on focus
+	window.addEventListener(rootUrl +'unload', onUnload.probe); // if the page content knows this, it can only ping
+	window.addEventListener('focus', onUnload.probe); // and to update the view when the extension was disabled, also probe on focus
 }
 
 
 require.config({ defaultLoader: loadScript, });
 
-return { onDisconnect, };
+define({ onUnload, });
 
-}); })(this);
+})(this);
