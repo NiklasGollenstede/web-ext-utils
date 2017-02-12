@@ -118,7 +118,7 @@ function createInputRow(pref) {
 			value: '-',
 			className: 'remove-value-entry',
 		}),
-		createElement('div', {
+		model.input && createElement('div', {
 			className: 'inputs-wrapper',
 		}, (Array.isArray(model.input) ? model.input : [ model.input, ]).map(props => createElement('span', {
 			className: 'input-wrapper', style: props.style || { },

@@ -38,6 +38,9 @@ textarea:focus, input:active:focus, select:active:focus {
 textarea:active:focus, input:active:focus, select:active:focus {
 	transition-delay: 0.06s;
 }
+textarea {
+	border-color: black;
+}
 .checkbox-wrapper>input { display: none; }
 .checkbox-wrapper {
 	position: relative;

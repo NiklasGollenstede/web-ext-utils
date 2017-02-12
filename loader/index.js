@@ -15,10 +15,6 @@ const getScource = (() => { const { toString, } = (() => 0);
 })();
 const callChrome = (api, method, ...args) => new Promise((y, n) => api[method](...args, value => n(chrome.runtime.lastError || y(value))));
 
-typeof require.config === 'function' && require.config(config);
-if ('serveContentScripts' in config) { serveContentScripts(config.serveContentScripts); }
-chrome.webNavigation && chrome.webNavigation.onCommitted.addListener(onNavigation);
-
 const tabs = new Map/*<tabId, Map<frameId, { port, promise, resolve, reject, }>>*/;
 
 function serveContentScripts(value) {
@@ -110,10 +106,8 @@ function getPort(tabId, frameId) {
 	let frame  = frames.get(frameId); if (!frame)  { frame  = { };     frames.set(frameId, frame); }
 	if (frame.port || frame.promise) { return frame.port || frame.promise; }
 	let reject; const promise = frame.promise = new Promise((y, n) => ((frame.resolve = y), (frame.reject = (reject = n))));
-	Promise.all([
-		callChrome(chrome.tabs, 'executeScript', tabId, { frameId, file: requirePath, }),
-		callChrome(chrome.tabs, 'executeScript', tabId, { frameId, file: contentPath, }),
-	]).catch(error => { reject(error); frame.promise === promise && (frame.promise = frame.resolve = frame.reject = null); });
+	Promise.all([ requirePath, contentPath, ].map(file => callChrome(chrome.tabs, 'executeScript', tabId, { frameId, file, })))
+	.catch(error => { reject(error); frame.promise === promise && (frame.promise = frame.resolve = frame.reject = null); });
 	return promise;
 }
 
@@ -236,8 +230,8 @@ async function onNavigation({ tabId, frameId, url, }) {
 	const frame = frames && frames.get(frameId);
 	frame && frame.doDicsonnect && frame.doDicsonnect();
 	Self.forEach(self => {
-		if (!ContentScript.prototype.matchesTab.call(self, tabId, frameId, url)) { return; }
-		ContentScript.prototype.applyToTab.call(self, tabId, frameId);
+		if (!ContentScript.prototype.matchesFrame.call(self, tabId, frameId, url)) { return; }
+		ContentScript.prototype.applyToFrame.call(self, tabId, frameId);
 	});
 }
 
@@ -254,6 +248,12 @@ function matchPatternToRegExp(pattern) {
 		+ (host === '*' ? '[^\/]+?' : escape(host).replace(/^\\\*\\./g, '(?:[^\/]+?.)?'))
 		+ (path ? '\/'+ escape(path).replace(/\\\*/g, '.*') : '\/?')
 	+')$');
+}
+
+{
+	typeof require.config === 'function' && require.config(config);
+	if ('serveContentScripts' in config) { serveContentScripts(config.serveContentScripts); }
+	chrome.webNavigation && chrome.webNavigation.onCommitted.addListener(onNavigation);
 }
 
 return {

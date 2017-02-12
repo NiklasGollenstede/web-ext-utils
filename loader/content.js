@@ -3,11 +3,14 @@
 const require = global.require;
 const chrome = (global.browser || global.chrome);
 const resolved = Promise.resolve();
-const port = chrome.runtime.connect({ name: 'require.scriptLoader', });
-port.requests = new Map/*<random, [ resolve, reject, ]>*/;
+const readystates = [ 'interactive', 'complete', ]; // document.readystate values, ascending
 const rootUrl = chrome.extension.getURL('');
 const gecko = rootUrl.startsWith('moz-');
 const FunctionConstructor = (() => 0).constructor; // avoid to be flagged by static analysis
+
+const port = chrome.runtime.connect({ name: 'require.scriptLoader', });
+      port.requests = new Map/*<random, [ resolve, reject, ]>*/;
+const unloadListeners = new Set; let unloaded = false;
 
 function onMessage([ method, id, args, ]) {
 	if (method === '') { // handle responses
@@ -64,54 +67,53 @@ const methods = {
 		});
 	}); },
 };
-const readystates = [ 'interactive', 'complete', ];
 
-function loadScript(url) {
-	return request('loadScript', url);
-}
-
-const listeners = new Set; let unloaded = false;
 function doUnload(event) {
 	if (unloaded) { return; } unloaded = true;
 	delete global.require; delete global.define;
 
-	(!event || event.type !== 'unload') && listeners.forEach(listener => { try { listener(); } catch (error) { console.error(error); } });
-	listeners.clear();
+	(!event || event.type !== 'unload') // no need to unload if the page is being destroyed anyway
+	&& unloadListeners.forEach(listener => { try { listener(); } catch (error) { console.error(error); } });
+	unloadListeners.clear();
 
 	port.onDisconnect.removeListener(doUnload);
 	port.onMessage.removeListener(onMessage);
 	gecko && window.removeEventListener('unload', doUnload);
 	gecko && window.removeEventListener(rootUrl +'unload', onUnload.probe);
-	gecko && window.removeEventListener('focus', onUnload.probe);
+	gecko && window.removeEventListener('visibilitychange', onVisibilityChange);
 	port.disconnect();
 }
 
 const onUnload = Object.freeze({
-	addListener(listener) { listeners.add(listener); },
-	hasListener(listener) { listeners.has(listener); },
-	removeListener(listener) { listeners.delete(listener); },
+	addListener(listener) { unloadListeners.add(listener); },
+	hasListener(listener) { unloadListeners.has(listener); },
+	removeListener(listener) { unloadListeners.delete(listener); },
 	/// tests whether the background page that created this content script is still alive, and emits onUnload if it is not
 	probe() {
 		try { post('ping'); return false; }
 		catch (_) { resolved.then(doUnload); return true; }
 	},
 });
+function onVisibilityChange() { !document.hidden && onUnload.probe(); }
 
-port.onDisconnect.addListener(doUnload);
-port.onMessage.addListener(onMessage);
+{
+	port.onDisconnect.addListener(doUnload);
+	port.onMessage.addListener(onMessage);
 
-if (gecko) {
-	// the BF-cache of firefox means that ports are normally not closed when a tab is navigated
-	window.addEventListener('unload', doUnload); // TODO: this disables the BF-cache ==> use pagehide instead? and reconnect on pageshow?
-	// firefox doesn't fire onDisconnect if a port becomes unusable because the other side is gone, which happens when the extension is reloaded via 'about:debugging' and probably when updating
-	window.dispatchEvent(new CustomEvent(rootUrl +'unload')); // so tell a potential previous content to check if its port is still working, and disconnect if it is not
-	window.addEventListener(rootUrl +'unload', onUnload.probe); // if the page content knows this, it can only ping
-	window.addEventListener('focus', onUnload.probe); // and to update the view when the extension was disabled, also probe on focus
+	if (gecko) {
+		// the BF-cache of firefox means that ports are normally not closed when a tab is navigated
+		window.addEventListener('unload', doUnload); // TODO: this disables the BF-cache ==> use pagehide instead? and reconnect on pageshow?
+		// firefox doesn't fire onDisconnect if a port becomes unusable because the other side is gone, which happens when the extension is reloaded via 'about:debugging' and probably when updating
+		window.dispatchEvent(new CustomEvent(rootUrl +'unload')); // so tell a potential previous content to check if its port is still working, and disconnect if it is not
+		window.addEventListener(rootUrl +'unload', onUnload.probe); // if the page content knows this, it can only ping
+		window.addEventListener('visibilitychange', onVisibilityChange); // and to update the view when the extension was disabled, also probe when the window becomes visible again
+	}
+
+	require.config({ defaultLoader(url) {
+		return request('loadScript', url);
+	}, });
+
+	define({ onUnload, });
 }
-
-
-require.config({ defaultLoader: loadScript, });
-
-define({ onUnload, });
 
 })(this);
