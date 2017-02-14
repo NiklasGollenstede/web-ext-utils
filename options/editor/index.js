@@ -38,8 +38,11 @@ return function loadEditor({ host, options, onCommand, }) {
 				saveInput(row.querySelector('.input-field'));
 			} break;
 			case 'input-field': {
-				if (target.dataset.type !== 'control') { return false; }
-				onCommand(target.parentNode.pref, target.dataset.value);
+				if (target.type !== 'button') { return false; }
+				const element = getParent(target, '.pref-container');
+				const row = getParent(target, '.input-row');
+				const index = Array.prototype.indexOf(row.parentNode, row);
+				onCommand(element.pref, target.dataset.id, index);
 			} break;
 			default: { return true; }
 		} return false; });
@@ -157,6 +160,12 @@ function createInput(props) {
 		case 'text': {
 			input = createElement('textarea', inputProps);
 		} break;
+		case 'control': {
+			Object.assign(inputProps, {
+				value: props.label,
+				dataset: { id: props.id, },
+			});
+		} /* falls through */
 		default: {
 			input = createElement('input', inputProps);
 			input.type = ({
@@ -197,7 +206,7 @@ function setInputValue(input, value) {
 		case 'bool':    input.firstChild.checked = value; break;
 		case 'boolInt': input.firstChild.checked = (value === props.on); break;
 		case 'menulist':input.selectedIndex = (props.options || []).findIndex(option => option.value === value); break;
-		case 'control': input.dataset.value = value; /* falls through */
+		case 'control': break;
 		default:        input.value !== value && (input.value = value); break;
 	}
 }
@@ -216,7 +225,7 @@ function getInputValue(input) {
 		case 'menulist':  return props.options && props.options[input.selectedIndex].value;
 		case 'number':    return +input.value;
 		case 'integer':   return Math.round(+input.value);
-		case 'control':   return input.dataset.value;
+		case 'control':   return true;
 		default:          return input.value;
 	}
 }
@@ -270,7 +279,7 @@ function displayPreferences(prefs, host) { prefs.forEach(pref => {
 	if (model.hidden) { return; }
 
 	const input = createInputRow(pref);
-	const labelId = pref.expanded != null && 'l'+ Math.random().toString(36).slice(2);
+	const labelId = model.expanded != null && 'l'+ Math.random().toString(36).slice(2);
 
 	let valuesContainer, childrenContainer;
 	const element = host.appendChild(createElement('div', {

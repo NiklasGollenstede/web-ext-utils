@@ -94,10 +94,10 @@ textarea {
 	display: table-cell;
 }
 .value-prefix {
-	padding: 0 6px;
+	padding: 0 .5em;
 }
 .value-suffix {
-	padding: 0 6px;
+	padding: 0 .5em;
 }
 
 /* sizes */

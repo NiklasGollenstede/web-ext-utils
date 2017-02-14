@@ -77,16 +77,24 @@ async function showExtensionTab(url, match = url) {
 
 /**
  * Uses a Notification to report a critical error to the user. falls back to console.error if Notifications are unavailable.
- * @param  {string?}  message  A static error message, the Notification title.
- * @param  {Error?}   error    The error that was thrown.
+ * @param  {string?}  title    A static message as the Notification title.
+ * @param  {Error}    error    The error that was thrown.
  */
-function reportError(message, error) {
-	if (!error) { error = message; message = ''; }
-	if (!Notifications) { return void console.error(message || `Critical error:`, error); }
+function reportError(title, error) {
+	if (!error) { error = title; title = ''; }
+	if (!Notifications) { return void console.error(title || `Critical error:`, error); }
+	let message = ''; if (!error) {
+		message = 'at all';
+	} else if (typeof error === 'string') {
+		message = error;
+	} else {
+		if (error.name) { message += error.name +': '; }
+		if (error.message) { message += error.message; }
+		if (!message) { message = 'at all'; }
+	}
 	Notifications.create('web-ext-utils:error', {
 		type: 'basic', iconUrl: require.toUrl([ 'error.svg', 'error.png', 'icon.svg', 'icon.png', ].find(Files.exsists)),
-		title: message || `That didn't work ...`,
-		message: error && (error.message || error.name) || error || 'at all',
+		title: title || `That didn't work ...`, message,
 	});
 	clearErrorSoon();
 }

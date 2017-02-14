@@ -4,17 +4,17 @@ const _api = global.chrome || global.browser;
 
 const ua = navigator.userAgent;
 const rootUrl = _api.extension.getURL('');
-const blink = rootUrl.startsWith('chrome');
+const blink = rootUrl.startsWith('chrome-');
 const opera = blink && (/ OPR\/\d+\./).test(ua); // TODO: is this safe to do?
 const vivaldi = blink && (/ Vivaldi\/\d+\./).test(ua); // TODO: is this safe to do?
 const google = blink && !opera && !vivaldi; // TODO: test for Google Chrome specific api
 const chromium = blink && !opera && !vivaldi && !google;
 
-const gecko = rootUrl.startsWith('moz');
+const gecko = !blink && rootUrl.startsWith('moz-');
 const fennec = gecko && !(_api.windows); // can't use userAgent (may be faked) // TODO: this may be added in the future
 const firefox = gecko && !fennec;
 
-const edgeHTML = rootUrl.startsWith('ms-browser');
+const edgeHTML = !blink && !gecko && rootUrl.startsWith('ms-browser-');
 const edge = edgeHTML;
 
 const currentApp = (() => { switch (true) {

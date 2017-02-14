@@ -1,5 +1,26 @@
 (function(global) { 'use strict';  // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+/**
+ * An Event that is fired to tell the background script was disabled/removed/reloaded/killed/updated/... and the content script should unload too.
+ * This Event always fires after any of the situations described above,
+ * as soon as possible, and at latest when the tab becomes visible or before the extension loads again
+ * @method  probe  Can be called by to test whether the content script should unload.
+ *                 Returns true if the background script is not reachable, i.e. has unloaded.
+ *                 This is mostly the case in Firefox, for example after the extension was disabled.
+ *                 Asynchronously fires the Event if it returns true.
+ */
+const onUnload = Object.freeze({
+	addListener(listener) { unloadListeners.add(listener); },
+	hasListener(listener) { return unloadListeners.has(listener); },
+	removeListener(listener) { unloadListeners.delete(listener); },
+	probe() {
+		try { post('ping'); return false; }
+		catch (_) { resolved.then(doUnload); return true; }
+	},
+});
+
+//////// start of private implementation ////////
+
 const require = global.require;
 const chrome = (global.browser || global.chrome);
 const resolved = Promise.resolve();
@@ -12,7 +33,7 @@ const port = chrome.runtime.connect({ name: 'require.scriptLoader', });
       port.requests = new Map/*<random, [ resolve, reject, ]>*/;
 const unloadListeners = new Set; let unloaded = false;
 
-function onMessage([ method, id, args, ]) {
+async function onMessage([ method, id, args, ]) {
 	if (method === '') { // handle responses
 		const [ value, ] = args;
 		const threw = id < 0; threw && (id = -id);
@@ -22,14 +43,13 @@ function onMessage([ method, id, args, ]) {
 		if (!methods[method]) { port.postMessage([ '', -id, [ { message: 'Unknown request', }, ], ]); }
 		else if (!id) {
 			methods[method].apply(port, args);
-		} else {
-			resolved.then(() => methods[method].apply(port, args)).then(
-				value => port.postMessage([ '', +id, [ value, ], ]),
-				error => port.postMessage([ '', -id, [ error instanceof Error ? {
-					name: error.name, message: error.message, stack: error.stack,
-				} : error, ], ])
-			);
-		}
+		} else { try {
+			const value = (await methods[method].apply(port, args));
+			port.postMessage([ '', +id, [ value, ], ]);
+		} catch (error) {
+			error instanceof Error && (error = { name: error.name, message: error.message, stack: error.stack, });
+			port.postMessage([ '', -id, [ error, ], ]);
+		} }
 	}
 }
 
@@ -45,15 +65,15 @@ function post(method, ...args) { // eslint-disable-line no-unused-vars
 
 const methods = {
 	run(script, args) {
-		return resolved.then(() => new FunctionConstructor(`return (${ script }).apply(this, arguments)`).apply(global, args));
+		return new FunctionConstructor(`return (${ script }).apply(this, arguments)`).apply(global, args);
 	},
-	require(modules) {
+	async require(modules) {
 		if (!Array.isArray(modules)) {
 			require.config({ config: modules, });
 			modules = Object.keys(modules);
 		}
 		if (typeof require.async === 'function') {
-			return Promise.all(modules.map(_ => require.async(_))).then(_=>_.length);
+			return (await Promise.all(modules.map(_ => require.async(_)))).length;
 		} else {
 			return new Promise(done => require(modules, done));
 		}
@@ -84,16 +104,6 @@ function doUnload(event) {
 	port.disconnect();
 }
 
-const onUnload = Object.freeze({
-	addListener(listener) { unloadListeners.add(listener); },
-	hasListener(listener) { unloadListeners.has(listener); },
-	removeListener(listener) { unloadListeners.delete(listener); },
-	/// tests whether the background page that created this content script is still alive, and emits onUnload if it is not
-	probe() {
-		try { post('ping'); return false; }
-		catch (_) { resolved.then(doUnload); return true; }
-	},
-});
 function onVisibilityChange() { !document.hidden && onUnload.probe(); }
 
 {
@@ -109,7 +119,7 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); }
 		window.addEventListener('visibilitychange', onVisibilityChange); // and to update the view when the extension was disabled, also probe when the window becomes visible again
 	}
 
-	require.config({ defaultLoader(url) {
+	require.config({ async defaultLoader(url) {
 		return request('loadScript', url);
 	}, });
 
