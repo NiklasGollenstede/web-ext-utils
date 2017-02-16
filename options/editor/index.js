@@ -157,7 +157,7 @@ function createInput(props) {
 				textContent: option.label,
 			})));
 		} break;
-		case 'text': {
+		case 'text': case 'code': {
 			input = createElement('textarea', inputProps);
 		} break;
 		case 'control': {
@@ -267,7 +267,7 @@ function copyProperties(target, source) {
 }
 
 function sanatize(html) {
-	const allowed = /^(a|b|big|br|code|div|i|p|pre|li|ol|ul|span|sup|sub|tt)$/;
+	const allowed = /^(a|b|big|br|code|div|i|p|pre|kbd|li|ol|ul|spam|span|sup|sub|tt|var)$/;
 	return html.replace(
 		(/<(\/?)(\w+)[^>]*?( href="(?!(javascript|data):)[^"]*?")?( title="[^"]*?")?[^>]*?>/g),
 		(match, slash, tag, href, title) => allowed.test(tag) ? ('<'+ slash + tag + (title || '') + (href ? href +'target="_blank"' : '') +'>') : ''
@@ -288,17 +288,17 @@ function displayPreferences(prefs, host) { prefs.forEach(pref => {
 		labelId && createElement('input', {
 			type: 'checkbox', className: 'toggle-switch', id: labelId, checked: model.expanded,
 		}),
-		createElement('label', {
+		model.title && createElement('label', {
 			className: 'toggle-switch', htmlFor: labelId,
 		}, [
 			labelId && createElement('span', {
 				textContent: '➤', className: 'toggle-marker',
 			}),
 			createElement('span', {
-				textContent: model.title || pref.name, className: 'pref-title',
+				textContent: model.title, className: 'pref-title',
 			}),
 		]),
-		createElement('div', { className: 'reset-values', }, [ createElement('a', {
+		model.title && createElement('div', { className: 'reset-values', }, [ createElement('a', {
 			textContent: 'reset',
 			title: `Double click to reset this option and all it's children to their default values`,
 			ondblclick: ({ button, }) => !button && pref.resetAll(),

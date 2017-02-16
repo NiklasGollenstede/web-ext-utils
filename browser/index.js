@@ -11,6 +11,7 @@ let messageHandler;
 const rootUrl = _api.extension.getURL('');
 const gecko = rootUrl.startsWith('moz-');
 const edgeHTML = rootUrl.startsWith('ms-browser-');
+const inContent = typeof _api.extension.getBackgroundPage !== 'function';
 
 let Storage = gecko ? _browser.storage : wrapAPI(_api.storage);
 if (!Storage.sync || (await Storage.sync.get('some_key').then(() => false, () => true))) { // if storage.sync is unavailable or broken, use storage.local instead
@@ -46,15 +47,15 @@ if (!Storage.sync || (await Storage.sync.get('some_key').then(() => false, () =>
 const Browser = new Proxy(Object.freeze({
 	chrome: edgeHTML ? _browser : _chrome,
 	browser: gecko ? _browser : null,
-	rootUrl, rootURL: rootUrl,
+	rootUrl, rootURL: rootUrl, inContent,
 	get messages() { return getGlobalPort(); },
 	get Messages() { return getGlobalPort(); },
-	get applications() { console.error('Chrome.applications has been moved to browser/version.js'); console.trace(); },
+	get applications() { console.error('Chrome.applications has been moved to browser/version.js'); },
 	Storage,
 }), { get(self, key) {
 	let value;
-	value = self[key]; if (value) { return value; }
-	value = edgeHTML ? _browser[key] : _chrome[key]; if (value) { return value; }
+	value = self[key]; if (value !== undefined) { return value; }
+	value = edgeHTML ? _browser[key] : _chrome[key]; if (value !== undefined) { return value; }
 	key = key.replace(/^./, s => s.toLowerCase());
 	return gecko ? _browser[key] : wrapAPI(_api[key]);
 }, set() { }, });

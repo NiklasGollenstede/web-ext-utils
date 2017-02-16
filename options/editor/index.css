@@ -41,6 +41,9 @@ textarea:active:focus, input:active:focus, select:active:focus {
 textarea {
 	border-color: black;
 }
+textarea[data-type="code"] {
+	font-family: monospace;
+}
 .checkbox-wrapper>input { display: none; }
 .checkbox-wrapper {
 	position: relative;

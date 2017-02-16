@@ -300,6 +300,7 @@ return class OptionsRoot {
 		if (!key.startsWith(this.prefix) || this.destroyed) { return; }
 		const path = key.slice(this.prefix.length);
 		const option = this.options.get(path);
+		if (!option) { return; }
 		const values = changes[key].newValue || option.defaults;
 		const list = option.values;
 		const old = Values.get(list);

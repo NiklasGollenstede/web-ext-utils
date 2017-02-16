@@ -318,6 +318,7 @@ return {
 	ContentScript,
 	runInTab,
 	requireInTab,
+	parseMatchPatterns: parsePatterns,
 };
 
 }); })(this);
