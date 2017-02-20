@@ -1,14 +1,15 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { runtime, Storage, },
+	'../browser/': { Storage, },
 }) => {
 
-let context = null; // a OptionsRoot during its constrution
+let context = null; // a OptionsRoot during its construction
 
-const Values = new WeakMap;
-const OnTrue = new WeakMap;
-const OnFalse = new WeakMap;
-const OnChange = new WeakMap;
-const OnAnyChange = new WeakMap;
+const Values = new WeakMap/*<Option, ValueList>*/;
+const IsSet = new WeakMap/*<ValueList, bool>*/;
+const OnTrue = new WeakMap/*<Option, Set<function>>*/;
+const OnFalse = new WeakMap/*<Option, Set<function>>*/;
+const OnChange = new WeakMap/*<Option, Set<function>>*/;
+const OnAnyChange = new WeakMap/*<Option, Set<function>>*/;
 
 const callbackMaps = [ OnTrue, OnFalse, OnChange, OnAnyChange, ];
 
@@ -123,6 +124,7 @@ class ValueList {
 	}
 	get current() { return Values.get(this); }
 	get is() { return !!Values.get(this).find(x => x); }
+	get isSet() { return IsSet.get(this); }
 	get(index) {
 		return Values.get(this)[index];
 	}
@@ -287,10 +289,12 @@ return class OptionsRoot {
 		return storage.get(this.keys)
 		.then(data => inContext(this, () => {
 			if (Array.isArray(data) && data.length === 1) { data = data[0]; } // some weird Firefox bug
-			this.options.forEach(option => Values.set(option, new ValueList(
-				option,
-				data.hasOwnProperty(prefix + option.path) ? data[prefix + option.path] : option.defaults
-			)));
+			this.options.forEach(option => {
+				const set = data.hasOwnProperty(prefix + option.path);
+				const values = new ValueList(option, set ? data[prefix + option.path] : option.defaults);
+				Values.set(option, values);
+				IsSet.set(values, set);
+			});
 			onChanged && onChanged.addListener(this.onChanged);
 			return this;
 		}));
@@ -305,6 +309,7 @@ return class OptionsRoot {
 		const list = option.values;
 		const old = Values.get(list);
 		Values.set(list, values);
+		IsSet.set(list, !!changes[key].newValue);
 
 		const is = !!values.find(x => x);
 		const was = !!old.find(x => x);

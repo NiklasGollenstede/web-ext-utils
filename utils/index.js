@@ -76,29 +76,53 @@ async function showExtensionTab(url, match = url) {
 }
 
 /**
- * Uses a Notification to report a critical error to the user. falls back to console.error if Notifications are unavailable.
- * @param  {string?}  title    A static message as the Notification title.
- * @param  {Error}    error    The error that was thrown.
+ * Uses a Notification to report a critical error to the user.
+ * Only displays a single message at once and hides that message after 5 seconds.
+ * Falls back to console.error if Notifications are unavailable.
+ * @param  {string?}  	title     Optional. The Notification's title.
+ * @param  {...string}  messages  Additional message strings.
+ * @param  {Error}      error     The error that was thrown.
  */
-function reportError(title, error) {
-	if (!error) { error = title; title = ''; }
-	if (!Notifications) { return void console.error(title || `Critical error:`, error); }
-	let message = ''; if (!error) {
-		message = 'at all';
-	} else if (typeof error === 'string') {
-		message = error;
+function reportError(...messages) {
+	if (!Notifications) { return void console.error(...messages); }
+	const error = messages.pop();
+	const title = messages.shift() || `That didn't work ...`;
+	let message = messages.join(' ') + (messages.length ? ' ' : '');
+	if (typeof error === 'string') {
+		message += error;
 	} else {
 		if (error.name) { message += error.name +': '; }
 		if (error.message) { message += error.message; }
-		if (!message) { message = 'at all'; }
 	}
+	if (!message && !error) { message = 'at all'; }
+
 	Notifications.create('web-ext-utils:error', {
-		type: 'basic', iconUrl: require.toUrl([ 'error.svg', 'error.png', 'icon.svg', 'icon.png', ].find(Files.exsists)),
-		title: title || `That didn't work ...`, message,
+		type: 'basic', title, message,
+		iconUrl: require.toUrl([ 'error.svg', 'error.png', 'icon.svg', 'icon.png', ].find(Files.exsists)),
 	});
 	clearErrorSoon();
 }
 const clearErrorSoon = debounce(() => Notifications.clear('web-ext-utils:error'), 5000);
+
+/**
+ * Uses a Notification to report an operations success.
+ * Only displays a single message at once and hides that message after 5 seconds.
+ * @param  {string?}  	title     Optional. The Notification's title.
+ * @param  {...string}  messages  Additional message strings.
+ */
+function reportSuccess(...messages) {
+	if (!Notifications) { return void console.info(...messages); }
+	const title = messages.shift() || `Operation completed successfully!`;
+	const message = messages.join(' ');
+
+	Notifications.create('web-ext-utils:success', {
+		type: 'basic', title, message,
+		iconUrl: require.toUrl([ 'success.svg', 'success.png', 'icon.svg', 'icon.png', ].find(Files.exsists)),
+	});
+	clearSuccessSoon();
+}
+const clearSuccessSoon = debounce(() => Notifications.clear('web-ext-utils:success'), 5000);
+
 function debounce(callback, time) {
 	let timer = null;
 	return function() {
@@ -112,6 +136,7 @@ return {
 	attachAllContentScripts,
 	showExtensionTab,
 	reportError,
+	reportSuccess,
 };
 
 }); })(this);

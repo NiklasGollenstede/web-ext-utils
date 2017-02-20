@@ -147,6 +147,7 @@ class ContentScript {
 	matchesFrame(tabId, frameId, url) {
 		return (
 			(this.frames !== 'top' || frameId < 1)
+			&& (/^(?:https?|file|ftp|app):\/\//).test(url) // i.e. '<all_urls>'
 			&& this.include.some(_=>_.test(url))
 			&& !this.exclude.some(_=>_.test(url))
 		);
@@ -286,6 +287,7 @@ function onNavigation({ tabId, frameId, url, }) {
 	const frames = tabs.get(tabId);
 	const frame = frames && frames.get(frameId);
 	frame && frame.doDicsonnect && frame.doDicsonnect();
+	if (!(/^(?:https?|file|ftp|app):\/\//).test(url)) { return; } // i.e. '<all_urls>'
 	Self.forEach(self => {
 		if (!ContentScript.prototype.matchesFrame.call(self, tabId, frameId, url)) { return; }
 		ContentScript.prototype.applyToFrame.call(self, tabId, frameId);

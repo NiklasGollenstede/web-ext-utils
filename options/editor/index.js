@@ -38,11 +38,18 @@ return function loadEditor({ host, options, onCommand, }) {
 				saveInput(row.querySelector('.input-field'));
 			} break;
 			case 'input-field': {
-				if (target.type !== 'button') { return false; }
-				const element = getParent(target, '.pref-container');
-				const row = getParent(target, '.input-row');
-				const index = Array.prototype.indexOf(row.parentNode, row);
-				onCommand(element.pref, target.dataset.id, index);
+				if (target.dataset.type === 'control') {
+					const element = getParent(target, '.pref-container');
+					const row = getParent(target, '.input-row');
+					const index = Array.prototype.indexOf(row.parentNode, row);
+					onCommand(element.pref, target.dataset.id, index);
+				} else if (target.dataset.type === 'random') {
+					target.dataset.value = Math.random().toString(32).slice(2);
+					saveInput(getParent(target, '.input-field'));
+				}
+			} break;
+			case 'toggle-switch': case 'toggle-marker': case 'pref-title': {
+				host.dataset.resize = true; // cause the inline options frame in Firefox to resize
 			} break;
 			default: { return true; }
 		} return false; });
@@ -145,9 +152,7 @@ function createInputRow(pref) {
 function createInput(props) {
 	const inputProps = {
 		className: 'input-field',
-		dataset: {
-			type: props.type,
-		},
+		dataset: { type: props.type, },
 		placeholder: props.placeholder || '',
 	};
 	let input; switch (props.type) {
@@ -160,16 +165,17 @@ function createInput(props) {
 		case 'text': case 'code': {
 			input = createElement('textarea', inputProps);
 		} break;
-		case 'control': {
+		case 'random': case 'control': {
 			Object.assign(inputProps, {
 				value: props.label,
-				dataset: { id: props.id, },
+				dataset: { id: props.id, type: props.type, },
 			});
 		} /* falls through */
 		default: {
 			input = createElement('input', inputProps);
 			input.type = ({
 				control: 'button',
+				random: 'button',
 				bool: 'checkbox',
 				boolInt: 'checkbox',
 				integer: 'number',
@@ -183,13 +189,13 @@ function createInput(props) {
 	if (props.type === 'number') { input.step = 'any'; }
 	if (input.type === 'checkbox') {
 		input.className = '';
-		input.id = 'l'+ Math.random().toString(36).slice(2);
+		input.id = 'l'+ Math.random().toString(32).slice(2);
 		input = createElement('div', { className: 'checkbox-wrapper input-field', }, [
 			input,
 			createElement('label', { htmlFor: input.id, }),
 		]);
 	}
-	input.id = 'i'+ Math.random().toString(36).slice(2);
+	input.id = 'i'+ Math.random().toString(32).slice(2);
 	propsMap.set(input.id, props);
 	return input;
 }
@@ -206,6 +212,7 @@ function setInputValue(input, value) {
 		case 'bool':    input.firstChild.checked = value; break;
 		case 'boolInt': input.firstChild.checked = (value === props.on); break;
 		case 'menulist':input.selectedIndex = (props.options || []).findIndex(option => option.value === value); break;
+		case 'random':  input.dataset.value = value; break;
 		case 'control': break;
 		default:        input.value !== value && (input.value = value); break;
 	}
@@ -225,6 +232,7 @@ function getInputValue(input) {
 		case 'menulist':  return props.options && props.options[input.selectedIndex].value;
 		case 'number':    return +input.value;
 		case 'integer':   return Math.round(+input.value);
+		case 'random':    return input.dataset.value;
 		case 'control':   return true;
 		default:          return input.value;
 	}
@@ -279,7 +287,7 @@ function displayPreferences(prefs, host) { prefs.forEach(pref => {
 	if (model.hidden) { return; }
 
 	const input = createInputRow(pref);
-	const labelId = model.expanded != null && 'l'+ Math.random().toString(36).slice(2);
+	const labelId = model.expanded != null && 'l'+ Math.random().toString(32).slice(2);
 
 	let valuesContainer, childrenContainer;
 	const element = host.appendChild(createElement('div', {
