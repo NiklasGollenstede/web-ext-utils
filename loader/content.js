@@ -72,11 +72,7 @@ const methods = {
 			require.config({ config: modules, });
 			modules = Object.keys(modules);
 		}
-		if (typeof require.async === 'function') {
-			return (await Promise.all(modules.map(_ => require.async(_)))).length;
-		} else {
-			return new Promise(done => require(modules, done));
-		}
+		return new Promise((resolve, reject) => require(modules, (...args) => resolve(args.length), reject));
 	},
 	waitFor(state) { return new Promise(ready => {
 		if (readystates.indexOf(document.readystate) <= readystates.indexOf(state)) { return void ready(); }

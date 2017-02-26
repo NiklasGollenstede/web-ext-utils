@@ -52,12 +52,11 @@ class ContentScript {
 	 */
 	constructor(options) {
 		const self = {
-			include: [ ], exclude: [ ],
+			include: [ ], exclude: [ ], incognito: false,
 			frames: 'top', runAt: 'document_end',
 			modules: null, script: null, args: [ ],
 		}; Self.set(this, self);
 		Object.assign(this, options);
-		options.matches && (this.matches = options.matches);
 	}
 
 	/**
@@ -75,6 +74,11 @@ class ContentScript {
 	 */
 	set exclude(v)   { Self.get(this).exclude = parsePatterns(v); }
 	get exclude()    { return Self.get(this).exclude.map(_=>_.source); }
+	/**
+	 * Whether to include incognito tabs or not.
+	 */
+	set incognito(v) { Self.get(this).incognito = !!v; }
+	get incognito()  { return Self.get(this).incognito; }
 	/**
 	 * The frames to run the ContentScript in.
 	 * @param  {string}  frames  Enum:
@@ -115,9 +119,9 @@ class ContentScript {
 	async applyNow() {
 		const self = Self.get(this);
 		const tabs = (await callChrome(chrome.tabs, 'query', { }));
-		return [ ].concat(...(await Promise.all(tabs.map(async ({ id: tabId, }) => {
+		return [ ].concat(...(await Promise.all(tabs.map(async ({ id: tabId, incognito, }) => {
 			return Promise.all((await callChrome(chrome.webNavigation, 'getAllFrames', { tabId, })).map(async ({ frameId, url, }) => {
-				if (!ContentScript.prototype.matchesFrame.call(self, tabId, frameId, url)) { return 0; }
+				if (!ContentScript.prototype.matchesFrame.call(self, tabId, frameId, url, incognito)) { return 0; }
 				try { (await ContentScript.prototype.applyToFrame.call(self, tabId, frameId)); } catch (error) { console.error(error); return 0; }
 				return { tabId, frameId, url, };
 			}));
@@ -132,21 +136,24 @@ class ContentScript {
 		if (this.runAt === 'document_idle' || this.runAt === 'document_end') { (await request(tabId, frameId, 'waitFor', {
 			document_end: 'interactive', document_idle: 'complete',
 		}[this.runAt])); }
-		(await getPort(tabId, frameId));
+		const port = (await getPort(tabId, frameId));
+		if (port.sender.tab.incognito && !this.incognito) { return; } // this should not be done here, but the tab.incognito info is currently not available earlier
 		this.modules && (await requireInTab(tabId, frameId, this.modules));
 		this.script && (await request(tabId, frameId, 'run', this.script, this.args));
 	}
 
 	/**
 	 * Tests whether this ContentScript matches a tab described be the arguments.
-	 * @param  {natural}  tabId    The tabId to match.
-	 * @param  {natural}  frameId  The frameId to match.
-	 * @param  {string}   url      The url to match.
-	 * @return {boolean}           Whether this combination of (tabId, frameId, url) is matched.
+	 * @param  {natural}  tabId      The tabId to match.
+	 * @param  {natural}  frameId    The frameId to match.
+	 * @param  {string}   url        The url to match.
+	 * @param  {boolean}  incognito  The the incognito state of the tab.
+	 * @return {boolean}             Whether this combination of (tabId, frameId, url) is matched.
 	 */
-	matchesFrame(tabId, frameId, url) {
+	matchesFrame(tabId, frameId, url, incognito) {
 		return (
 			(this.frames !== 'top' || frameId < 1)
+			&& (!incognito || this.incognito)
 			&& (/^(?:https?|file|ftp|app):\/\//).test(url) // i.e. '<all_urls>'
 			&& this.include.some(_=>_.test(url))
 			&& !this.exclude.some(_=>_.test(url))
