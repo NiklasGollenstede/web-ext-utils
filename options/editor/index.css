@@ -117,11 +117,15 @@ textarea[data-type="code"] {
 	display: inline-block;
 }
 textarea, input[type="text"]:not([data-type="keybordKey"]) {
-	min-width: 500px;
+	/* min-width: 500px; */
+	width: 500px;
+	max-width: 65vw;
+}
+input[type="number"] {
+	max-width: 7em;
 }
 textarea {
 	min-height: 4.5em;
-	max-width: 100%;
 }
 pre {
 	white-space: pre-wrap;

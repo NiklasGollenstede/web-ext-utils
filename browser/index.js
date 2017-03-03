@@ -47,7 +47,7 @@ if (!Storage.sync || (await Storage.sync.get('some_key').then(() => false, () =>
 const Browser = new Proxy(Object.freeze({
 	chrome: edgeHTML ? _browser : _chrome,
 	browser: gecko ? _browser : null,
-	rootUrl, rootURL: rootUrl, inContent,
+	rootUrl, rootURL: rootUrl, inContent, isGecko: gecko, isEdge: edgeHTML,
 	get messages() { return getGlobalPort(); },
 	get Messages() { return getGlobalPort(); },
 	get applications() { console.error('Chrome.applications has been moved to browser/version.js'); },

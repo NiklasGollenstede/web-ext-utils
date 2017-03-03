@@ -1,17 +1,19 @@
-(function(global) { 'use strict'; const factory = function webExtUtils_chrome(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+}) => {
 
-const _api = global.chrome || global.browser;
-
+const _api = global.browser || global.chrome;
 const ua = navigator.userAgent;
 const rootUrl = _api.extension.getURL('');
+const info = typeof _api.runtime.getBrowserInfo === 'function' && (await _api.runtime.getBrowserInfo());
+
 const blink = rootUrl.startsWith('chrome-');
-const opera = blink && (/ OPR\/\d+\./).test(ua); // TODO: is this safe to do?
-const vivaldi = blink && (/ Vivaldi\/\d+\./).test(ua); // TODO: is this safe to do?
-const google = blink && !opera && !vivaldi; // TODO: test for Google Chrome specific api
-const chromium = blink && !opera && !vivaldi && !google;
+const opera = blink && (/ OPR\/\d+\./).test(ua);
+const vivaldi = blink && (/ Vivaldi\/\d+\./).test(ua);
+const chromium = blink && (/ Chromium\/\d+\./).test(ua);
+const google = blink && !opera && !vivaldi && !chromium;
 
 const gecko = !blink && rootUrl.startsWith('moz-');
-const fennec = gecko && !(_api.windows); // can't use userAgent (may be faked) // TODO: this may be added in the future
+const fennec = gecko && (info ? info.name === 'Fennec' : _api.extension.getBackgroundPage === 'function' ? !(_api.windows) : (/Android/).test(ua)); // shouldn't use userAgent (may be faked)
 const firefox = gecko && !fennec;
 
 const edgeHTML = !blink && !gecko && rootUrl.startsWith('ms-browser-');
@@ -27,23 +29,23 @@ const currentApp = (() => { switch (true) {
 	case (edge):            return 'edge';
 } return null; })();
 
-const appVersion = (() => { switch (true) {
+const appVersion = info ? info.version
+: (() => { switch (true) {
 	case (edge):            return           (/Edge\/((?:\d+.)*\d+)/).exec(ua)[1];
 	case (vivaldi):         return        (/Vivaldi\/((?:\d+.)*\d+)/).exec(ua)[1];
 	case (opera):           return            (/OPR\/((?:\d+.)*\d+)/).exec(ua)[1];
 	case (blink):           return (/Chrom(?:e|ium)\/((?:\d+.)*\d+)/).exec(ua)[1];
+
+	// only relevant prior to FF51 and in content scripts:
+	// TODO: add tests that work in content scripts
 	case (fennec): switch (true) {
-		// TODO: keep up to date
-		case !!(_api.sessions && _api.sessions.onChanged): return '53.0'; // TODO:  test
-		case !!(_api.runtime.onInstalled): return '52.0';
+		case !!(_api.storage.sync): return '52.0'; // test should work in content
 		case !!(_api.management && _api.management.getSelf): return '51.0';
 		case !!(_api.pageAction && _api.pageAction.show): return '50.0';
 		default: return '48.0';
 	}
 	case (firefox): switch (true) {
-		// TODO: keep up to date
-		case !!(_api.sessions && _api.sessions.onChanged): return '53.0'; // TODO:  test
-		case !!(_api.runtime.onInstalled): return '52.0';
+		case !!(_api.storage.sync): return '52.0'; // test should work in content
 		case !!(_api.management && _api.management.getSelf): return '51.0';
 		case !!(_api.runtime.connectNative || _api.history && _api.history.getVisits): return '50.0'; // these require permissions
 		case !!(_api.tabs.removeCSS): return '49.0';
@@ -85,4 +87,4 @@ return new Proxy(Object.freeze({
 	set() { },
 });
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { /* eslint-disable */ module.exports = result; /* eslint-enable */ } else { global[factory.name] = result; } } })(this);
+}); })(this);

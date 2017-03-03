@@ -21,7 +21,12 @@ const onUnload = Object.freeze({
 
 //////// start of private implementation ////////
 
-const require = global.require;
+if (global.require) {
+	if (global.reRegisteringLoaderAfterPageShow) { return; }
+	throw new Error(`Loading content loader in a frame that is already loaded`);
+}
+
+let debug = false, require = null, resolveRequire; const getRequire = new Promise(_ => (resolveRequire = _));
 const chrome = (global.browser || global.chrome);
 const resolved = Promise.resolve();
 const readystates = [ 'interactive', 'complete', ]; // document.readystate values, ascending
@@ -68,11 +73,16 @@ const methods = {
 		return new FunctionConstructor(`return (${ script }).apply(this, arguments)`).apply(global, args);
 	},
 	async require(modules) {
+		if (!require) { (await getRequire); }
 		if (!Array.isArray(modules)) {
 			require.config({ config: modules, });
 			modules = Object.keys(modules);
 		}
-		return new Promise((resolve, reject) => require(modules, (...args) => resolve(args.length), reject));
+		if (typeof require === 'function') {
+			return new Promise((resolve, reject) => global.require(modules, (...args) => resolve(args.length), reject));
+		} else {
+			return Promise.all(modules.map(id => request('loadScript', rootUrl + id +'js'))).then(_=>_.length);
+		}
 	},
 	waitFor(state) { return new Promise(ready => {
 		if (readystates.indexOf(document.readystate) <= readystates.indexOf(state)) { return void ready(); }
@@ -82,44 +92,74 @@ const methods = {
 			ready();
 		});
 	}); },
+	ignoreRequire: resolveRequire,
 };
 
-function doUnload(event) {
+function doUnload() {
 	if (unloaded) { return; } unloaded = true;
+	debug && console.debug('unloading content');
 	delete global.require; delete global.define;
+	Object.keys(methods).forEach(key => delete methods[key]);
 
-	(!event || event.type !== 'unload') // no need to unload if the page is being destroyed anyway
-	&& unloadListeners.forEach(listener => { try { listener(); } catch (error) { console.error(error); } });
+	unloadListeners.forEach(listener => { try { listener(); } catch (error) { console.error(error); } });
 	unloadListeners.clear();
 
 	port.onDisconnect.removeListener(doUnload);
 	port.onMessage.removeListener(onMessage);
-	gecko && window.removeEventListener('unload', doUnload);
-	gecko && window.removeEventListener(rootUrl +'unload', onUnload.probe);
-	gecko && window.removeEventListener('visibilitychange', onVisibilityChange);
+	window.addEventListener('pagehide', onPageHide, true);
+	window.addEventListener('pageshow', onPageShow, true);
+	gecko && window.removeEventListener(rootUrl +'unload', onAfterReload, true);
+	gecko && window.removeEventListener('visibilitychange', onVisibilityChange, true);
 	port.disconnect();
 }
 
-function onVisibilityChange() { !document.hidden && onUnload.probe(); }
+function onPageHide({ isTrusted, }) {
+	if (!isTrusted) { return; }
+	debug && console.debug('content hide');
+	window.addEventListener('pageshow', onPageShow, true);
+	request('pagehide').then(() => console.log('got reply for pagehide'));
+}
+function onPageShow({ isTrusted, }) {
+	if (!isTrusted) { return; }
+	debug && console.debug('content show');
+	global.reRegisteringLoaderAfterPageShow = true;
+	request('pageshow').then(() => console.log('got reply for pageshow'))
+	.catch(error => console.error(error)).then(() => delete global.reRegisteringLoaderAfterPageShow);
+}
+
+function onAfterReload() { onUnload.probe(); debug && console.debug('onAfterReload'); }
+function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && console.debug('onVisibilityChange'); }
 
 {
 	port.onDisconnect.addListener(doUnload);
 	port.onMessage.addListener(onMessage);
 
+	window.addEventListener('pagehide', onPageHide, true);
+
 	if (gecko) {
-		// the BF-cache of firefox means that ports are normally not closed when a tab is navigated
-		window.addEventListener('unload', doUnload); // TODO: this disables the BF-cache ==> use pagehide instead? and reconnect on pageshow?
 		// firefox doesn't fire onDisconnect if a port becomes unusable because the other side is gone, which happens when the extension is reloaded via 'about:debugging' and probably when updating
 		window.dispatchEvent(new CustomEvent(rootUrl +'unload')); // so tell a potential previous content to check if its port is still working, and disconnect if it is not
-		window.addEventListener(rootUrl +'unload', onUnload.probe); // if the page content knows this, it can only ping
-		window.addEventListener('visibilitychange', onVisibilityChange); // and to update the view when the extension was disabled, also probe when the window becomes visible again
+		window.addEventListener(rootUrl +'unload', onAfterReload, true); // if the page content knows this, it can only ping
+		window.addEventListener('visibilitychange', onVisibilityChange, true); // and to update the view when the extension was disabled, also probe when the window becomes visible again
 	}
 
-	require.config({ async defaultLoader(url) {
-		return request('loadScript', url);
-	}, });
-
-	define({ onUnload, });
+	global.require = {
+		async defaultLoader(url) {
+			return request('loadScript', url);
+		},
+		callback() {
+			define(({
+				module,
+			}) => {
+				({ debug, } = module.config() || { debug: false, });
+				debug && console.debug('loader', module.id);
+				return ({
+					onUnload,
+				});
+			});
+			resolveRequire(require = global.require);
+		},
+	};
 }
 
 })(this);

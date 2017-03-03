@@ -308,7 +308,7 @@ function displayPreferences(prefs, host) { prefs.forEach(pref => {
 		]),
 		model.title && createElement('div', { className: 'reset-values', }, [ createElement('a', {
 			textContent: 'reset',
-			title: `Double click to reset this option and all it's children to their default values`,
+			title: `Double click to reset this option and all its children to their default values`,
 			ondblclick: ({ button, }) => !button && pref.resetAll(),
 		}), ]),
 
