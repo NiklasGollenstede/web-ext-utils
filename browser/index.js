@@ -1,4 +1,5 @@
 (function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	require,
 }) => {
 
 const _chrome = typeof chrome !== 'undefined' && global.chrome;
@@ -6,7 +7,7 @@ const _browser = typeof browser !== 'undefined' && global.browser;
 const _api = _browser || _chrome;
 
 const cache = new WeakMap;
-let messageHandler;
+let messageHandler, manifest;
 
 const rootUrl = _api.extension.getURL('');
 const gecko = rootUrl.startsWith('moz-');
@@ -50,6 +51,7 @@ const Browser = new Proxy(Object.freeze({
 	rootUrl, rootURL: rootUrl, inContent, isGecko: gecko, isEdge: edgeHTML,
 	get messages() { return getGlobalPort(); },
 	get Messages() { return getGlobalPort(); },
+	get manifest() { return manifest || (manifest = freeze(_api.runtime.getManifest())); },
 	get applications() { console.error('Chrome.applications has been moved to browser/version.js'); },
 	Storage,
 }), { get(self, key) {
@@ -109,6 +111,15 @@ function promisify(method, thisArg) {
 			});
 		});
 	};
+}
+
+function freeze(object) {
+	Object.freeze(object);
+	Object.keys(object).forEach(key => {
+		const value = object[key];
+		value !== null  && typeof value === 'object' && freeze(value);
+	});
+	return object;
 }
 
 }); })(this);

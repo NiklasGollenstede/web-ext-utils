@@ -1,6 +1,7 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../browser/': { runtime, extension, tabs, Tabs, Windows, Notifications, },
 	Files,
+	require,
 }) => {
 
 /// escapes a string for usage in a regular expression
@@ -69,8 +70,11 @@ async function attachAllContentScripts({ cleanup, } = { }) {
  * @return {Promise<Tab>}         The chrome.tabs.Tab that is now the active tab in the focused window.
  */
 async function showExtensionTab(url, match = url) {
-	const window = extension.getViews({ type: 'tab', }).find(window => window && window.location.pathname === match && window.tabId != null);
-	const tab = (await (window ? Tabs.update(window.tabId, { active: true, }) : Tabs.create({ url: extension.getURL(url), })));
+	match = extension.getURL(match || url); url = extension.getURL(url);
+	const window = extension.getViews({ type: 'tab', }).find(window =>
+		window && (typeof match === 'string' ? window.location.href === match : match.test(window.location.href)) && window.tabId != null
+	);
+	const tab = (await (window ? Tabs.update(window.tabId, { active: true, }) : Tabs.create({ url, })));
 	(await Windows.update(tab.windowId, { focused: true, }));
 	return tab;
 }
@@ -83,7 +87,7 @@ async function showExtensionTab(url, match = url) {
  * @param  {...string}  messages  Additional message strings.
  * @param  {Error}      error     The error that was thrown.
  */
-function reportError(...messages) {
+function reportError(...messages) { try {
 	if (!Notifications) { return void console.error(...messages); }
 	const error = messages.pop();
 	const title = messages.shift() || `That didn't work ...`;
@@ -98,10 +102,10 @@ function reportError(...messages) {
 
 	Notifications.create('web-ext-utils:error', {
 		type: 'basic', title, message,
-		iconUrl: require.toUrl([ 'error.svg', 'error.png', 'icon.svg', 'icon.png', ].find(Files.exsists)),
+		iconUrl: require.toUrl([ 'error.svg', 'error.png', 'icon.svg', 'icon.png', ].find(Files.exists)),
 	});
 	clearErrorSoon();
-}
+} catch (_) { try { console.error(...messages); console.error(`failed to show notification`, _); } catch (_) { } } }
 const clearErrorSoon = debounce(() => Notifications.clear('web-ext-utils:error'), 5000);
 
 /**
@@ -117,7 +121,7 @@ function reportSuccess(...messages) {
 
 	Notifications.create('web-ext-utils:success', {
 		type: 'basic', title, message,
-		iconUrl: require.toUrl([ 'success.svg', 'success.png', 'icon.svg', 'icon.png', ].find(Files.exsists)),
+		iconUrl: require.toUrl([ 'success.svg', 'success.png', 'icon.svg', 'icon.png', ].find(Files.exists)),
 	});
 	clearSuccessSoon();
 }

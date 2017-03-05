@@ -1,5 +1,6 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../browser/': { Storage, },
+	require,
 }) => {
 
 let context = null; // a OptionsRoot during its construction
@@ -10,6 +11,7 @@ const OnTrue = new WeakMap/*<Option, Set<function>>*/;
 const OnFalse = new WeakMap/*<Option, Set<function>>*/;
 const OnChange = new WeakMap/*<Option, Set<function>>*/;
 const OnAnyChange = new WeakMap/*<Option, Set<function>>*/;
+const dummySet = new Set; // to delete from
 
 const callbackMaps = [ OnTrue, OnFalse, OnChange, OnAnyChange, ];
 
@@ -50,50 +52,58 @@ class Option {
 		return ctx.storage.remove(ctx.keys.filter(_=>_.startsWith(path)));
 	}
 
-	whenTrue(listener) {
+	whenTrue(listener, { owner, } = { }) {
 		const values = this.values;
 		const listeners = OnTrue.get(this) || new Set;
 		OnTrue.set(this, listeners);
+		owner && owner.addEventListener('unload', () => listeners.delete(listener));
 		if (listeners.has(listener)) { return false; }
 		listeners.add(listener);
 		values.is && callAll([ listener, ], values.get(0), values, null, this.path);
 		return true;
 	}
-	whenFalse(listener) {
+	whenFalse(listener, { owner, } = { }) {
 		const values = this.values;
 		const listeners = OnFalse.get(this) || new Set;
 		OnFalse.set(this, listeners);
+		owner && owner.addEventListener('unload', () => listeners.delete(listener));
 		if (listeners.has(listener)) { return false; }
 		listeners.add(listener);
 		!values.is && callAll([ listener, ], values.get(0), values, null, this.path);
 		return true;
 	}
-	when(true_false) {
-		true_false && true_false.true && this.whenTrue(true_false.true);
-		true_false && true_false.false && this.whenFalse(true_false.false);
+	when(true_false, { owner, } = { }) {
+		true_false && true_false.true  && this.whenTrue (true_false.true,  owner);
+		true_false && true_false.false && this.whenFalse(true_false.false, owner);
 	}
-	whenChange(listener) {
+	whenChange(listener, { owner, } = { }) {
 		const values = this.values;
 		const listeners = OnChange.get(this) || new Set;
 		OnChange.set(this, listeners);
+		owner && owner.addEventListener('unload', () => listeners.delete(listener));
 		if (listeners.has(listener)) { return false; }
 		listeners.add(listener);
 		callAll([ listener, ], values.get(0), values, null, this.path);
 		return true;
 	}
-	onChange(listener) {
+	onChange(listener, { owner, } = { }) {
 		const listeners = OnChange.get(this) || new Set;
 		OnChange.set(this, listeners);
+		owner && owner.addEventListener('unload', () => listeners.delete(listener));
 		return listeners.add(listener);
 	}
-	onAnyChange(listener) {
+	onAnyChange(listener, { owner, } = { }) {
 		const listeners = OnAnyChange.get(this) || new Set;
 		OnAnyChange.set(this, listeners);
+		owner && owner.addEventListener('unload', () => listeners.delete(listener));
 		return listeners.add(listener);
 	}
 	offAnyChange(listener) {
 		const listeners = OnAnyChange.get(this);
 		return listeners && listeners.delete(listener);
+	}
+	off(listener) {
+		[ OnTrue, OnFalse, OnChange, OnAnyChange, ].forEach(_=>(_.get(this) || dummySet).delete(listener));
 	}
 } Object.freeze(Option.prototype);
 
@@ -278,6 +288,10 @@ return class OptionsRoot {
 	constructor({ model, prefix, storage, onChanged, }) {
 		this.model = deepFreeze(model);
 		this.options = new Map;
+		if (!prefix && !storage && !onChanged) { try {
+			require('../loader/content')
+			.onUnload.addListener(() => this.destroy());
+		} catch (_) { /* not in content */ } }
 		this.prefix = prefix = prefix == null ? 'options' : prefix;
 		this.storage = storage = storage || Storage.sync;
 		this._onChanged = onChanged = onChanged || (storage === Storage.sync || storage === Storage.local ? Storage.onChanged : null);

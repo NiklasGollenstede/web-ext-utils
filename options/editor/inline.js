@@ -1,24 +1,31 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'node_modules/web-ext-utils/browser/version': { current: currentBrowser, version: browserVersion, fennec, },
-	'node_modules/web-ext-utils/options/editor/': Editor,
-	'node_modules/web-ext-utils/options/editor/about': about,
+	'../../browser/': { manifest, },
+	'../../browser/version': { current: currentBrowser, version: browserVersion, },
+	'./': Editor,
+	about,
 	'common/options': options,
-}) => {
-const chrome = global.browser || global.chrome;
+	require,
+}) => window => {
+const { document, } = window;
+(window.browser || window.chrome).tabs.getCurrent(tab => tab && (window.tabId = tab.id));
 
-window.options = options;
-chrome.tabs.getCurrent(tab => tab && (window.tabId = tab.id));
+document.title = 'Options - '+ manifest.name;
+
+[ 'index', 'inline', 'about', ].forEach(style => {
+	const link = document.createElement('link');
+	link.href = require.toUrl(`./${ style }.css`);
+	link.rel = 'stylesheet';
+	document.head.appendChild(link);
+});
 
 new Editor({
 	options,
-	host: document.querySelector('#options'),
+	host: document.body.appendChild(document.createElement('form')),
 });
 
-const manifest = chrome.runtime.getManifest();
-global.document.title = 'Options - '+ manifest.name;
 about({
 	manifest,
-	host: document.querySelector('#about'),
+	host: document.body.appendChild(document.createElement('div')),
 	browser: { name: currentBrowser.replace(/^./, c => c.toUpperCase()), version: browserVersion, },
 });
 

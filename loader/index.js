@@ -140,6 +140,10 @@ class ContentScript {
 
 //////// start of private implementation ////////
 
+if (global.innerWidth || global.innerHeight) { // opened in tab
+	global.location.href = '/view.html#403';
+}
+
 /// get config specified in the script tag via < data-...="..." >
 const data = currentScript.dataset, config = { };
 Object.keys(data).forEach(key => { try { config[key] = JSON.parse(data[key]); } catch(_) {config[key] = data[key]; } });
@@ -192,7 +196,6 @@ class Frame {
 
 	async getPort() {
 		if (!chrome.runtime.onConnect.hasListener(onConnect)) { throw new Error(`This module needs to be enabled by \`serveContentScripts(true)\` first`); }
-		// (await callChrome(chrome.tabs, 'executeScript', this.tabId, { file: contentPath, frameId: this.frameId, matchAboutBlank: true, }));
 
 		let reject; this.gettingPort = new Promise((y, n) => ((this.gotPort = y), (reject = n)));
 		callChrome(chrome.tabs, 'executeScript', this.tabId, {
@@ -327,11 +330,9 @@ const methods = {
 		return true;
 	},
 	pagehide() {
-		console.log('bg pagehide');
 		this.frame.hide();
 	},
 	pageshow() {
-		console.log('bg pageshow');
 		this.frame.show();
 	},
 };

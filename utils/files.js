@@ -7,8 +7,16 @@ const files = JSON.parse((await readFile('files.json', 'utf-8')));
 
 function split(path) {
 	const parts = path.split(/\/|\\/g);
-	parts.forEach((part, index) => part === '..' && (parts[index] = (parts[index - 1] = '')));
-	return parts.filter(_=>_ && _ !== '.');
+	for (
+		let i = 0;
+		i < parts.length;
+		parts[i] === '.' ?
+		parts.splice(i, 1)
+		: parts[i] === '..' && i > 0 && parts[i -1] !== '..' ?
+		parts.splice(--i, 2)
+		: ++i
+	) { void 0; }
+	return parts;
 }
 
 function find(path) {
@@ -18,10 +26,10 @@ function find(path) {
 }
 
 function resolve(...fragments) {
-	return [].concat(...fragments.map(split)).join('');
+	return split(fragments.join('/')).join('/');
 }
 
-function exsists(path) {
+function exists(path) {
 	try { return !!find(path); } catch (_) { return false; }
 }
 
@@ -32,6 +40,14 @@ function readDir(path) { try {
 } catch (_) {
 	throw new Error(`"${ path }" is not a directory`);
 } }
+
+async function stat(path) {
+	const node = find(path);
+	return {
+		isFile() { return node === true; },
+		isDirectory() { return typeof node === 'object'; },
+	};
+}
 
 /**
  * Loads a file included in the extension.
@@ -53,10 +69,11 @@ async function readFile(path, encoding) {
 }
 
 return {
-	resolve,
-	exsists,
+	exists,
 	readdir: readDir, readDir,
 	readFile,
+	resolve,
+	stat,
 };
 
 }); })(this);

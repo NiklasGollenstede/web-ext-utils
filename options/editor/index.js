@@ -342,7 +342,7 @@ function displayPreferences(prefs, host) { prefs.forEach(pref => {
 		while (valuesContainer.children.length > values.length) { valuesContainer.lastChild.remove(); }
 		values.forEach((value, index) => setInputRowValues(valuesContainer.children[index], value));
 		setButtonDisabled(element);
-	});
+	}, { owner: host.ownerDocument.defaultView, });
 
 	childrenContainer && pref.when({
 		true: () => fieldsEnabled(childrenContainer, pref.path, true),

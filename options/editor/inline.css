@@ -1,4 +1,11 @@
 
+body {
+	max-width: 1000px;
+	/* min-width: 420px; what was this good for? */
+	margin: 0 auto;
+	padding: 8px;
+}
+
 .options-host .pref-title {
 	font-size: 120%;
 	font-weight: 400;
