@@ -90,13 +90,13 @@ async function showExtensionTab(url, match = url) {
 function reportError(...messages) { try {
 	if (!Notifications) { return void console.error(...messages); }
 	const error = messages.pop();
-	const title = messages.shift() || `That didn't work ...`;
+	const title = (messages.shift() || `That didn't work ...`) +'';
 	let message = messages.join(' ') + (messages.length ? ' ' : '');
 	if (typeof error === 'string') {
 		message += error;
 	} else {
-		if (error.name) { message += error.name +': '; }
-		if (error.message) { message += error.message; }
+		if (error && error.name) { message += error.name +': '; }
+		if (error && error.message) { message += error.message; }
 	}
 	if (!message && !error) { message = 'at all'; }
 

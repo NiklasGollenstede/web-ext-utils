@@ -1,5 +1,5 @@
 (function(global) { 'use strict'; const queue = [ ]; global.initView = view => queue.push(view); define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { manifest, },
+	'../browser/': { extension, manifest, },
 	'../utils/': { reportError, },
 	'../utils/files': FS,
 	require,
@@ -13,28 +13,39 @@ const methods = {
 		handlers[name] = handler;
 	},
 	removeHandler(name) {
-		if (name +'' === '404') { throw new Error(`The error handler can only be replaced, not removed`); }
 		delete handlers[name];
 	},
 };
 
-const handlers = {
-	404(view, options, name) {
-		const code = (/^[45]\d\d/).test(name) && name;
-		view.document.body.innerHTML = `<h1>${ code || 404 }</h1>`;
-		!code && console.error(`Got unknown view "${ view.location.hash.slice(1) }"`);
-	},
-};
+function defaultError(view, options, name) {
+	const code = (/^[45]\d\d/).test(name) && name;
+	view.document.body.innerHTML = `<h1>${ code || 404 }</h1>`;
+	!code && console.error(`Got unknown view "${ view.location.hash.slice(1) }"`);
+}
 
-async function initView(view) {
+const handlers = { }, pending = { };
+
+async function initView(view) { try {
 	const [ name, query, ] = view.location.hash.slice(1).split('?');
 	const options = query ? parseQuery(query) : { };
 
-	(view.browser || view.chrome).tabs.getCurrent(tab => tab && (view.tabId = tab.id));
+	const getId = new Promise(got => (view.browser || view.chrome).tabs.getCurrent(tab => got(tab && (view.tabId = tab.id))));
 
-	try { (await (handlers[name] || handlers['404'])(view, options, name)); }
-	catch (error) { reportError(`Failed to display page "${ name }"`, error); console.error(error); }
-}
+	const handler = handlers[name];
+	if (handler) {
+		(await null); // let the DOM finish
+		(await handler(view, options, name));
+	}
+
+	const tabId = (await getId);
+	if (pending[tabId]) {
+		pending[tabId](view);
+		delete pending[tabId];
+	} else if (!handler) {
+		(await (handlers['404'] || defaultError)(view, options, name));
+	}
+
+} catch (error) { reportError(`Failed to display page "${ name }"`, error); console.error(error); } }
 
 if (
 	manifest.options_ui && (/^(?:(?:chrome|moz|ms)-extension:\/\/.*?)?\/?view.html#options(?:\ß|$)/).test(manifest.options_ui.page)
@@ -75,6 +86,7 @@ function loadFrame(path, view) {
 }
 
 global.initView = initView;
+extension.getViews().forEach(view => view !== global && !queue.includes(view) && view.location.reload()); // reload old views
 queue.forEach(initView);
 queue.splice(0, Infinity);
 

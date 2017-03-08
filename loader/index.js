@@ -2,21 +2,9 @@
 /* eslint-disable no-throw-literal */ /* eslint-disable prefer-promise-reject-errors */
 
 /**
- * Enables, disables and gets the status of this module serving content scripts.
- * @param  {bool?}  value  Optional. Bool to set the module to enabled or disabled. Omit to leave as is.
- * @return {bool}          Whether the module is now enabled or not.
- */
-function serveContentScripts(value) {
-	if (arguments.length === 0) { void 0; } // just return the current state
-	else if (value) { chrome.runtime.onConnect.addListener(onConnect); } // TODO: only for '<all_urls>'
-	else { chrome.runtime.onConnect.removeListener(onConnect); } // TODO: disconnect all open ports
-	return chrome.runtime.onConnect.hasListener(onConnect);
-}
-
-/**
  * Dynamically executes functions as content scripts.
  * @param  {natural}       tabId    The id of the tab to run in.
- * @param  {natural}       frameId  Optional. The id of the frame within the tab to run in.
+ * @param  {natural}       frameId  Optional. The id of the frame within the tab to run in. Defaults to the top level frame.
  * @param  {function}      script   A function that will be decompiled and run as content script.
  * @param  {...any}        args     Arguments that will be cloned to call the function with.
  *                                  `this` in the function will be the global object (not necessarily `window`).
@@ -31,7 +19,7 @@ async function runInTab(tabId, frameId, script, ...args) {
 /**
  * Dynamically loads content scripts by `require()`ing them in the content context.
  * @param  {natural}          tabId    The id of the tab to run in.
- * @param  {natural}          frameId  Optional. The id of the frame within the tab to run in.
+ * @param  {natural}          frameId  Optional. The id of the frame within the tab to run in. Defaults to the top level frame.
  * @param  {[string]|object}  modules  An Array if module ids to load, or an object where each key is a module id
  *                                     and the values will be made available as `module.config()`.
  * @return {natural}                   The number of modules loaded.
@@ -40,6 +28,18 @@ async function runInTab(tabId, frameId, script, ...args) {
 async function requireInTab(tabId, frameId, modules) {
 	if (typeof frameId !== 'number') { modules = frameId; frameId = 0; }
 	return Frame.get(tabId, frameId).request('require', modules);
+}
+
+/**
+ * Detaches all content scripts from the given context. Specifically, it performs the same steps as when the extension is unloaded.
+ * That is, it fires the onUnload event, deletes the global define and require functions and closes the loader connection.
+ * @param  {natural}   tabId    The id of the tab to run in.
+ * @param  {natural}   frameId  Optional. The id of the frame within the tab to run in. Defaults to the top level frame.
+ */
+async function detachFormTab(tabId, frameId) {
+	const frames = tabs.get(tabId);
+	const frame = frames && frames.get(frameId);
+	frame && frame.destroy();
 }
 
 /**
@@ -56,7 +56,6 @@ class ContentScript {
 			modules: null, script: null, args: [ ],
 			onMatch: new Event,
 		}; Self.set(this, self);
-		this.onMatch = self.onMatch.event;
 		Object.assign(this, options);
 	}
 
@@ -68,7 +67,7 @@ class ContentScript {
 	 * @throws {TypeError}                 If the description above is not met.
 	 * @return {[string]}                  The sources of the created RegExps.
 	 */
-	set include(v)   { Self.get(this).include = parsePatterns(v); }
+	set include(v)   { Self.get(this).include = parsePatterns(v); listenToNavigation(); }
 	get include()    { return Self.get(this).include.map(_=>_.source); }
 	/**
 	 * Same as .include, only that it can overrule includes to exclude them again.
@@ -116,7 +115,8 @@ class ContentScript {
 		(await Promise.all(tabs.map(async ({ id: tabId, incognito, }) => Promise.all(
 			(await callChrome(chrome.webNavigation, 'getAllFrames', { tabId, }))
 			.map(async ({ frameId, url, }) => { try {
-				applied.add((await Frame.get(tabId, frameId).applyIfMatches(self, url, incognito)));
+				const [ frame, , done, ] = (await Frame.get(tabId, frameId).applyIfMatches(self, url, incognito));
+				(await done); applied.add(frame);
 			} catch (error) { console.error(error); } })
 		))));
 		applied.delete(null); return applied;
@@ -126,15 +126,31 @@ class ContentScript {
 	 * Applies the ContentScript to a specific frame now, regardless of whether it matches.
 	 */
 	async applyToFrame(tabId, frameId = 0) {
-		Frame.get(tabId, frameId).applyIfMatches(Self.get(this), null);
+		return Frame.get(tabId, frameId).applyIfMatches(Self.get(this), null);
+	}
+
+	get onMatch() {
+		return Self.get(this).onMatch.event;
+	}
+
+	get onShow() {
+		const self = Self.get(this);
+		return (self.onShow || (self.onShow = new Event)).event;
+	}
+
+	get onHide() {
+		const self = Self.get(this);
+		return (self.onHide || (self.onHide = new Event)).event;
 	}
 
 	/**
 	 * Permanently disables the instance so that it will never run any scripts again and all accessors will throw.
 	 */
 	destroy() {
-		Self.get(this).onMatch.clear();
-		Self.delete(this);
+		const self = Self.get(this);
+		if (!self) { return; } Self.delete(this);
+		self.onMatch.clear();
+		self.include.length && listenToNavigation();
 	}
 }
 
@@ -144,15 +160,11 @@ if (global.innerWidth || global.innerHeight) { // opened in tab
 	global.location.href = '/view.html#403';
 }
 
-/// get config specified in the script tag via < data-...="..." >
-const data = currentScript.dataset, config = { };
-Object.keys(data).forEach(key => { try { config[key] = JSON.parse(data[key]); } catch(_) {config[key] = data[key]; } });
-
 const chrome = (global.browser || global.chrome);
 const rootUrl = chrome.extension.getURL('');
 const gecko = rootUrl.startsWith('moz-');
 const contentPath = new URL('./content.js', currentScript.src).href.replace(rootUrl, '/');
-const requirePath = config.requireScript || '/node_modules/es6lib/require.js';
+const requirePath = '/node_modules/es6lib/require.js';
 const getScource = (() => { const { toString, } = (() => 0);
 	return func => { if (typeof func !== 'function') { throw new Error(`'script' must be a function`); } return toString.call(func); };
 })();
@@ -162,11 +174,18 @@ let debug = false;
 const tabs = new Map/*<tabId, Map<frameId, Frame>>*/;
 const Self = new Map/*<ContentScript, object>*/;
 
+function listenToNavigation() {
+	if (!chrome.webNavigation) { return; }
+	const filters = [ ];
+	Self.forEach(self => filters.push(...self.include.map(exp => ({ urlMatches: exp.source, }))));
+	chrome.webNavigation.onCommitted.removeListener(onNavigation); // must remove first to avoid duplicate
+	if (!filters.length) { return; }
+	chrome.webNavigation.onCommitted.addListener(onNavigation, { url: filters, });
+}
+
 function onNavigation({ tabId, frameId, url, }) {
-	const frames = tabs.get(tabId);
-	frameId === 0 && frames && frames.delete(frameId);
 	if (!(/^(?:https?|file|ftp|app):\/\//).test(url)) { return; } // i.e. '<all_urls>'
-	const frame = Frame.get(tabId, frameId);
+	const frame = Frame.get(tabId, frameId, true);
 	Self.forEach(self => frame.applyIfMatches(self, url));
 }
 
@@ -181,22 +200,22 @@ class Frame {
 		this.gettingPort = null;
 		this.gotPort = null;
 		this.inited = false;
-		this.pagehide = null;
-		this.pageshow = null;
-		this.remove = null;
+		this.onhide = null;
+		this.onshow = null;
+		this.onremove = null;
 		this.arg = null;
+		this.scripts = new Set;
 		this.destroy = this.destroy.bind(this);
 	}
 
-	static get(tabId, frameId) {
+	static get(tabId, frameId, refresh) {
 		let frames = tabs.get(tabId); if (!frames) { frames = new Map; tabs.set(tabId, frames); }
+		refresh && frameId === 0 && frames.delete(frameId);
 		let frame = frames.get(frameId); if (!frame) { frame = new Frame(tabId, frameId); frames.set(frameId, frame); }
 		return frame;
 	}
 
 	async getPort() {
-		if (!chrome.runtime.onConnect.hasListener(onConnect)) { throw new Error(`This module needs to be enabled by \`serveContentScripts(true)\` first`); }
-
 		let reject; this.gettingPort = new Promise((y, n) => ((this.gotPort = y), (reject = n)));
 		callChrome(chrome.tabs, 'executeScript', this.tabId, {
 			file: contentPath + (debug && gecko ? '?debug=true' : ''), frameId: this.frameId, matchAboutBlank: true, runAt: 'document_start',
@@ -237,30 +256,35 @@ class Frame {
 			|| incognito && !script.incognito
 			|| !script.include.some(_=>_.test(url))
 			|| script.exclude.some(_=>_.test(url))
-		)) { return null; }
+		)) { return [ ]; }
 		if (!this.port) { (await (this.gettingPort || this.getPort())); }
-		if (url && this.incognito && !script.incognito) { return null; }
-		script.onMatch.fire(this.eventArg);
-		script.modules && (await this.request('require', script.modules));
-		script.script && (await this.request('run', script.script, script.args));
-		return this.eventArg;
+		if (url && this.incognito && !script.incognito) { return [ ]; }
+		const done = (async () => {
+			script.modules && (await this.request('require', script.modules));
+			return script.script ? this.request('run', script.script, script.args) : undefined;
+		})();
+		url && script.onMatch.fire(this.eventArg, url, done);
+		this.scripts.add(script);
+		return [ this.eventArg, null, done, ];
 	}
 
 	hide() {
-		this.hidden = true;
-		this.pagehide && this.pagehide.fire(this.eventArg);
+		if (this.hidden) { return; } this.hidden = true;
+		this.onhide && this.onhide.fire(this.eventArg);
+		this.scripts.forEach(script => script.onHide && script.onHide.fire(this.eventArg));
 		const frames = tabs.get(this.tabId);
 		this.frameId === 0 && frames.get(this.frameId) === this && frames.delete(this.frameId);
 	}
 	show() {
-		this.hidden = false;
-		this.pageshow && this.pageshow.fire(this.eventArg);
+		if (!this.hidden) { return; } this.hidden = false;
 		this.frameId === 0 && tabs.get(this.tabId).set(this.frameId, this.frame);
+		this.onshow && this.onshow.fire(this.eventArg);
+		this.scripts.forEach(script => script.onShow && script.onShow.fire(this.eventArg));
 	}
 
-	get onPageHide() { if (!this.pagehide) { this.pagehide = new Event; } return this.pagehide; }
-	get onPageShow() { if (!this.pageshow) { this.pageshow = new Event; } return this.pageshow; }
-	get onRemove  () { if (!this.remove)   { this.remove   = new Event; } return this.remove; }
+	get onHide  () { if (!this.onhide)   { this.onhide   = new Event; } return this.onhide; }
+	get onShow  () { if (!this.onshow)   { this.onshow   = new Event; } return this.onshow; }
+	get onRemove() { if (!this.onremove) { this.onremove = new Event; } return this.onremove; }
 	get eventArg() { const self = this; if (!this.arg) { this.arg = Object.freeze({
 		tabId: this.tabId,
 		frameId: this.frameId,
@@ -269,14 +293,15 @@ class Frame {
 		get onPageHide() { return self.onPageHide.event; },
 		get onPageShow() { return self.onPageShow.event; },
 		get onRemove  () { return self.onRemove.event; },
-	}); } return this.arg;}
+	}); } return this.arg; }
 
 	destroy(unload) {
+		this.hide();
 		const frames = tabs.get(this.tabId);
 		frames && frames.get(this.frameId) === this && frames.delete(this.frameId);
-		if (this.remove) { !unload && this.remove.fire(this.eventArg); this.remove.listeners.clear(); this.remove = null; }
-		if (this.pagehide) { this.pagehide.listeners.clear(); this.pagehide = null; }
-		if (this.pageshow) { this.pageshow.listeners.clear(); this.pageshow = null; }
+		if (this.onremove) { !unload && this.onremove.fire(this.eventArg); this.onremove.listeners.clear(); this.onremove = null; }
+		if (this.onhide) { this.onhide.listeners.clear(); this.onhide = null; }
+		if (this.onshow) { this.onshow.listeners.clear(); this.onshow = null; }
 		this.port && this.port.onDisconnect.removeListener(this.destroy);
 		this.port && this.port.disconnect();
 	}
@@ -390,17 +415,14 @@ window.addEventListener('unload', () => {
 });
 
 {
-	global.require && typeof global.require.config === 'function' && global.require.config(config);
-	if ('serveContentScripts' in config) { serveContentScripts(config.serveContentScripts); }
-	if ('debug' in config) { debug = !!config.debug; }
-	chrome.webNavigation && chrome.webNavigation.onCommitted.addListener(onNavigation);
+	chrome.runtime.onConnect.addListener(onConnect);
 }
 
 Object.assign(exports, {
-	serveContentScripts,
 	ContentScript,
 	runInTab,
 	requireInTab,
+	detachFormTab,
 	parseMatchPatterns: parsePatterns,
 });
 Object.defineProperty(exports, 'debug', { set(v) { debug = !!v; }, get() { return debug; }, configurable: true, });
