@@ -94,9 +94,10 @@ function reportError(...messages) { try {
 	let message = messages.join(' ') + (messages.length ? ' ' : '');
 	if (typeof error === 'string') {
 		message += error;
-	} else {
-		if (error && error.name) { message += error.name +': '; }
-		if (error && error.message) { message += error.message; }
+	} else if (error) {
+		if (error.name) { message += error.name +': '; }
+		if (error.message === 'No window matching {"frame_id":0,"matchesHost":["<all_urls>"]}') { message += `Cannot access tab`; } // unhelpful Firefox error when trying to access an url that doesn't match <all_urls>
+		else if (error.message) { message += error.message; }
 	}
 	if (!message && !error) { message = 'at all'; }
 

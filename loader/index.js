@@ -42,6 +42,10 @@ async function detachFormTab(tabId, frameId) {
 	frame && frame.destroy();
 }
 
+function getFrame(tabId, frameId) {
+	return Frame.get(tabId, frameId).eventArg;
+}
+
 /**
  * Defines a content script that can automatically attach to tabs.
  */
@@ -199,6 +203,7 @@ class Frame {
 		this.port = null;
 		this.gettingPort = null;
 		this.gotPort = null;
+		this.cancelPort = null;
 		this.inited = false;
 		this.onhide = null;
 		this.onshow = null;
@@ -216,7 +221,7 @@ class Frame {
 	}
 
 	async getPort() {
-		let reject; this.gettingPort = new Promise((y, n) => ((this.gotPort = y), (reject = n)));
+		let reject; this.gettingPort = new Promise((y, n) => ((this.gotPort = y), (reject = (this.cancelPort = n))));
 		callChrome(chrome.tabs, 'executeScript', this.tabId, {
 			file: contentPath + (debug && gecko ? '?debug=true' : ''), frameId: this.frameId, matchAboutBlank: true, runAt: 'document_start',
 		}).catch(reject);
@@ -228,6 +233,7 @@ class Frame {
 		this.incognito = port.sender.tab.incognito;
 		this.gotPort && this.gotPort();
 		this.gotPort = null;
+		this.onshow && this.onshow.fire(this.eventArg);
 	}
 	initContent() {
 		if (requirePath) {
@@ -257,7 +263,8 @@ class Frame {
 			|| !script.include.some(_=>_.test(url))
 			|| script.exclude.some(_=>_.test(url))
 		)) { return [ ]; }
-		if (!this.port) { (await (this.gettingPort || this.getPort())); }
+		try { if (!this.port) { (await (this.gettingPort || this.getPort())); } }
+		catch (error) { if (error !== this) { throw error; } else { return [ ]; } }
 		if (url && this.incognito && !script.incognito) { return [ ]; }
 		const done = (async () => {
 			script.modules && (await this.request('require', script.modules));
@@ -277,7 +284,9 @@ class Frame {
 	}
 	show() {
 		if (!this.hidden) { return; } this.hidden = false;
-		this.frameId === 0 && tabs.get(this.tabId).set(this.frameId, this.frame);
+		const frames = tabs.get(this.tabId), old = frames.get(this.frameId);
+		old && old !== this && old.cancelPort && old.cancelPort(old);
+		this.frameId === 0 && frames.set(this.frameId, this);
 		this.onshow && this.onshow.fire(this.eventArg);
 		this.scripts.forEach(script => script.onShow && script.onShow.fire(this.eventArg));
 	}
@@ -423,6 +432,7 @@ Object.assign(exports, {
 	runInTab,
 	requireInTab,
 	detachFormTab,
+	getFrame,
 	parseMatchPatterns: parsePatterns,
 });
 Object.defineProperty(exports, 'debug', { set(v) { debug = !!v; }, get() { return debug; }, configurable: true, });
