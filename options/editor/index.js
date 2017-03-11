@@ -329,10 +329,8 @@ function displayPreferences(prefs, host) { prefs.forEach(pref => {
 					minLength: model.minLength || 0,
 				},
 			}),
-			childrenContainer = pref.children.filter(({ type, }) => type !== 'hidden').length && displayPreferences(
-				pref.children,
-				createElement('fieldset', { className: 'pref-children', })
-			),
+			childrenContainer = pref.children.filter(({ type, }) => type !== 'hidden').length
+			&& createElement('fieldset', { className: 'pref-children', }),
 		]),
 	]));
 	Object.assign(element, { pref, input, });
@@ -344,6 +342,7 @@ function displayPreferences(prefs, host) { prefs.forEach(pref => {
 		setButtonDisabled(element);
 	}, { owner: host.ownerDocument.defaultView, });
 
+	childrenContainer && displayPreferences(pref.children, childrenContainer);
 	childrenContainer && pref.when({
 		true: () => fieldsEnabled(childrenContainer, pref.path, true),
 		false: () => fieldsEnabled(childrenContainer, pref.path, false),

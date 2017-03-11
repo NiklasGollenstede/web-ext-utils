@@ -141,6 +141,9 @@ pre {
 	transition-property: color, fill, background-color, border-color, box-shadow, opacity;
 	transition-duration: 0.21s;
 }
+.preload * {
+	transition: none !important;
+}
 
 /* collapsing lists */
 .toggle-switch>* {

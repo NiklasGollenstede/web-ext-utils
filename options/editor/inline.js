@@ -7,7 +7,7 @@
 	require,
 }) => window => {
 const { document, } = window;
-(window.browser || window.chrome).tabs.getCurrent(tab => tab && (window.tabId = tab.id));
+(window.browser || window.chrome) && (window.browser || window.chrome).tabs.getCurrent(tab => tab && (window.tabId = tab.id));
 
 document.title = 'Options - '+ manifest.name;
 
@@ -15,7 +15,8 @@ document.title = 'Options - '+ manifest.name;
 	const link = document.createElement('link');
 	link.href = require.toUrl(`./${ style }.css`);
 	link.rel = 'stylesheet';
-	document.head.appendChild(link);
+	link.scoped = true;
+	document.body.appendChild(link);
 });
 
 new Editor({

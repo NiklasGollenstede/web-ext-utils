@@ -288,7 +288,7 @@ return class OptionsRoot {
 	constructor({ model, prefix, storage, onChanged, }) {
 		this.model = deepFreeze(model);
 		this.options = new Map;
-		if (!prefix && !storage && !onChanged) { try {
+		if (!storage && !onChanged) { try {
 			require('../loader/content')
 			.onUnload.addListener(() => this.destroy());
 		} catch (_) { /* not in content */ } }

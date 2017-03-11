@@ -1,15 +1,19 @@
 (async function(global) { 'use strict'; // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-document.currentScript.remove();
+const { document, location, history, } = global;
+document.currentScript.remove(); // ==> body is now empty
 
 const chrome = global.browser || global.chrome;
-const main = chrome && chrome.extension.getBackgroundPage();
+const main = global.background = chrome && chrome.extension.getBackgroundPage();
+// let main; if (chrome) { try { main = chrome.extension.getBackgroundPage(); } catch (_) { main = (await new Promise(done => chrome.runtime.getBackgroundPage(done))); } } // edge doesn't allow extension.getBackgroundPage() with event pages
 
-if ((/##doCloseOnBlur##-?\d+#-?\d+$/).test(location.href)) { // the view was an incognito panel (see below), so it should close it on blur
+if ((/##doCloseOnBlur##\d+#-?\d+#-?\d+$/).test(location.href)) { // the view was an incognito panel (see below), so it should close it on blur
 	global.addEventListener('blur', event => global.close());
-	const [ match, left, top, ] = (/##doCloseOnBlur##(-?\d+)#(-?\d+)$/).exec(location.href);
+	const { windowId, } = (await global.browser.tabs.getCurrent());
+	global.resize = (width, height) => global.browser.windows.update(windowId, { width, height, }); // provide a function for the view to resize itself. TODO: should probably add some px as well
+	const [ match, activeTab, left, top, ] = (/##doCloseOnBlur##(\d+)#(-?\d+)#(-?\d+)$/).exec(location.href);
+	global.activeTab = activeTab; // the "panel" can't query for the active tab itself, because that is now its own tab
 	history.replaceState(null, '', location.href.slice(0, -match.length));
-	const tab = (await global.browser.tabs.getCurrent());
-	(await global.browser.windows.update(tab.windowId, { top: +top, left: +left, })); // firefox currently ignores top and left in .create(), so move it here
+	(await global.browser.windows.update(windowId, { top: +top, left: +left, })); // firefox currently ignores top and left in .create(), so move it here
 } else
 if ((/##doNotRecurse##$/).test(location.href)) { // avoid recursion, which would be very hard to stop for the user
 	history.replaceState(null, '', location.href.replace(/##doNotRecurse##$/, ''));
@@ -24,12 +28,14 @@ if (!main) {
 	const browser = global.browser;
 	const tab = (await browser.tabs.getCurrent());
 	if (!tab) { // in a panel. Open a non-private mode popup where the panel would be
+		const getActive = browser.tabs.query({ currentWindow: true, active: true, });
 		const parent = (await browser.windows.getLastFocused());
-		const width = 700, height = 600; // the popup will not resize itself as the panel would
+		const options = new global.URLSearchParams(location.hash.split('?')[1] || ''); // the popup will not resize itself as the panel would, so the dimensions can be passed as query params 'w' and 'h'
+		const width = (options.get('w') <<0 || 700) + 14, height = (options.get('h') <<0 || 600) + 42; // the maximum size for panels is somewhere around 700x800. Firefox needs some additional pixels 14x42 for FF54 on Win 10 with dpi 1.25
 		const left = Math.round(parent.left + parent.width - width - 25);
 		const top = Math.round(parent.top + 74); // the actual frame height varies, but 74px should place the popup at the bottom if the button
 		(await browser.windows.create({
-			type: 'popup', url: location.href +`##doCloseOnBlur##${ left }#${ top }`, // the panel would close itself on blur, so emulate that (see above)
+			type: 'popup', url: location.href +`##doCloseOnBlur##${ (await getActive)[0].id }#${ left }#${ top }`, // the panel would close itself on blur, so emulate that (see above)
 			top, left, width, height,
 		}));
 	} else { // in a tab in a private window (unless someone explicitly opened a view in an incognito popup)

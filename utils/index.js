@@ -1,6 +1,5 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../browser/': { runtime, extension, tabs, Tabs, Windows, Notifications, },
-	Files,
 	require,
 }) => {
 
@@ -87,8 +86,9 @@ async function showExtensionTab(url, match = url) {
  * @param  {...string}  messages  Additional message strings.
  * @param  {Error}      error     The error that was thrown.
  */
-function reportError(...messages) { try {
-	if (!Notifications) { return void console.error(...messages); }
+async function reportError(...messages) { try {
+	try { console.error(...messages); } catch (_) { }
+	if (!Notifications) { return; }
 	const error = messages.pop();
 	const title = (messages.shift() || `That didn't work ...`) +'';
 	let message = messages.join(' ') + (messages.length ? ' ' : '');
@@ -103,7 +103,7 @@ function reportError(...messages) { try {
 
 	Notifications.create('web-ext-utils:error', {
 		type: 'basic', title, message,
-		iconUrl: require.toUrl([ 'error.svg', 'error.png', 'icon.svg', 'icon.png', ].find(Files.exists)),
+		iconUrl: errorIcon || (errorIcon = (await getIcon('error'))),
 	});
 	clearErrorSoon();
 } catch (_) { try { console.error(...messages); console.error(`failed to show notification`, _); } catch (_) { } } }
@@ -115,18 +115,22 @@ const clearErrorSoon = debounce(() => Notifications.clear('web-ext-utils:error')
  * @param  {string?}  	title     Optional. The Notification's title.
  * @param  {...string}  messages  Additional message strings.
  */
-function reportSuccess(...messages) {
+async function reportSuccess(...messages) {
 	if (!Notifications) { return void console.info(...messages); }
 	const title = messages.shift() || `Operation completed successfully!`;
 	const message = messages.join(' ');
 
 	Notifications.create('web-ext-utils:success', {
 		type: 'basic', title, message,
-		iconUrl: require.toUrl([ 'success.svg', 'success.png', 'icon.svg', 'icon.png', ].find(Files.exists)),
+		iconUrl: successIcon || (successIcon = (await getIcon('success'))),
 	});
 	clearSuccessSoon();
 }
 const clearSuccessSoon = debounce(() => Notifications.clear('web-ext-utils:success'), 5000);
+
+let errorIcon, successIcon; async function getIcon(name) {
+	return require.toUrl([ `${ name }.svg`, `${ name }.png`, `icon.svg`, `icon.png`, ].find((await require.async('./files')).exists));
+}
 
 function debounce(callback, time) {
 	let timer = null;

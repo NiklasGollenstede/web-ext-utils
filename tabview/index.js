@@ -1,8 +1,10 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	'../utils/': { reportError, },
+	'../../es6lib/dom': { createElement, },
 }) => {
 
 const styles = {
-	default: `
+	default: `/* default */
 		.content, .tablist, .tab {
 			box-sizing: border-box;
 			font-family: "Segoe UI";
@@ -43,7 +45,7 @@ const styles = {
 		.tab>.title {
 		}
 	`,
-	vertical: `
+	vertical: `/* vertical */
 		.content {
 			top: 0px; height: 100%;
 			right: 0px; width: calc(100% - 200px);
@@ -95,7 +97,7 @@ const styles = {
 			}
 		}
 	`,
-	horizontal: `
+	horizontal: `/* horizontal */
 		.content {
 			left: 0px; width: 100%;
 			bottom: 0px; height: calc(100% - 40px);
@@ -135,7 +137,7 @@ const styles = {
 			white-space: nowrap;
 		}
 	`,
-	firefox: `
+	firefox: `/* firefox */
 		.tablist {
 			background-color: #424F5A;
 		}
@@ -155,13 +157,17 @@ const styles = {
 
 return class TabView {
 	constructor({ host, content, tabs, active, onSelect, style, }) {
-		this.style = host.appendChild(document.createElement('style'));
-		this.style.scoped = true;
-		this.style.textContent = typeof style !== 'string' ? '' : styles.default + style.split(' ').map(style => styles[style]).join('\n');
-		this.tabwrapper = host.appendChild(document.createElement('div'));
-		this.tabwrapper.classList = 'tabwrapper';
-		this.tablist = this.tabwrapper.appendChild(document.createElement('div'));
-		this.tablist.classList = 'tablist';
+		this.style = host.appendChild(createElement('style', {
+			scoped: true,
+			textContent: typeof style !== 'string' ? '' : styles.default + style.split(' ').map(style => styles[style]).join('\n'),
+		}));
+		this.tabwrapper = host.appendChild(createElement('div', {
+			classList: 'tabwrapper',
+		}, [
+			this.tablist = createElement('div', {
+				classList: 'tablist',
+			}),
+		]));
 		this.content = host.appendChild(content);
 		this.content.classList = 'content';
 		tabs.forEach(tab => this.add(tab));
@@ -171,33 +177,33 @@ return class TabView {
 
 	set active(id) {
 		const old = this.tablist.querySelector(':scope>.tab.active');
+		if (old && old.dataset.id === id) { return; }
 		old && old.classList.remove('active');
 		const now = this.get(id);
 		now.classList.add('active');
-		try { this.onSelect && this.onSelect(now); } catch (error) { console.error(error); }
+		try { this.onSelect && this.onSelect(now); } catch (error) { reportError(`Failed to navigate tabview`, error); }
 	}
 	get active() {
 		return this.tablist.querySelector(':scope>.tab.active').id;
 	}
 
-	add({ id, title, icon, position = Infinity, data, }) {
-		const tab = this.tablist.insertBefore(document.createElement('div'), this.tablist.children[position]);
-		tab.className = 'tab';
-		tab.id = tab.dataset.id = id;
-		tab.icon = tab.appendChild(document.createElement('div'));
-		tab.icon.classList = 'icon';
-		setIcon(tab, icon);
-		tab._title = tab.appendChild(document.createElement('span'));
-		tab._title.classList = 'title';
-		tab._title.textContent = title;
-		tab.data = data;
-		tab.onclick = ({ button, }) => !button && (this.active = id);
+	add({ id, position = Infinity, data, }) {
+		this.tablist.insertBefore(createElement('div', {
+			className: 'tab',
+			id: id, dataset: { id, },
+			data: data !== undefined ? data : { },
+			onclick: ({ button, }) => !button && (this.active = id),
+		}, [
+			createElement('span', { classList: 'title', }),
+			createElement('div', { classList: 'icon', }),
+		]), this.tablist.children[position]);
+		this.set(arguments[0]);
 	}
 
 	set(props) {
 		const tab = this.get(props.id);
-		'title' in props && (tab._title.textContent = props.title);
-		'icon' in props && setIcon(tab, props.icon);
+		'title' in props && (tab.querySelector('.title').textContent = props.title);
+		'icon' in props && setIcon(tab.querySelector('.icon'), props.icon);
 	}
 
 	remove(id) {
@@ -209,17 +215,18 @@ return class TabView {
 	}
 };
 
-function setIcon(tab, icon) {
-	tab.icon.textContent = '';
-	tab.icon.style.backgroundImage = '';
-	tab.icon.classList.remove('missing');
-	if (typeof icon === 'string') {
-		tab.icon.style.backgroundImage = `url(${ icon })`;
-	} else if (icon instanceof Element) {
-		tab.icon.appendChild(icon);
+function setIcon(icon, value) {
+	icon.textContent = '';
+	icon.style.backgroundImage = '';
+	icon.classList.remove('missing');
+	if (typeof value === 'string') {
+		icon.style.backgroundImage = `url(${ value })`;
+	} else if (typeof value.querySelector === 'function') {
+		icon.appendChild(value);
 	} else {
-		tab.icon.classList.add('missing');
+		icon.classList.add('missing');
 	}
+	return icon;
 }
 
 }); })(this);

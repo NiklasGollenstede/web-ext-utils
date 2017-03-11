@@ -15,6 +15,9 @@ const methods = {
 	removeHandler(name) {
 		delete handlers[name];
 	},
+	getHandler(name) {
+		return handlers[name];
+	},
 };
 
 function defaultError(view, options, name) {
@@ -26,7 +29,8 @@ function defaultError(view, options, name) {
 const handlers = { }, pending = { };
 
 async function initView(view) { try {
-	const [ name, query, ] = view.location.hash.slice(1).split('?');
+	let [ name, query, ] = view.location.hash.slice(1).split('?');
+	name === 'index' && (name = '');
 	const options = query ? parseQuery(query) : { };
 
 	const getId = new Promise(got => (view.browser || view.chrome).tabs.getCurrent(tab => got(tab && (view.tabId = tab.id))));
@@ -45,7 +49,7 @@ async function initView(view) { try {
 		(await (handlers['404'] || defaultError)(view, options, name));
 	}
 
-} catch (error) { reportError(`Failed to display page "${ name }"`, error); console.error(error); } }
+} catch (error) { (await reportError(`Failed to display page "${ name }"`, error)); console.error(error); } }
 
 if (
 	manifest.options_ui && (/^(?:(?:chrome|moz|ms)-extension:\/\/.*?)?\/?view.html#options(?:\ß|$)/).test(manifest.options_ui.page)
@@ -71,29 +75,36 @@ if ((await FS.exists('views'))) { for (const name of (await FS.readdir('views'))
 		? (await require.async(path +'/'))
 		: null
 	);
-	if (handler) { methods.setHandler(isFile ? name.replace(/\.(?:html|js)$/, '') : name, handler); }
+	if (handler) {
+		methods.setHandler(isFile ? name.replace(/\.(?:html|js)$/, '') : name, handler);
+		(isFile ? (/^index\.(?:html|js)$/) : (/^index$/)).test(name) && methods.setHandler('', handler);
+	}
 } }
 
 function loadFrame(path, view) {
-	const frame = view.document.createElement('iframe');
+	const frame = global.document.createElement('iframe');
 	frame.src = '/'+ path;
 	frame.style.border = 'none';
-	frame.style.position = 'fixed';
+	// frame.style.position = 'fixed';
+	frame.style.margin = 0;
 	frame.style.top    = frame.style.left  = '0';
 	frame.style.height = frame.style.width = '100%';
 	view.document.body.appendChild(frame);
 	frame.addEventListener('load', () => (view.document.title = frame.contentDocument.title), { once: true, });
 }
 
-global.initView = initView;
-extension.getViews().forEach(view => view !== global && !queue.includes(view) && view.location.reload()); // reload old views
-queue.forEach(initView);
-queue.splice(0, Infinity);
+(async () => {
+	for (let i = 0; i < 10; i++) { (await null); } // give view modules that depend on this module some ticks time to work with it
+	global.initView = initView;
+	extension.getViews().forEach(view => view !== global && !queue.includes(view) && view.location.reload()); // reload old views
+	queue.forEach(initView);
+	queue.splice(0, Infinity);
+})();
 
 return methods;
 
 function parseQuery(query) {
-	const search = new URLSearchParams(query.replace(/[?#]+/, '&')), config = { };
+	const search = new global.URLSearchParams(query.replace(/[?#]+/, '&')), config = { };
 	for (const [ key, value, ] of search) {
 		try { config[key] = JSON.parse(value); } catch(_) { config[key] = value; }
 	}
