@@ -106,15 +106,17 @@ textarea[data-type="code"] {
 /* sizes */
 .pref-title {
 	font-weight: 600;
-	font-size: 180%;
+	font-size: 170%;
 	margin: 8px 0   3px 0;
 	display: inline-block;
 }
 .pref-description {
 	font-size: 117%;
-	font-weight: 500;
 	margin: 3px 0   8px 0;
 	display: inline-block;
+}
+.value-prefix, .value-suffix {
+	font-size: 117%;
 }
 textarea, input[type="text"]:not([data-type="keybordKey"]) {
 	/* min-width: 500px; */

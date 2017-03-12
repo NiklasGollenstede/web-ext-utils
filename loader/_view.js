@@ -42,7 +42,7 @@ if (!main) {
 		const windows = (await browser.windows.getAll());
 		const parent = windows.find(_=>!_.incognito); // get any window that is non-private
 		browser.tabs.create({
-			url: location.href +'##doCloseOnBlur##', // very much avoid recursion
+			url: location.href +'##doNotRecurse##', // very much avoid recursion
 			windowId: parent.id, active: !document.hidden, // the new tab should be active if the current one is
 		});
 		// the window of the new tab should be focused if the current one is

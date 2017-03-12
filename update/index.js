@@ -43,7 +43,7 @@ for (const component of Object.keys(_updated)) {
 	}
 	if (last > now) {
 		// downgrade
-		console.error(`${ path } version was downgraded from ${ last } to ${ now }`);
+		component !== 'browser' && console.error(`${ path } version was downgraded from ${ last } to ${ now }`);
 		updated.downgraded = true;
 		Object.freeze(updated); continue;
 	}

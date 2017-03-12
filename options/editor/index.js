@@ -2,7 +2,7 @@
 }) => {
 
 const queryChild = (() => {
-	try { document.querySelector(':scope'); }
+	try { global.document.querySelector(':scope'); }
 	catch (error) {
 		return (element, ...selectors) =>
 		selectors.reduce((element, selector) => element && Array.prototype.find.call(
@@ -67,6 +67,12 @@ return function loadEditor({ host, options, onCommand, }) {
 		if (!target.matches || !target.matches('.input-field, .input-field *')) { return; }
 		saveInput(getParent(target, '.input-field'));
 	});
+	host.addEventListener('focus', ({ target: input, }) => {
+		if (!input.matches('.dynamic-select')) { return; }
+		const element = getParent(input, '.pref-container');
+		const props = propsMap.get(input.id);
+		setSelectOptions(input, props.getOptions(element.pref));
+	}, true);
 
 	if (!Array.isArray(options)) {
 		options = options.constructor.name === 'OptionsRoot' ? options.children : [ options, ];
@@ -137,7 +143,7 @@ function createInputRow(pref) {
 				innerHTML: sanatize(props.prefix),
 				className: 'value-prefix',
 			}),
-			createInput(props),
+			createInput(props, pref),
 			props.suffix && createElement('span', {
 				innerHTML: sanatize(props.suffix),
 				className: 'value-suffix',
@@ -149,7 +155,7 @@ function createInputRow(pref) {
 }
 
 /// returns a single .input-field field of a given type
-function createInput(props) {
+function createInput(props, pref) {
 	const inputProps = {
 		className: 'input-field',
 		dataset: { type: props.type, },
@@ -157,10 +163,13 @@ function createInput(props) {
 	};
 	let input; switch (props.type) {
 		case 'menulist': {
-			input = createElement('select', inputProps, (props.options || [ ]).map(option => createElement('option', {
-				value: option.value,
-				textContent: option.label,
-			})));
+			input = createElement('select', inputProps);
+			if (typeof props.getOptions === 'function') {
+				input.classList.add('dynamic-select');
+				setSelectOptions(input, typeof props.getCurrent === 'function' ? [ props.getCurrent(pref), ] : props.getOptions(pref));
+			} else if (props.options) {
+				setSelectOptions(input, props.options);
+			}
 		} break;
 		case 'text': case 'code': {
 			input = createElement('textarea', inputProps);
@@ -200,6 +209,17 @@ function createInput(props) {
 	return input;
 }
 
+function setSelectOptions(select, options) {
+	select.textContent = '';
+	options.forEach(option => {
+		select.appendChild(createElement('option', {
+			value: option.value,
+			textContent: option.label,
+			disabled: option.disabled,
+		}));
+	});
+}
+
 function setInputRowValues(row, values) {
 	if (row.matches('.row-single')) { values = [ values, ]; }
 	row.querySelectorAll('.input-field').forEach((input, index) => setInputValue(input, values[index]));
@@ -211,7 +231,7 @@ function setInputValue(input, value) {
 		case 'checkbox':
 		case 'bool':    input.firstChild.checked = value; break;
 		case 'boolInt': input.firstChild.checked = (value === props.on); break;
-		case 'menulist':input.selectedIndex = (props.options || []).findIndex(option => option.value === value); break;
+		case 'menulist':input.selectedIndex = (props.options || Array.from(input)).findIndex(option => option.value == value); break; // eslint-disable-line eqeqeq
 		case 'random':  input.dataset.value = value; break;
 		case 'control': break;
 		default:        input.value !== value && (input.value = value); break;
@@ -229,7 +249,7 @@ function getInputValue(input) {
 		case 'checkbox':
 		case 'bool':      return input.firstChild.checked;
 		case 'boolInt':   return input.firstChild.checked ? props.on : props.off;
-		case 'menulist':  return props.options && props.options[input.selectedIndex].value;
+		case 'menulist':  return (props.map || (_=>_))((props.options || Array.from(input))[input.selectedIndex].value);
 		case 'number':    return +input.value;
 		case 'integer':   return Math.round(+input.value);
 		case 'random':    return input.dataset.value;
@@ -250,7 +270,7 @@ function getParent(element, selector) {
 }
 
 function createElement(tagName, properties, childList) {
-	const element = document.createElement(tagName);
+	const element = global.document.createElement(tagName);
 	if (Array.isArray(properties)) { childList = properties; properties = null; }
 	properties && copyProperties(element, properties);
 	for (let i = 0; childList && i < childList.length; ++i) {

@@ -49,7 +49,7 @@ async function initView(view) { try {
 		(await (handlers['404'] || defaultError)(view, options, name));
 	}
 
-} catch (error) { (await reportError(`Failed to display page "${ name }"`, error)); console.error(error); } }
+} catch (error) { (await reportError(`Failed to display page "${ view.location.hash }"`, error)); console.error(error); } }
 
 if (
 	manifest.options_ui && (/^(?:(?:chrome|moz|ms)-extension:\/\/.*?)?\/?view.html#options(?:\ß|$)/).test(manifest.options_ui.page)
@@ -105,7 +105,8 @@ return methods;
 
 function parseQuery(query) {
 	const search = new global.URLSearchParams(query.replace(/[?#]+/, '&')), config = { };
-	for (const [ key, value, ] of search) {
+	for (let [ key, value, ] of search) {
+		try { value = decodeURIComponent(value); } catch(_) { }
 		try { config[key] = JSON.parse(value); } catch(_) { config[key] = value; }
 	}
 	return config;

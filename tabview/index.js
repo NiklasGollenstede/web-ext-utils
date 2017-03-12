@@ -31,6 +31,7 @@ const styles = {
 			cursor: pointer;
 			-webkit-user-select: none;
 			-moz-user-select: none;
+			position: relative;
 		}
 		.tab>.icon {
 			display: inline-block;
@@ -63,7 +64,6 @@ const styles = {
 			margin-right: -17px;
 		}
 		.tab {
-			position: relative;
 			height: 54px;
 			line-height: 54px;
 			font-size: 24px;
