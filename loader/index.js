@@ -1,4 +1,4 @@
-(function(global) { 'use strict'; const { currentScript, } = document; const factory = function Loader(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; const { currentScript, } = global.document; const factory = function Loader(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 /* eslint-disable no-throw-literal */ /* eslint-disable prefer-promise-reject-errors */
 
 /**
@@ -160,14 +160,15 @@ class ContentScript {
 
 //////// start of private implementation ////////
 
-if (global.innerWidth || global.innerHeight) { // opened in tab
-	global.location.href = '/view.html#403';
+if (global.innerWidth || global.innerHeight) { // background page opened in tab
+	global.stop();
+	global.location.replace('/view.html#403?from=background');
 }
 
 const chrome = (global.browser || global.chrome);
 const rootUrl = chrome.extension.getURL('');
 const gecko = rootUrl.startsWith('moz-');
-const contentPath = new URL('./content.js', currentScript.src).href.replace(rootUrl, '/');
+const contentPath = new global.URL('./content.js', currentScript.src).href.replace(rootUrl, '/');
 const requirePath = '/node_modules/es6lib/require.js';
 const getScource = (() => { const { toString, } = (() => 0);
 	return func => { if (typeof func !== 'function') { throw new Error(`'script' must be a function`); } return toString.call(func); };
@@ -418,7 +419,7 @@ function matchPatternToRegExp(pattern) {
 	+')$');
 }
 
-window.addEventListener('unload', () => {
+global.addEventListener('unload', () => {
 	tabs.forEach(_=>_.forEach(frame => Frame.prototype.destroy.call(frame, true)));
 	tabs.clear();
 });

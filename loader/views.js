@@ -20,10 +20,17 @@ const methods = {
 	},
 };
 
+//////// start of private implementation ////////
+
 function defaultError(view, options, name) {
 	const code = (/^[45]\d\d/).test(name) && name;
 	view.document.body.innerHTML = `<h1>${ code || 404 }</h1>`;
 	!code && console.error(`Got unknown view "${ view.location.hash.slice(1) }"`);
+}
+
+if (global.innerWidth || global.innerHeight) { // background page opened in tab
+	global.stop();
+	global.location.replace('/view.html#403?from=background');
 }
 
 const handlers = { }, pending = { };
@@ -33,30 +40,27 @@ async function initView(view) { try {
 	name === 'index' && (name = '');
 	const options = query ? parseQuery(query) : { };
 
-	const getId = new Promise(got => (view.browser || view.chrome).tabs.getCurrent(tab => got(tab && (view.tabId = tab.id))));
+	const tabId = view.tabId = ((await new Promise(got => (view.browser || view.chrome).tabs.getCurrent(got))) || { id: null, }).id;
 
-	const handler = handlers[name];
+	view.addEventListener('popstate', () => { // reload if name changes to a different handler
+		const newHandler = handlers[view.location.hash.replace(/^\#|\?.*$/g, '')] || handlers['404'] || defaultError;
+		if (newHandler !== handler) { view.location.reload(); }
+	});
+
+	let handler = handlers[name];
 	if (handler) {
-		(await null); // let the DOM finish
 		(await handler(view, options, name));
 	}
 
-	const tabId = (await getId);
 	if (pending[tabId]) {
 		pending[tabId](view);
 		delete pending[tabId];
 	} else if (!handler) {
-		(await (handlers['404'] || defaultError)(view, options, name));
+		handler = handlers['404'] || defaultError;
+		(await handler(view, options, name));
 	}
 
 } catch (error) { (await reportError(`Failed to display page "${ view.location.hash }"`, error)); console.error(error); } }
-
-if (
-	manifest.options_ui && (/^(?:(?:chrome|moz|ms)-extension:\/\/.*?)?\/?view.html#options(?:\ß|$)/).test(manifest.options_ui.page)
-	&& (await FS.exists('node_modules/web-ext-utils/options/editor/inline.js'))
-) {
-	methods.setHandler('options', (await require.async('node_modules/web-ext-utils/options/editor/inline')));
-}
 
 if ((await FS.exists('views'))) { for (const name of (await FS.readdir('views'))) {
 	const path = FS.resolve('views', name);
@@ -80,6 +84,13 @@ if ((await FS.exists('views'))) { for (const name of (await FS.readdir('views'))
 		(isFile ? (/^index\.(?:html|js)$/) : (/^index$/)).test(name) && methods.setHandler('', handler);
 	}
 } }
+
+if (
+	!handlers.options && manifest.options_ui && (/^(?:(?:chrome|moz|ms)-extension:\/\/.*?)?\/?view.html#options(?:\?|$)/).test(manifest.options_ui.page)
+	&& (await FS.exists('node_modules/web-ext-utils/options/editor/inline.js'))
+) {
+	methods.setHandler('options', (await require.async('node_modules/web-ext-utils/options/editor/inline')));
+}
 
 function loadFrame(path, view) {
 	const frame = global.document.createElement('iframe');

@@ -33,6 +33,9 @@ const styles = {
 			-moz-user-select: none;
 			position: relative;
 		}
+		.tab.hidden-tab:not(.active) {
+			display: none;
+		}
 		.tab>.icon {
 			display: inline-block;
 			background-size: 100%;
@@ -159,7 +162,7 @@ return class TabView {
 	constructor({ host, content, tabs, active, onSelect, style, }) {
 		this.style = host.appendChild(createElement('style', {
 			scoped: true,
-			textContent: typeof style !== 'string' ? '' : styles.default + style.split(' ').map(style => styles[style]).join('\n'),
+			textContent: styles.default +'\n'+ (style || [ ]).map(style => styles[style] || '').join('\n'),
 		}));
 		this.tabwrapper = host.appendChild(createElement('div', {
 			classList: 'tabwrapper',
@@ -171,6 +174,8 @@ return class TabView {
 		this.content = host.appendChild(content);
 		this.content.classList = 'content';
 		tabs.forEach(tab => this.add(tab));
+		this.defaultTab = tabs.find(_=>_.default);
+		this.defaultTab && (this.defaultTab = this.get(this.defaultTab.id));
 		this.onSelect = onSelect;
 		this.active = active;
 	}
@@ -179,9 +184,9 @@ return class TabView {
 		const old = this.tablist.querySelector(':scope>.tab.active');
 		if (old && old.dataset.id === id) { return; }
 		old && old.classList.remove('active');
-		const now = this.get(id);
+		const now = this.get(id) || this.defaultTab;
 		now.classList.add('active');
-		try { this.onSelect && this.onSelect(now); } catch (error) { reportError(`Failed to navigate tabview`, error); }
+		try { this.onSelect && this.onSelect(now, id); } catch (error) { reportError(`Failed to navigate tabview`, error); }
 	}
 	get active() {
 		return this.tablist.querySelector(':scope>.tab.active').id;
@@ -204,6 +209,7 @@ return class TabView {
 		const tab = this.get(props.id);
 		'title' in props && (tab.querySelector('.title').textContent = props.title);
 		'icon' in props && setIcon(tab.querySelector('.icon'), props.icon);
+		'hidden' in props && tab.classList[props.hidden ? 'add' : 'remove']('hidden-tab');
 	}
 
 	remove(id) {
