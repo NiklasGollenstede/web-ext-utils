@@ -51,6 +51,7 @@ async function Home(window, options, name) {
 				} else if (Array.isArray(head)) {
 					head.forEach(node => document.head.appendChild(node.cloneNode(true)));
 				}
+				try { view.history.replaceState(window.history.state, null); } catch (_) { }
 
 				(await (handlers[id] || handlers['404'])(view, { }, id));
 				global.setTimeout(() => document.documentElement.classList.remove('preload'), 500);

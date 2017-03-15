@@ -1,4 +1,4 @@
-(function(global) { 'use strict'; const { currentScript, } = global.document; const factory = function Loader(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; const factory = function Loader(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 /* eslint-disable no-throw-literal */ /* eslint-disable prefer-promise-reject-errors */
 
 /**
@@ -159,11 +159,6 @@ class ContentScript {
 }
 
 //////// start of private implementation ////////
-
-if (global.innerWidth || global.innerHeight) { // background page opened in tab
-	global.stop();
-	global.location.replace('/view.html#403?from=background');
-}
 
 const chrome = (global.browser || global.chrome);
 const rootUrl = chrome.extension.getURL('');
@@ -438,4 +433,14 @@ Object.assign(exports, {
 });
 Object.defineProperty(exports, 'debug', { set(v) { debug = !!v; }, get() { return debug; }, configurable: true, });
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; global[factory.name] = result; } })(this);
+}; // end factory
+
+const { currentScript, } = global.document; // need to get this synchronously
+
+if (global.innerWidth || global.innerHeight) { // stop loading at once if the background page was opened in a tab or window
+	console.warn(`Background page opened in view`);
+	global.history.replaceState({ from: global.location.href.slice(global.location.origin.length), }, null, '/view.html#403');
+	global.stop(); global.location.reload();
+} else
+
+if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; global[factory.name] = result; } })(this);

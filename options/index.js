@@ -114,7 +114,7 @@ class OptionList extends Array {
 		if (Array.isArray(items)) {
 			items.forEach((item, index) => (this[item.name] = (this[index] = new Option(item, parent))));
 		} else {
-			Object.keys(items).forEach((key, index) => (this[key] = (this[index] = new Option(items[key], parent, key))));
+			Object.keys(items).forEach((key, index) => items[key] && (this[key] = (this[index] = new Option(items[key], parent, key))));
 		}
 		return Object.freeze(this);
 	}

@@ -1,4 +1,4 @@
-(function(global) { 'use strict'; const queue = [ ]; global.initView = view => queue.push(view); define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; const factory = (async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../browser/': { extension, manifest, },
 	'../utils/': { reportError, },
 	'../utils/files': FS,
@@ -26,11 +26,6 @@ function defaultError(view, options, name) {
 	const code = (/^[45]\d\d/).test(name) && name;
 	view.document.body.innerHTML = `<h1>${ code || 404 }</h1>`;
 	!code && console.error(`Got unknown view "${ view.location.hash.slice(1) }"`);
-}
-
-if (global.innerWidth || global.innerHeight) { // background page opened in tab
-	global.stop();
-	global.location.replace('/view.html#403?from=background');
 }
 
 const handlers = { }, pending = { };
@@ -89,7 +84,9 @@ if (
 	!handlers.options && manifest.options_ui && (/^(?:(?:chrome|moz|ms)-extension:\/\/.*?)?\/?view.html#options(?:\?|$)/).test(manifest.options_ui.page)
 	&& (await FS.exists('node_modules/web-ext-utils/options/editor/inline.js'))
 ) {
-	methods.setHandler('options', (await require.async('node_modules/web-ext-utils/options/editor/inline')));
+	const options = (await require.async('node_modules/web-ext-utils/options/editor/inline'));
+	methods.setHandler('options', options);
+	!handlers[''] && methods.setHandler('', options);
 }
 
 function loadFrame(path, view) {
@@ -123,4 +120,15 @@ function parseQuery(query) {
 	return config;
 }
 
-}); })(this);
+}); // end factory
+
+// enqueue all views that load before this module is ready
+const queue = [ ]; global.initView = view => queue.push(view);
+
+if (global.innerWidth || global.innerHeight) { // stop loading at once if the background page was opened in a tab or window
+	console.warn(`Background page opened in view`);
+	global.history.replaceState({ from: global.location.href.slice(global.location.origin.length), }, null, '/view.html#403');
+	global.stop(); global.location.reload();
+} else { define(factory); }
+
+})(this);
