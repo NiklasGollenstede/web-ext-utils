@@ -6,6 +6,10 @@ const chrome = global.browser || global.chrome;
 const main = global.background = chrome && chrome.extension.getBackgroundPage();
 // let main; if (chrome) { try { main = chrome.extension.getBackgroundPage(); } catch (_) { main = (await new Promise(done => chrome.runtime.getBackgroundPage(done))); } } // edge doesn't allow extension.getBackgroundPage() with event pages
 
+if ((/##mayWait##$/).test(location.href)) { // after reload when it is OK to just wait for the extension to reload this view once again
+	history.replaceState(null, '', location.href.replace(/##mayWait##$/, ''));
+	if (!main || !main.initView) { return void (global.document.body.innerHTML = `<h1 style="font-family: Segoe UI, Tahoma, sans-serif;">Loading ...</a>`); }
+} else
 if ((/##doCloseOnBlur##\d+#-?\d+#-?\d+$/).test(location.href)) { // the view was an incognito panel (see below), so it should close it on blur
 	global.addEventListener('blur', event => global.close());
 	const { windowId, } = (await global.browser.tabs.getCurrent());
@@ -17,12 +21,12 @@ if ((/##doCloseOnBlur##\d+#-?\d+#-?\d+$/).test(location.href)) { // the view was
 	history.replaceState(null, '', location.href.slice(0, -match.length));
 	(await global.browser.windows.update(windowId, { top: +top, left: +left, })); // firefox currently ignores top and left in .create(), so move it here
 } else
-if ((/##doNotRecurse##$/).test(location.href)) { // avoid recursion, which would be very hard to stop for the user
+if ((/##doNotRecurse##$/).test(location.href)) { // avoid recursion, which would be very hard for the user to stop
 	history.replaceState(null, '', location.href.replace(/##doNotRecurse##$/, ''));
 } else
 if (!main) {
-	if (!chrome) { // Firefox's inline options page after extension reload
-		history.replaceState(null, '', location.href +'##doNotRecurse##');
+	if (!chrome) { // Firefox's inline options page after extension reload. must reload once to show up in browser.extension.getViews()
+		history.replaceState(null, '', location.href +'##mayWait##');
 		return void location.reload();
 	}
 	// in a Firefox incognito context without access to the background page
@@ -55,14 +59,17 @@ if (!main) {
 }
 
 // failed to move to non-private window. This only happens in very weird situations (e.g. in the All-in-One Sidebar)
-if (!main) { throw new Error(`This extension page can't be displayed here.`); }
+if (!main) { throw new Error(`
+	This extension page can't be displayed here.
+	<br>Please try to open <a href="${ global.location.href.replace(/"/g, '&quot;') }">
+	${ global.location.href.replace(/\</g, '&lt;').replace(/\>/g, '&gt;') }</a> in a normal tab.
+`); }
+if (!main.initView) { throw new Error(`This extension did not start correctly. Disabling and enabling it may help.`); }
 
 main.initView(global); // work with the background page
 
-} catch (error) { global.document.body.innerHTML = `
-	<style> * {font-family: "Segoe UI", Tahoma, sans-serif; } </style>
+} catch (error) { (global.document.body.innerHTML = `
+	<style> * { font-family: Segoe UI, Tahoma, sans-serif; } </style>
 	<h1>500</h1>
 	`+ (error ? (error.name ? error.name +': ' : '') + (error.message || '') : '') +`
-	<br>Please try to open <a href="${ global.location.href.replace(/"/g, '&quot;') }">
-	${ global.location.href.replace(/\</g, '&lt;').replace(/\>/g, '&gt;') }</a> in a normal tab.
-`; } })(this);
+`); console.error(error); } })(this);

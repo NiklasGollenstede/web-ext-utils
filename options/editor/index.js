@@ -71,7 +71,9 @@ return function loadEditor({ host, options, onCommand, }) {
 		if (!input.matches('.dynamic-select')) { return; }
 		const element = getParent(input, '.pref-container');
 		const props = propsMap.get(input.id);
+		const value = getInputValue(input);
 		setSelectOptions(input, props.getOptions(element.pref));
+		value !== undefined && setInputValue(input, value);
 	}, true);
 
 	if (!Array.isArray(options)) {
@@ -249,7 +251,7 @@ function getInputValue(input) {
 		case 'checkbox':
 		case 'bool':      return input.firstChild.checked;
 		case 'boolInt':   return input.firstChild.checked ? props.on : props.off;
-		case 'menulist':  return (props.map || (_=>_))((props.options || Array.from(input))[input.selectedIndex].value);
+		case 'menulist':  return (props.map || (_=>_))(((props.options || Array.from(input))[input.selectedIndex] || { }).value);
 		case 'number':    return +input.value;
 		case 'integer':   return Math.round(+input.value);
 		case 'random':    return input.dataset.value;

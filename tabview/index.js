@@ -1,223 +1,137 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../utils/': { reportError, },
+	'../utils/event': { setEvent, },
+	'../browser/version': { current, },
 	'../../es6lib/dom': { createElement, },
+	require,
 }) => {
 
-const styles = {
-	default: `/* default */
-		.content, .tablist, .tab {
-			box-sizing: border-box;
-			font-family: "Segoe UI";
-		}
-		.content {
-			position: absolute;
-			overflow: auto;
-		}
-		.tabwrapper {
-			position: absolute;
-			overflow: hidden;
-		}
-		.tablist {
-			position: absolute;
-			top: 0px; right: 0px; bottom: 0px; left: 0px;
-			overflow: auto;
-		}
-		.tab {
-			border-color: transparent;
-			border-style: solid;
-			border-width: 0;
-			transition-property: color, fill, background-color, border-color;
-			transition-duration: 0.21s;
-			cursor: pointer;
-			-webkit-user-select: none;
-			-moz-user-select: none;
-			position: relative;
-		}
-		.tab.hidden-tab:not(.active) {
-			display: none;
-		}
-		.tab>.icon {
-			display: inline-block;
-			background-size: 100%;
-			background-repeat: no-repeat;
-			background-position: center center;
-			text-align: center;
-		}
-		.tab>.icon.missing {
-			display: none;
-		}
-		.tab>.title {
-		}
-	`,
-	vertical: `/* vertical */
-		.content {
-			top: 0px; height: 100%;
-			right: 0px; width: calc(100% - 200px);
-			transition: width 0.16s;
-		}
-		.tabwrapper {
-			top: 0px; height: 100%;
-			left: 0px; width: 200px;
-			transition: width 0.16s;
-		}
-		.tablist {
-			padding-top: 54px;
-			overflow-y: scroll;
-			overflow-x: hidden;
-			margin-right: -17px;
-		}
-		.tab {
-			height: 54px;
-			line-height: 54px;
-			font-size: 24px;
-			border-left-width: 5px;
-			padding: 3px;
-		}
-		.tab>.icon {
-			height: 48px;
-			width: 48px;
-		}
-		.tab>.title {
-			position: absolute;
-			top: 0px;
-			right: 0px;
-			left: 56px;
-			overflow: hidden;
-			text-overflow: ellipsis;
-			white-space: nowrap;
-		}
-
-		@media (max-width: 900px) {
-			.tabwrapper {
-				width: 60px;
-			}
-			.content {
-				width: calc(100% - 60px);
-			}
-			.tab .missing + .title {
-				left: 8px;
-				text-overflow: hidden;
-			}
-		}
-	`,
-	horizontal: `/* horizontal */
-		.content {
-			left: 0px; width: 100%;
-			bottom: 0px; height: calc(100% - 40px);
-		}
-		.tabwrapper {
-			left: 0px; width: 100%;
-			top: 0px; height: 40px;
-		}
-		.tablist {
-			/*overflow-y: hidden;*/
-			/*overflow-x: scroll;*/
-			/*margin-bottom: -17px;*/
-		}
-		.tab {
-			float: left;
-			height: 100%;
-			line-height: 35px;
-			padding-left: 0px;
-			padding-right: 10px;
-			border-bottom-width: 5px;
-			padding: 6px;
-		}
-		.tab>.icon {
-			height: 24px;
-			width: 24px;
-		}
-		.tab>.title {
-			position: relative;
-			display: inline-block;
-			height: 100%;
-			line-height: 23px;
-			padding-left: 4px;
-			min-width: 6em;
-			max-width: 12em;
-			overflow: hidden;
-			text-overflow: ellipsis;
-			white-space: nowrap;
-		}
-	`,
-	firefox: `/* firefox */
-		.tablist {
-			background-color: #424F5A;
-		}
-		.tab.active {
-			color: #F2F2F2;
-			border-color: orange;
-			background-color: #343F48;
-		}
-		.tab:not(.active):hover {
-			background-color: #5E6972;
-		}
-		.tab {
-			color: #C1C1C1;
-		}
-	`,
-};
+const Self = new WeakMap;
 
 return class TabView {
-	constructor({ host, content, tabs, active, onSelect, style, }) {
-		this.style = host.appendChild(createElement('style', {
-			scoped: true,
-			textContent: styles.default +'\n'+ (style || [ ]).map(style => styles[style] || '').join('\n'),
-		}));
-		this.tabwrapper = host.appendChild(createElement('div', {
-			classList: 'tabwrapper',
+	constructor({
+		host = global.document.body, template = createElement('div'),
+		tabs = [ ], active, onLoad, onShow, onHide, onUnload, style = [ ], linkStyle = true,
+	}) {
+		const self = { template, tabs: { }, active: null, default: null, }; Self.set(this, self);
+
+		const root = this.root = self.root = createElement('div', {
+			classList: 'tabview '+ style.map(style => style === 'browser' ? current : style).join(' '),
 		}, [
-			this.tablist = createElement('div', {
-				classList: 'tablist',
+			linkStyle && createElement('link', { href: require.toUrl(`./index.css`), rel: 'stylesheet', }),
+			createElement('div', {
+				classList: 'tabwrapper',
+			}, [
+				self.tablist = createElement('div', {
+					classList: 'tablist',
+				}),
+			]),
+			self.content = createElement('div', {
+				classList: 'content',
 			}),
-		]));
-		this.content = host.appendChild(content);
-		this.content.classList = 'content';
+		]);
+
+		self.onLoad = setEvent(this, 'onLoad', { init: onLoad, });
+		self.onShow = setEvent(this, 'onShow', { init: onShow, });
+		self.onHide = setEvent(this, 'onHide', { init: onHide, });
+		self.onUnload = setEvent(this, 'onUnload', { init: onUnload, });
+
 		tabs.forEach(tab => this.add(tab));
-		this.defaultTab = tabs.find(_=>_.default);
-		this.defaultTab && (this.defaultTab = this.get(this.defaultTab.id));
-		this.onSelect = onSelect;
 		this.active = active;
+		host && host.appendChild(root);
 	}
 
-	set active(id) {
-		const old = this.tablist.querySelector(':scope>.tab.active');
-		if (old && old.dataset.id === id) { return; }
-		old && old.classList.remove('active');
-		const now = this.get(id) || this.defaultTab;
-		now.classList.add('active');
-		try { this.onSelect && this.onSelect(now, id); } catch (error) { reportError(`Failed to navigate tabview`, error); }
-	}
+	async setActive(id) { try {
+		const self = Self.get(this);
+		const old = self.active;
+		if (old && old.id === id) { return; }
+		if (self.selecting) { console.warn(`Tabview: ignoring recursive setActive() call`); return; } self.selecting = true;
+		const now = self.active = self.tabs[id] || self.default || null;
+		old && old.tile.classList.remove('active');
+		now && now.tile.classList.add('active');
+
+		if (old) {
+			(await self.onHide([ old.arg, ]));
+			if (old.unload) {
+				(await self.onUnload([ old.arg, ]));
+				old.content.remove();
+				old.content = null;
+			} else {
+				old.content.classList.remove('active');
+			}
+		}
+
+		if (!now) { return; }
+		if (!now.content) {
+			now.content = self.template.cloneNode(true);
+			now.content.classList.add('active');
+			const wait = now.content.tagName === 'IFRAME' && new Promise(loaded => (now.content.onload = _=>loaded(_.target)));
+			self.content.appendChild(now.content);
+			wait && (await wait); wait && (now.onload = null);
+			(await self.onLoad([ now.arg, ]));
+		} else {
+			now.content.classList.add('active');
+		}
+		(await self.onShow([ now.arg, ]));
+
+	} finally { Self.get(this).selecting = false; } }
+
+	set active(id) { this.setActive(id); }
 	get active() {
-		return this.tablist.querySelector(':scope>.tab.active').id;
+		const self = Self.get(this);
+		return self.active && self.active.id;
 	}
 
-	add({ id, position = Infinity, data, }) {
-		this.tablist.insertBefore(createElement('div', {
-			className: 'tab',
-			id: id, dataset: { id, },
-			data: data !== undefined ? data : { },
+	add({ id, position = Infinity, }) {
+		const self = Self.get(this);
+		if (self.tabs[id]) { throw new Error(`Duplicate tab id "${ id }"`); }
+		const tab = self.tabs[id] = {
+			id, tile: null, content: null, data: { }, title: '',
+			default: false, unload: false,
+			arg: Object.freeze({
+				id,
+				get data() { return tab.data; },
+				get content() { return tab.content; },
+				get title() { return tab.title; },
+			}),
+		};
+		tab.tile = self.tablist.insertBefore(createElement('div', {
+			classList: 'tab',
 			onclick: ({ button, }) => !button && (this.active = id),
 		}, [
-			createElement('span', { classList: 'title', }),
-			createElement('div', { classList: 'icon', }),
-		]), this.tablist.children[position]);
+			tab.titleElement = createElement('span', { classList: 'title', }),
+			tab.iconElement = createElement('div', { classList: 'icon', }),
+		]), self.tablist.children[position]);
 		this.set(arguments[0]);
 	}
 
 	set(props) {
-		const tab = this.get(props.id);
-		'title' in props && (tab.querySelector('.title').textContent = props.title);
-		'icon' in props && setIcon(tab.querySelector('.icon'), props.icon);
-		'hidden' in props && tab.classList[props.hidden ? 'add' : 'remove']('hidden-tab');
+		const self = Self.get(this);
+		const tab = self.tabs[props.id];
+		if (!tab) { throw new Error(`No such tab "${ props.id }"`); }
+		'title' in props && (tab.titleElement.textContent = tab.title = props.title);
+		'icon' in props && setIcon(tab.iconElement, props.icon);
+		'hidden' in props && tab.tile.classList[props.hidden ? 'add' : 'remove']('hidden-tab');
+		'default' in props && (self.default = tab);
+		'data' in props && (tab.data = props.data !== undefined ? props.data : { });
+		'unload' in props && (tab.unload = props.unload);
 	}
 
-	remove(id) {
-		this.get(id).remove();
+	async remove(id) {
+		const self = Self.get(this);
+		const tab = self.tabs[id];
+		if (!tab) { return; }
+		const wait = tab === self.active && this.setActive();
+		tab.tile.remove(); delete self.tabs[id]; wait && (await wait);
+		if (tab.content && tab.content.parentNode) {
+			(await self.onUnload([ tab.arg, ]));
+			tab.content.remove();
+			tab.content = null;
+		}
 	}
 
 	get(id) {
-		return this.tablist.querySelector(':scope>.tab[data-id="'+ id +'"]');
+		const self = Self.get(this);
+		return self.tabs[id] && self.tabs[id].arg;
 	}
 };
 
