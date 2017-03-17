@@ -357,7 +357,7 @@ function displayPreferences(prefs, host) { prefs.forEach(pref => {
 	]));
 	Object.assign(element, { pref, input, });
 
-	pref.whenChange((_, { current: values, }) => {
+	pref.whenChange(values => {
 		while (valuesContainer.children.length < values.length) { valuesContainer.appendChild(cloneInput(input)); }
 		while (valuesContainer.children.length > values.length) { valuesContainer.lastChild.remove(); }
 		values.forEach((value, index) => setInputRowValues(valuesContainer.children[index], value));

@@ -1,6 +1,6 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../utils/event': { setEvent, },
 	'../browser/version': { current, },
+	'../utils/event': { setEvent, },
 	'../../es6lib/dom': { createElement, },
 	require,
 }) => {
@@ -30,15 +30,20 @@ return class TabView {
 			}),
 		]);
 
-		self.onLoad = setEvent(this, 'onLoad', { init: onLoad, });
-		self.onShow = setEvent(this, 'onShow', { init: onShow, });
-		self.onHide = setEvent(this, 'onHide', { init: onHide, });
-		self.onUnload = setEvent(this, 'onUnload', { init: onUnload, });
+		self.onLoad = onLoad && setEvent(this, 'onLoad', { init: onLoad, }) || null;
+		self.onShow = onShow && setEvent(this, 'onShow', { init: onShow, }) || null;
+		self.onHide = onHide && setEvent(this, 'onHide', { init: onHide, }) || null;
+		self.onUnload = onUnload && setEvent(this, 'onUnload', { init: onUnload, }) || null;
 
 		tabs.forEach(tab => this.add(tab));
 		this.active = active;
 		host && host.appendChild(root);
 	}
+
+	get onLoad() { Self.get(this).onLoad = setEvent(this, 'onLoad', { lazy: false, }); return this.onLoad; }
+	get onShow() { Self.get(this).onShow = setEvent(this, 'onShow', { lazy: false, }); return this.onShow; }
+	get onHide() { Self.get(this).onHide = setEvent(this, 'onHide', { lazy: false, }); return this.onHide; }
+	get onUnload() { Self.get(this).onUnload = setEvent(this, 'onUnload', { lazy: false, }); return this.onUnload; }
 
 	async setActive(id) { try {
 		const self = Self.get(this);
@@ -50,9 +55,9 @@ return class TabView {
 		now && now.tile.classList.add('active');
 
 		if (old) {
-			(await self.onHide([ old.arg, ]));
+			self.onHide && (await self.onHide([ old.arg, ]));
 			if (old.unload) {
-				(await self.onUnload([ old.arg, ]));
+				self.onUnload && (await self.onUnload([ old.arg, ]));
 				old.content.remove();
 				old.content = null;
 			} else {
@@ -67,11 +72,11 @@ return class TabView {
 			const wait = now.content.tagName === 'IFRAME' && new Promise(loaded => (now.content.onload = _=>loaded(_.target)));
 			self.content.appendChild(now.content);
 			wait && (await wait); wait && (now.onload = null);
-			(await self.onLoad([ now.arg, ]));
+			self.onLoad && (await self.onLoad([ now.arg, ]));
 		} else {
 			now.content.classList.add('active');
 		}
-		(await self.onShow([ now.arg, ]));
+		self.onShow && (await self.onShow([ now.arg, ]));
 
 	} finally { Self.get(this).selecting = false; } }
 
@@ -123,7 +128,7 @@ return class TabView {
 		const wait = tab === self.active && this.setActive();
 		tab.tile.remove(); delete self.tabs[id]; wait && (await wait);
 		if (tab.content && tab.content.parentNode) {
-			(await self.onUnload([ tab.arg, ]));
+			self.onUnload && (await self.onUnload([ tab.arg, ]));
 			tab.content.remove();
 			tab.content = null;
 		}

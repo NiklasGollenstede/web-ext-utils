@@ -1,4 +1,4 @@
-(function(global) { 'use strict'; const factory = (async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; prepare() && define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../browser/': { extension, manifest, },
 	'../utils/': { reportError, },
 	'../utils/files': FS,
@@ -104,9 +104,9 @@ function loadFrame(path, view) {
 (async () => {
 	for (let i = 0; i < 10; i++) { (await null); } // give view modules that depend on this module some ticks time to work with it
 	global.initView = initView;
-	extension.getViews().forEach(view => view !== global && !queue.includes(view) && view.location.reload()); // reload old views
-	queue.forEach(initView);
-	queue.splice(0, Infinity);
+	extension.getViews().forEach(view => view !== global && !prepare.queue.includes(view) && view.location.reload()); // reload old views
+	prepare.queue.forEach(initView);
+	prepare.queue.splice(0, Infinity);
 })();
 
 return methods;
@@ -120,15 +120,16 @@ function parseQuery(query) {
 	return config;
 }
 
-}); // end factory
+}); function prepare() {
 
 // enqueue all views that load before this module is ready
-const queue = [ ]; global.initView = view => queue.push(view);
+const queue = prepare.queue = [ ]; global.initView = view => queue.push(view);
 
 if (global.innerWidth || global.innerHeight) { // stop loading at once if the background page was opened in a tab or window
 	console.warn(`Background page opened in view`);
 	global.history.replaceState({ from: global.location.href.slice(global.location.origin.length), }, null, '/view.html#403');
 	global.stop(); global.location.reload();
-} else { define(factory); }
+	return false;
+} else { return true; }
 
-})(this);
+} })(this);

@@ -41,7 +41,7 @@ async function Home(window, options, name) {
 			}
 			try { view.history.replaceState(window.history.state, null); } catch (_) { }
 
-			(await (handlers[id] || handlers['404'])(view, { }, id));
+			(await (handlers[id] || handlers['404'])(view, { }, window.document.location.hash.replace(/^\#|\?.*$/g, '') || id));
 			global.setTimeout(() => document.documentElement.classList.remove('preload'), 500);
 		} catch (error) { reportError(`Failed to display tab "${ id }"`, error); } },
 

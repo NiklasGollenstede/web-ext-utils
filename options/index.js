@@ -1,24 +1,22 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../browser/': { Storage, },
+	'../utils/event': { setEvent, },
 	require,
 }) => {
 
-let context = null; // a OptionsRoot during its construction
+let currentRoot = null; // a OptionsRoot during its construction
 
-const Values = new WeakMap/*<Option, ValueList>*/;
-const IsSet = new WeakMap/*<ValueList, bool>*/;
-const OnTrue = new WeakMap/*<Option, Set<function>>*/;
-const OnFalse = new WeakMap/*<Option, Set<function>>*/;
-const OnChange = new WeakMap/*<Option, Set<function>>*/;
-const OnAnyChange = new WeakMap/*<Option, Set<function>>*/;
-const dummySet = new Set; // to delete from
-
-const callbackMaps = [ OnTrue, OnFalse, OnChange, OnAnyChange, ];
-
-const Contexts = new WeakMap;
+const Self = new WeakMap/*<Option, { root, values, isSet, on*, ... }>*/;
 
 class Option {
 	constructor(model, parent, name = model.name || '') {
+		const self = {
+			root: currentRoot, // OptionsRoot
+			values: null, // frozen Array, this.values
+			isSet: false,
+			onChange: null, fireChange: null,
+			onAnyChange: null, fireAnyChange: null,
+		}; Self.set(this, self);
 		this.model = model;
 		this.parent = parent;
 		this.name = name;
@@ -37,75 +35,58 @@ class Option {
 
 		this.children = new OptionList(model.children || [ ], this);
 
-		context.options.set(this.path, this);
-		Contexts.set(this, context);
-		return Object.freeze(this);
+		currentRoot.options.set(this.path, this);
+		this.values = null; // ValueList, set by root
+
+		// will be frozen by the root
 	}
 
-	get value() { return Values.get(this).get(0); }
-	set value(value) { return Values.get(this).set(0, value); }
-	get values() { return Values.get(this); }
-	set values(values) { return Values.get(this).replace(values); }
-	reset() { return Values.get(this).reset(); }
+	get value() { return this.values.get(0); }
+	set value(value) { return this.values.set(0, value); }
+	reset() { return this.values.reset(); }
 	resetAll() {
-		const ctx = Contexts.get(this), path = ctx.prefix + this.path;
-		return ctx.storage.remove(ctx.keys.filter(_=>_.startsWith(path)));
+		const root = Self.get(this).root, path = root.prefix + this.path;
+		return root.storage.remove(root.keys.filter(_=>_.startsWith(path)));
 	}
 
-	whenTrue(listener, { owner, } = { }) {
-		const values = this.values;
-		const listeners = OnTrue.get(this) || new Set;
-		OnTrue.set(this, listeners);
-		owner && owner.addEventListener('unload', () => listeners.delete(listener));
-		if (listeners.has(listener)) { return false; }
-		listeners.add(listener);
-		values.is && callAll([ listener, ], values.get(0), values, null, this.path);
+	get onChange() {
+		const self = Self.get(this); if (self.onChange) { return self.onChange; }
+		self.fireChange = setEvent(self, 'onChange', { lazy: false, });
+		return self.onChange;
+	}
+	get onAnyChange() {
+		const self = Self.get(this); if (self.onAnyChange) { return self.onAnyChange; }
+		self.fireAnyChange = setEvent(self, 'onAnyChange', { lazy: false, });
+		return self.onAnyChange;
+	}
+
+	whenTrue(listener, arg) {
+		return whenToggleTo(this, true, listener, arg);
+	}
+	whenFalse(listener, arg) {
+		return whenToggleTo(this, false, listener, arg);
+	}
+	when(true_false, arg) {
+		true_false && true_false.true  && whenToggleTo(this, true,  true_false.true,  arg);
+		true_false && true_false.false && whenToggleTo(this, false, true_false.false, arg);
+	}
+	whenChange(listener) {
+		const values = Self.get(this).values, added = this.onChange(...arguments);
+		added && listener(values, values, this);
 		return true;
-	}
-	whenFalse(listener, { owner, } = { }) {
-		const values = this.values;
-		const listeners = OnFalse.get(this) || new Set;
-		OnFalse.set(this, listeners);
-		owner && owner.addEventListener('unload', () => listeners.delete(listener));
-		if (listeners.has(listener)) { return false; }
-		listeners.add(listener);
-		!values.is && callAll([ listener, ], values.get(0), values, null, this.path);
-		return true;
-	}
-	when(true_false, { owner, } = { }) {
-		true_false && true_false.true  && this.whenTrue (true_false.true,  owner);
-		true_false && true_false.false && this.whenFalse(true_false.false, owner);
-	}
-	whenChange(listener, { owner, } = { }) {
-		const values = this.values;
-		const listeners = OnChange.get(this) || new Set;
-		OnChange.set(this, listeners);
-		owner && owner.addEventListener('unload', () => listeners.delete(listener));
-		if (listeners.has(listener)) { return false; }
-		listeners.add(listener);
-		callAll([ listener, ], values.get(0), values, null, this.path);
-		return true;
-	}
-	onChange(listener, { owner, } = { }) {
-		const listeners = OnChange.get(this) || new Set;
-		OnChange.set(this, listeners);
-		owner && owner.addEventListener('unload', () => listeners.delete(listener));
-		return listeners.add(listener);
-	}
-	onAnyChange(listener, { owner, } = { }) {
-		const listeners = OnAnyChange.get(this) || new Set;
-		OnAnyChange.set(this, listeners);
-		owner && owner.addEventListener('unload', () => listeners.delete(listener));
-		return listeners.add(listener);
-	}
-	offAnyChange(listener) {
-		const listeners = OnAnyChange.get(this);
-		return listeners && listeners.delete(listener);
-	}
-	off(listener) {
-		[ OnTrue, OnFalse, OnChange, OnAnyChange, ].forEach(_=>(_.get(this) || dummySet).delete(listener));
 	}
 } Object.freeze(Option.prototype);
+
+function whenToggleTo(option, should, listener, arg) {
+	const wrapped = (now, old) => {
+		const is = !!now.find(x=>x), was = !!old.find(x=>x);
+		is !== was && is === should && listener(now, old, option);
+	};
+	option.onChange(wrapped, arg);
+	const values = Self.get(option).values;
+	!!values.find(x=>x) === should && listener(values, values, option);
+	return wrapped;
+}
 
 class OptionList extends Array {
 	constructor(items, parent) {
@@ -125,43 +106,43 @@ class ValueList {
 	constructor(parent, values) {
 		this.parent = parent;
 
-		this.key = context.prefix + this.parent.path;
-		Values.set(this, Object.freeze(values));
+		this.key = currentRoot.prefix + this.parent.path;
+		Self.get(parent).values = Object.freeze(values);
 		const { model, } = parent;
 		this.max = model.hasOwnProperty('maxLength') ? +model.maxLength : 1;
 		this.min = model.hasOwnProperty('minLength') ? +model.minLength : +!model.hasOwnProperty('maxLength');
 		return Object.freeze(this);
 	}
-	get current() { return Values.get(this); }
-	get is() { return !!Values.get(this).find(x => x); }
-	get isSet() { return IsSet.get(this); }
+	get current() { return Self.get(this.parent).values; }
+	get is() { return !!Self.get(this.parent).values.find(x => x); }
+	get isSet() { return Self.get(this.parent).isSet; }
 	get(index) {
-		return Values.get(this)[index];
+		return Self.get(this.parent).values[index];
 	}
 	set(index, value) {
-		const values = Values.get(this).slice();
+		const values = Self.get(this.parent).values.slice();
 		values[index] = value;
 		this.parent.restrict.validate(value, values, this.parent);
-		return Contexts.get(this.parent).storage.set({ [this.key]: values, });
+		return Self.get(this.parent).root.storage.set({ [this.key]: values, });
 	}
 	replace(values) {
 		if (values.length < this.min || values.length > this.max) {
 			throw new Error('the number of values for the option "'+ this.key +'" must be between '+ this.min +' and '+ this.max);
 		}
 		this.parent.restrict && this.parent.restrict.validateAll(values, this.parent);
-		return Contexts.get(this.parent).storage.set({ [this.key]: values, });
+		return Self.get(this.parent).root.storage.set({ [this.key]: values, });
 	}
 	splice(index, remove, ...insert) {
-		const values = Values.get(this).slice();
+		const values = Self.get(this.parent).values.slice();
 		values.splice.apply(values, arguments);
 		if (values.length < this.min || values.length > this.max) {
 			throw new Error('the number of values for the option "'+ this.key +'" must be between '+ this.min +' and '+ this.max);
 		}
 		this.parent.restrict && this.parent.restrict.validateAll(insert, this.parent, index);
-		return Contexts.get(this.parent).storage.set({ [this.key]: values, });
+		return Self.get(this.parent).root.storage.set({ [this.key]: values, });
 	}
 	reset() {
-		return Contexts.get(this.parent).storage.remove(this.key);
+		return Self.get(this.parent).root.storage.remove(this.key);
 	}
 } Object.freeze(ValueList.prototype);
 
@@ -259,33 +240,27 @@ function getUniqueSet(unique, parent) {
 	}
 }
 
-function callAll(callbacks, value, values, old, path) {
-	callbacks && callbacks.forEach(listener => { try {
-		listener(value, values, old);
-	} catch (error) { console.error('Options change listener for "'+ path +'" threw', error); } });
-}
-
-function crawlDown(option, callback) {
+function toLeafs(option, callback) {
 	callback(option);
-	option.children.forEach(option => crawlDown(option, callback));
+	option.children.forEach(option => toLeafs(option, callback));
 }
 
-function climbUp(option, callback) {
+function toRoot(option, callback) {
 	callback(option);
-	option.parent && climbUp(option.parent, callback);
+	option.parent && toRoot(option.parent, callback);
 }
 
-function inContext(ctx, callback) {
+function inContext(root, callback) {
 	try {
-		context = ctx;
+		currentRoot = root;
 		return callback();
 	} finally {
-		context = null;
+		currentRoot = null;
 	}
 }
 
 return class OptionsRoot {
-	constructor({ model, prefix, storage, onChanged, }) {
+	/*async*/ constructor({ model, prefix, storage, onChanged, }) { return (async () => {
 		this.model = deepFreeze(model);
 		this.options = new Map;
 		if (!storage && !onChanged) { try {
@@ -295,43 +270,36 @@ return class OptionsRoot {
 		this.prefix = prefix = prefix == null ? 'options' : prefix;
 		this.storage = storage = storage || Storage.sync;
 		this._onChanged = onChanged = onChanged || (storage === Storage.sync || storage === Storage.local ? Storage.onChanged : null);
-		inContext(this, () => (this._shadow = new Option({ children: model, }, null)));
-		this.children = this._shadow.children;
 		this.onChanged = this.onChanged.bind(this);
+		onChanged && onChanged.addListener(this.onChanged);
+		this._shadow = inContext(this, () => new Option({ children: model, }, null));
+		this.children = this._shadow.children;
 		this.keys = Array.from(this.options.keys()).map(path => prefix + path);
 
-		return storage.get(this.keys)
-		.then(data => inContext(this, () => {
-			if (Array.isArray(data) && data.length === 1) { data = data[0]; } // some weird Firefox bug
-			this.options.forEach(option => {
-				const set = data.hasOwnProperty(prefix + option.path);
-				const values = new ValueList(option, set ? data[prefix + option.path] : option.defaults);
-				Values.set(option, values);
-				IsSet.set(values, set);
-			});
-			onChanged && onChanged.addListener(this.onChanged);
-			return this;
+		let data = (await storage.get(this.keys));
+		if (Array.isArray(data) && data.length === 1) { data = data[0]; } // some weird Firefox bug
+		inContext(this, () => this.options.forEach(option => {
+			const isSet = data.hasOwnProperty(prefix + option.path);
+			option.values = new ValueList(option, isSet ? data[prefix + option.path] : option.defaults);
+			Self.get(option).isSet = isSet;
+			Object.freeze(option);
 		}));
-	}
+		return this;
+	})(); }
 
 	onChanged(changes) { Object.keys(changes).forEach(key => {
 		if (!key.startsWith(this.prefix) || this.destroyed) { return; }
-		const path = key.slice(this.prefix.length);
-		const option = this.options.get(path);
-		if (!option) { return; }
-		const values = changes[key].newValue || option.defaults;
-		const list = option.values;
-		const old = Values.get(list);
-		Values.set(list, values);
-		IsSet.set(list, !!changes[key].newValue);
-
-		const is = !!values.find(x => x);
-		const was = !!old.find(x => x);
-
-		callAll(OnChange.get(option), values[0], list, old, path);
-		climbUp(option, option => callAll(OnAnyChange.get(option), values[0], list, old, path));
-		is && !was && callAll(OnTrue.get(option), values[0], list, old, path);
-		!is && was && callAll(OnFalse.get(option), values[0], list, old, path);
+		const option = this.options.get(key.slice(this.prefix.length));
+		const self = Self.get(option); if (!self) { return; }
+		const old = self.values;
+		const now = Object.freeze(changes[key].newValue || option.defaults);
+		self.values = now; self.isSet = !!changes[key].newValue;
+		const args = [ now, old, option, ];
+		self.fireChange && self.fireChange(args);
+		toRoot(option, other => {
+			const that = Self.get(other);
+			that.fireAnyChange && that.fireAnyChange(args);
+		});
 	}); }
 
 	resetAll() {
@@ -344,7 +312,11 @@ return class OptionsRoot {
 
 	destroy() {
 		this.destroyed = true;
-		crawlDown(this._shadow, option => callbackMaps.forEach(map => map.delete(option)));
+		toLeafs(this._shadow, option => {
+			const self = Self.get(option);
+			self.onChange && self.onChange(null, { last: true, });
+			self.onAnyChange && self.onAnyChange(null, { last: true, });
+		});
 		this._onChanged && this._onChanged.removeListener(this.onChanged);
 	}
 };
