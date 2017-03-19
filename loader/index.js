@@ -1,5 +1,9 @@
-(function(global) { 'use strict'; const factory = function Loader(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-/* eslint-disable no-throw-literal */ /* eslint-disable prefer-promise-reject-errors */
+(function(global) { 'use strict'; prepare() && define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	'../browser/': { manifest, rootUrl, isGecko, runtime, WebNavigation, Tabs, },
+	'../utils/event': { setEvent, },
+	require,
+	exports,
+}) => {
 
 /**
  * Dynamically executes functions as content scripts.
@@ -31,7 +35,7 @@ async function requireInTab(tabId, frameId, modules) {
 }
 
 /**
- * Detaches all content scripts from the given context. Specifically, it performs the same steps as when the extension is unloaded.
+ * Detaches all content scripts from the given context. Specifically, it performs the same steps for that context as when the extension is unloaded.
  * That is, it fires the onUnload event, deletes the global define and require functions and closes the loader connection.
  * @param  {natural}   tabId    The id of the tab to run in.
  * @param  {natural}   frameId  Optional. The id of the frame within the tab to run in. Defaults to the top level frame.
@@ -52,14 +56,10 @@ function getFrame(tabId, frameId) {
 class ContentScript {
 	/**
 	 * @param  {object}  options  An object whose properties are assigned to the new instance.
-	 *                            For the specific properties see below. Works as a copy constructor.
+	 *                            For the specific properties see below.
 	 */
 	constructor(options) {
-		const self = {
-			include: [ ], exclude: [ ], incognito: false, frames: 'top',
-			modules: null, script: null, args: [ ],
-			onMatch: new Event,
-		}; Self.set(this, self);
+		initScript(this);
 		Object.assign(this, options);
 	}
 
@@ -73,78 +73,87 @@ class ContentScript {
 	 */
 	set include(v)   { Self.get(this).include = parsePatterns(v); listenToNavigation(); }
 	get include()    { return Self.get(this).include.map(_=>_.source); }
+
 	/**
-	 * Same as .include, only that it can overrule includes to exclude them again.
+	 * Same format as `.include`. Frames with matching URLs will not be included, even if they are also matched by include patterns.
 	 */
 	set exclude(v)   { Self.get(this).exclude = parsePatterns(v); }
 	get exclude()    { return Self.get(this).exclude.map(_=>_.source); }
+
 	/**
-	 * Whether to include incognito tabs or not.
+	 * Whether to include incognito tabs or not. Defaults to false.
 	 */
 	set incognito(v) { Self.get(this).incognito = !!v; }
 	get incognito()  { return Self.get(this).incognito; }
+
 	/**
 	 * The frames to run the ContentScript in.
 	 * @param  {string}  frames  Enum:
-	 *     'top'       Only execute in matching top level frames.
+	 *     'top'       Only execute in matching top level frames. Default value.
 	 *     'matching'  Execute in all matching frames, regardless of the top level url.
 	 */
 	set frames(v)    { Self.get(this).frames = checkEnum([ 'top', 'matching', /*'children', 'all',*/ ], v); }
 	get frames()     { return Self.get(this).frames; }
+
 	/**
-	 * The ids of the modules to load. Same as the modules parameter to requireInTab().
+	 * The ids of the modules to load. Same as the `modules` parameter to `requireInTab()`.
 	 */
 	set modules(v)   { if (typeof v !== 'object') { throw new Error(`'modules' must be an Array, object or null`); } Self.get(this).modules = v; }
 	get modules()    { return Self.get(this).modules; }
+
 	/**
-	 * Function that is executed after all `.modules` specified in this ContentScript are loaded.
+	 * Function that is executed after all `.modules` specified in this ContentScript are loaded. Should return (a Promise to) a JSONable value.
 	 * @param  {function|null}  script  Same as the script parameter to runInTab().
-	 * @return {string}                 The decompiled source of the function.
+	 * @return {string|null}            The decompiled source of the function, if set.
 	 */
 	set script(v)    { Self.get(this).script = v == null ? v : getScource(v); }
 	get script()     { return Self.get(this).script; }
+
 	/**
-	 * Arguments to .script. Set as iterable, returned as Array.
+	 * Arguments to `.script`. Set as iterable, returned as Array. Default is empty.
 	 */
 	set args(v)      { Self.get(this).args = Array.from(v); }
 	get args()       { return Self.get(this).args; }
 
 	/**
 	 * Applies the ContentScript to all already open tabs and frames it matches.
-	 * @return {[object]}  An Array of { tabId, frameId, url, } describing all tabs this ContentScript was applied to.
+	 * @return {Set<Frame>}  An of all the Frames this ContentScript was applied to.
 	 */
 	async applyNow() {
-		const self = Self.get(this); const applied = new Set;
-		const tabs = (await callChrome(chrome.tabs, 'query', { }));
-		(await Promise.all(tabs.map(async ({ id: tabId, incognito, }) => Promise.all(
-			(await callChrome(chrome.webNavigation, 'getAllFrames', { tabId, }))
-			.map(async ({ frameId, url, }) => { try {
-				const [ frame, , done, ] = (await Frame.get(tabId, frameId).applyIfMatches(self, url, incognito));
-				(await done); applied.add(frame);
-			} catch (error) { console.error(error); } })
-		))));
-		applied.delete(null); return applied;
+		return applyScript(Self.get(this));
 	}
 
 	/**
 	 * Applies the ContentScript to a specific frame now, regardless of whether it matches.
+	 * @param  {natural}   tabId    The id of the tab to run in.
+	 * @param  {natural}   frameId  Optional. The id of the frame within the tab to run in. Defaults to the top level frame.
+	 * @return {[Frame, null, Promise]}  The Frame applied to, null (unknown URL), and a Promise that resolves after all `.modules` resolved, with the return value of `.script`, if set.
 	 */
 	async applyToFrame(tabId, frameId = 0) {
 		return Frame.get(tabId, frameId).applyIfMatches(Self.get(this), null);
 	}
 
+	/**
+	 * Event that is fired whenever and as soon as this ContentSchript matches a frame.
+	 * The arguments to the listeners are:
+	 * @param  {Frame}    frame  The Frame that was matched.
+	 * @param  {string}   url    The url of the matched frame at the time it was matched.
+	 * @param  {Promise}  value  Promise that resolved after `.modules` resolved, with the return value of `.script`, if set.
+	 * @return {Event}    Read-only.
+	 */
 	get onMatch() {
-		return Self.get(this).onMatch.event;
+		const self = Self.get(this); if (self.onMatch) { return self.onMatch; }
+		self.fireMatch = setEvent(self, 'onMatch', { lazy: false, }); return self.onMatch;
 	}
 
 	get onShow() {
-		const self = Self.get(this);
-		return (self.onShow || (self.onShow = new Event)).event;
+		const self = Self.get(this); if (self.onShow) { return self.onShow; }
+		self.fireShow = setEvent(self, 'onShow', { lazy: false, }); return self.onShow;
 	}
 
 	get onHide() {
-		const self = Self.get(this);
-		return (self.onHide || (self.onHide = new Event)).event;
+		const self = Self.get(this); if (self.onHide) { return self.onHide; }
+		self.fireHide = setEvent(self, 'onHide', { lazy: false, }); return self.onHide;
 	}
 
 	/**
@@ -153,34 +162,54 @@ class ContentScript {
 	destroy() {
 		const self = Self.get(this);
 		if (!self) { return; } Self.delete(this);
-		self.onMatch.clear();
+		self.fireMatch && self.fireMatch(null, { last: true, });
+		self.fireShow && self.fireShow(null, { last: true, });
+		self.fireHide && self.fireHide(null, { last: true, });
 		self.include.length && listenToNavigation();
 	}
 }
 
 //////// start of private implementation ////////
+/* eslint-disable no-throw-literal */ /* eslint-disable prefer-promise-reject-errors */
 
-const chrome = (global.browser || global.chrome);
-const rootUrl = chrome.extension.getURL('');
-const gecko = rootUrl.startsWith('moz-');
-const contentPath = new global.URL('./content.js', currentScript.src).href.replace(rootUrl, '/');
-const requirePath = '/node_modules/es6lib/require.js';
-const getScource = (() => { const { toString, } = (() => 0);
-	return func => { if (typeof func !== 'function') { throw new Error(`'script' must be a function`); } return toString.call(func); };
-})();
-const callChrome = (api, method, ...args) => new Promise((y, n) => api[method](...args, value => n(chrome.runtime.lastError || y(value))));
+const contentPath = new global.URL(require.toUrl('./content.js')).pathname;
+let requirePath = manifest.ext_tools && manifest.ext_tools.loader && manifest.ext_tools.loader.require;
+requirePath === undefined && (requirePath = '/node_modules/es6lib/require.js');
+const getScource = (x=>x).call.bind((x=>x).toString);
 let debug = false;
 
 const tabs = new Map/*<tabId, Map<frameId, Frame>>*/;
 const Self = new Map/*<ContentScript, object>*/;
 
+function initScript(_this) {
+	const self = {
+		include: [ ], exclude: [ ], incognito: false, frames: 'top',
+		modules: null, script: null, args: [ ],
+		onMatch: null, fireMatch: null,
+		onShow: null, fireShow: null,
+		onHide: null, fireHide: null,
+	}; Self.set(_this, self);
+}
+
+async function applyScript(self) {
+	const applied = new Set, tabs = (await Tabs.query({ }));
+	(await Promise.all(tabs.map(async ({ id: tabId, incognito, }) => Promise.all(
+		(await WebNavigation.getAllFrames({ tabId, }))
+		.map(async ({ frameId, url, }) => { try {
+			const [ frame, , done, ] = (await Frame.get(tabId, frameId).applyIfMatches(self, url, incognito));
+			(await done); applied.add(frame);
+		} catch (error) { console.error(error); } })
+	))));
+	applied.delete(null); return applied;
+}
+
 function listenToNavigation() {
-	if (!chrome.webNavigation) { return; }
+	if (!WebNavigation) { return; }
 	const filters = [ ];
 	Self.forEach(self => filters.push(...self.include.map(exp => ({ urlMatches: exp.source, }))));
-	chrome.webNavigation.onCommitted.removeListener(onNavigation); // must remove first to avoid duplicate
+	WebNavigation.onCommitted.removeListener(onNavigation); // must remove first to avoid duplicate
 	if (!filters.length) { return; }
-	chrome.webNavigation.onCommitted.addListener(onNavigation, { url: filters, });
+	WebNavigation.onCommitted.addListener(onNavigation, { url: filters, });
 }
 
 function onNavigation({ tabId, frameId, url, }) {
@@ -218,8 +247,9 @@ class Frame {
 
 	async getPort() {
 		let reject; this.gettingPort = new Promise((y, n) => ((this.gotPort = y), (reject = (this.cancelPort = n))));
-		callChrome(chrome.tabs, 'executeScript', this.tabId, {
-			file: contentPath + (debug && gecko ? '?debug=true' : ''), frameId: this.frameId, matchAboutBlank: true, runAt: 'document_start',
+		Tabs.executeScript(this.tabId, {
+			file: contentPath + (debug && isGecko ? '?debug=true' : ''), // query params don't work in chrome
+			frameId: this.frameId, matchAboutBlank: true, runAt: 'document_start',
 		}).catch(reject);
 		return this.gettingPort;
 	}
@@ -229,13 +259,13 @@ class Frame {
 		this.incognito = port.sender.tab.incognito;
 		this.gotPort && this.gotPort();
 		this.gotPort = null;
-		this.onshow && this.onshow.fire(this.eventArg);
+		this.fireShow && this.fireShow([ this.eventArg, ]);
 	}
 	initContent() {
 		if (requirePath) {
-			chrome.tabs.executeScript(this.tabId, { file: requirePath, frameId: this.frameId, matchAboutBlank: true, runAt: 'document_start', });
+			Tabs.executeScript(this.tabId, { file: requirePath, frameId: this.frameId, matchAboutBlank: true, runAt: 'document_start', });
 		} else {
-			this.post('ignoreRequire');
+			this.post('shimRequire');
 		}
 	}
 
@@ -262,19 +292,19 @@ class Frame {
 		try { if (!this.port) { (await (this.gettingPort || this.getPort())); } }
 		catch (error) { if (error !== this) { throw error; } else { return [ ]; } }
 		if (url && this.incognito && !script.incognito) { return [ ]; }
-		const done = (async () => {
+		const done = Object.freeze((async () => {
 			script.modules && (await this.request('require', script.modules));
 			return script.script ? this.request('run', script.script, script.args) : undefined;
-		})();
-		url && script.onMatch.fire(this.eventArg, url, done);
+		})());
+		url && script.fireMatch && script.fireMatch([ this.eventArg, url, done, ]);
 		this.scripts.add(script);
 		return [ this.eventArg, null, done, ];
 	}
 
 	hide() {
 		if (this.hidden) { return; } this.hidden = true;
-		this.onhide && this.onhide.fire(this.eventArg);
-		this.scripts.forEach(script => script.onHide && script.onHide.fire(this.eventArg));
+		this.fireHide && this.fireHide([ this.eventArg, ]);
+		this.scripts.forEach(script => script.fireHide && script.fireHide([ this.eventArg, ]));
 		const frames = tabs.get(this.tabId);
 		this.frameId === 0 && frames.get(this.frameId) === this && frames.delete(this.frameId);
 	}
@@ -283,32 +313,40 @@ class Frame {
 		const frames = tabs.get(this.tabId), old = frames.get(this.frameId);
 		old && old !== this && old.cancelPort && old.cancelPort(old);
 		this.frameId === 0 && frames.set(this.frameId, this);
-		this.onshow && this.onshow.fire(this.eventArg);
-		this.scripts.forEach(script => script.onShow && script.onShow.fire(this.eventArg));
+		this.fireShow && this.fireShow([ this.eventArg, ]);
+		this.scripts.forEach(script => script.fireShow && script.fireShow([ this.eventArg, ]));
 	}
 
-	get onHide  () { if (!this.onhide)   { this.onhide   = new Event; } return this.onhide; }
-	get onShow  () { if (!this.onshow)   { this.onshow   = new Event; } return this.onshow; }
-	get onRemove() { if (!this.onremove) { this.onremove = new Event; } return this.onremove; }
 	get eventArg() { const self = this; if (!this.arg) { this.arg = Object.freeze({
-		tabId: this.tabId,
-		frameId: this.frameId,
-		incognito: this.incognito,
+		tabId: self.tabId,
+		frameId: self.frameId,
+		incognito: self.incognito,
 		get hidden() { return self.hidden; },
-		get onPageHide() { return self.onPageHide.event; },
-		get onPageShow() { return self.onPageShow.event; },
-		get onRemove  () { return self.onRemove.event; },
+		get onShow() {
+			if (self.onShow) { return self.onShow; }
+			self.fireShow = setEvent(self, 'onShow', { lazy: false, }); return self.onShow;
+		},
+		get onHide() {
+			if (self.onHide) { return self.onHide; }
+			self.fireHide = setEvent(self, 'onHide', { lazy: false, }); return self.onHide;
+		},
+		get onRemove() {
+			if (self.onRemove) { return self.onRemove; }
+			self.fireRemove = setEvent(self, 'onRemove', { lazy: false, once: true, }); return self.onRemove;
+		},
 	}); } return this.arg; }
 
 	destroy(unload) {
 		this.hide();
 		const frames = tabs.get(this.tabId);
 		frames && frames.get(this.frameId) === this && frames.delete(this.frameId);
-		if (this.onremove) { !unload && this.onremove.fire(this.eventArg); this.onremove.listeners.clear(); this.onremove = null; }
-		if (this.onhide) { this.onhide.listeners.clear(); this.onhide = null; }
-		if (this.onshow) { this.onshow.listeners.clear(); this.onshow = null; }
+		this.fireShow && this.fireShow(null, { last: true, });
+		this.fireHide && this.fireHide(null, { last: true, });
+		this.fireRemove && this.fireRemove(unload ? null : [ this.eventArg, ]);
 		this.port && this.port.onDisconnect.removeListener(this.destroy);
 		this.port && this.port.disconnect();
+		this.port && delete this.port.frame && delete this.port;
+		this.scripts.clear();
 	}
 }
 
@@ -349,12 +387,9 @@ const methods = {
 	loadScript(url) {
 		if (!url.startsWith(rootUrl)) { throw { message: 'Can only load local resources', }; }
 		const file = url.slice(rootUrl.length - 1);
-		return new Promise((resolve, reject) => chrome.tabs.executeScript(this.sender.tab.id, {
+		return Tabs.executeScript(this.sender.tab.id, {
 			file, frameId: this.sender.frameId, matchAboutBlank: true, runAt: 'document_start',
-		}, () => {
-			if (!chrome.runtime.lastError) { resolve(true); }
-			else { reject({ message: chrome.runtime.lastError.message, }); }
-		}));
+		});
 	},
 	ping() {
 		return true;
@@ -368,7 +403,7 @@ const methods = {
 };
 
 function parsePatterns(patterns) {
-	!chrome.webNavigation && console.warn(`Using ContentScripts without "webNavigation"!`);
+	!WebNavigation && console.warn(`Using ContentScripts without "WebNavigation"!`);
 	!Array.isArray(patterns) && (patterns = [ patterns, ]);
 	return patterns.map(pattern => {
 		if (typeof pattern === 'object' && typeof pattern.test === 'function') { return new RegExp(pattern); }
@@ -382,21 +417,6 @@ function checkEnum(choices, value) {
 	if (value == null) { return choices[0]; }
 	if (choices.includes(value)) { return value; }
 	throw new Error(`This value must be one of: '`+ choices.join(`', `) +`'`);
-}
-
-function Event() {
-	const listeners = new Set;
-	return {
-		listeners,
-		fire() {
-			listeners.forEach(listener => { try { listener.apply(null, arguments); } catch (error) { console.error(error); } });
-		},
-		event: {
-			addListener(listener) { typeof listener === 'function' && listeners.add(listener); },
-			hasListener(listener) { return listeners.has(listener); },
-			removeListener(listener) { listeners.delete(listener); },
-		},
-	};
 }
 
 // copy from ../utils/index.js
@@ -420,7 +440,7 @@ global.addEventListener('unload', () => {
 });
 
 {
-	chrome.runtime.onConnect.addListener(onConnect);
+	runtime.onConnect.addListener(onConnect);
 }
 
 Object.assign(exports, {
@@ -433,14 +453,13 @@ Object.assign(exports, {
 });
 Object.defineProperty(exports, 'debug', { set(v) { debug = !!v; }, get() { return debug; }, configurable: true, });
 
-}; // end factory
-
-const { currentScript, } = global.document; // need to get this synchronously
+}); function prepare() {
 
 if (global.innerWidth || global.innerHeight) { // stop loading at once if the background page was opened in a tab or window
 	console.warn(`Background page opened in view`);
 	global.history.replaceState({ from: global.location.href.slice(global.location.origin.length), }, null, '/view.html#403');
 	global.stop(); global.location.reload();
-} else
+	return false;
+} else { return true; }
 
-if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; global[factory.name] = result; } })(this);
+} })(this);

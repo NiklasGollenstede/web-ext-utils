@@ -20,13 +20,14 @@ const onUnload = Object.freeze({
 });
 
 //////// start of private implementation ////////
+/* global window, document, CustomEvent, */
 
 if (global.require) {
 	if (global.reRegisteringLoaderAfterPageShow) { return; }
 	throw new Error(`Loading content loader in a frame that is already loaded`);
 }
 
-let debug = false, require = null, resolveRequire; const getRequire = new Promise(_ => (resolveRequire = _));
+let debug = false, require = null, resolveRequire; const getRequire = new Promise(_=>(resolveRequire = _)).then(_=>(require = _));
 const chrome = (global.browser || global.chrome);
 const resolved = Promise.resolve();
 const readystates = [ 'interactive', 'complete', ]; // document.readystate values, ascending
@@ -78,11 +79,7 @@ const methods = {
 			require.config({ config: modules, });
 			modules = Object.keys(modules);
 		}
-		if (typeof require === 'function') {
-			return new Promise((resolve, reject) => global.require(modules, (...args) => resolve(args.length), reject));
-		} else {
-			return Promise.all(modules.map(id => request('loadScript', rootUrl + id +'js'))).then(_=>_.length);
-		}
+		return new Promise((done, failed) => require(modules, (...args) => done(args.length), failed));
 	},
 	waitFor(state) { return new Promise(ready => {
 		if (readystates.indexOf(document.readystate) <= readystates.indexOf(state)) { return void ready(); }
@@ -92,7 +89,9 @@ const methods = {
 			ready();
 		});
 	}); },
-	ignoreRequire: resolveRequire,
+	shimRequire() {
+		resolveRequire((modules, done, failed) => Promise.all(modules.map(id => request('loadScript', rootUrl + id +'js'))).then(arg => done(arg.length), failed));
+	},
 };
 
 function doUnload() {
@@ -117,13 +116,13 @@ function onPageHide({ isTrusted, }) {
 	if (!isTrusted) { return; }
 	debug && console.debug('content hide');
 	window.addEventListener('pageshow', onPageShow, true);
-	request('pagehide').then(() => console.log('got reply for pagehide'));
+	request('pagehide').then(() => debug && console.debug('got reply for pagehide'));
 }
 function onPageShow({ isTrusted, }) {
 	if (!isTrusted) { return; }
 	debug && console.debug('content show');
 	global.reRegisteringLoaderAfterPageShow = true;
-	request('pageshow').then(() => console.log('got reply for pageshow'))
+	request('pageshow').then(() => debug && console.debug('got reply for pageshow'))
 	.catch(error => console.error(error)).then(() => delete global.reRegisteringLoaderAfterPageShow);
 }
 
@@ -157,7 +156,7 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 					onUnload,
 				});
 			});
-			resolveRequire(require = global.require);
+			resolveRequire(global.require);
 		},
 	};
 }
