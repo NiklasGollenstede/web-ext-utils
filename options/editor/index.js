@@ -111,7 +111,7 @@ function saveInput(target) {
 	const { pref, } = element;
 	const values = Array.from(element.querySelector('.values-container').children, getInputRowValues);
 	try {
-		pref.values = values;
+		pref.values.replace(values);
 		Array.from(element.querySelectorAll('.invalid')).concat(element).forEach(invalid => {
 			invalid.classList.remove('invalid');
 			invalid.title = '';

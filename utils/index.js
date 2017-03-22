@@ -96,7 +96,8 @@ async function reportError(...messages) { try {
 		message += error;
 	} else if (error) {
 		if (error.name) { message += error.name +': '; }
-		if (error.message === 'No window matching {"frame_id":0,"matchesHost":["<all_urls>"]}') { message += `Cannot access tab`; } // unhelpful Firefox error when trying to access an url that doesn't match <all_urls>
+		if ((/^No window matching {"frame_id":\d+,(?:"match_about_blank":true,)?"matchesHost":["<all_urls>"]}$/).test(error.message))
+		{ message += `Cannot access this tab`; } // unhelpful Firefox error when trying to access an url that doesn't match <all_urls> or is not loaded yet
 		else if (error.message) { message += error.message; }
 	}
 	if (!message && !error) { message = 'at all'; }
