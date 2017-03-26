@@ -1,10 +1,11 @@
 (function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	module,
 }) => {
 
 const _api = global.browser || global.chrome;
-const ua = navigator.userAgent;
+const ua = global.navigator.userAgent;
 const rootUrl = _api.extension.getURL('');
-const info = typeof _api.runtime.getBrowserInfo === 'function' && (await _api.runtime.getBrowserInfo());
+const info = typeof _api.runtime.getBrowserInfo === 'function' && (await _api.runtime.getBrowserInfo()) || module.config();
 
 const blink = rootUrl.startsWith('chrome-');
 const opera = blink && (/ OPR\/\d+\./).test(ua);
@@ -13,7 +14,7 @@ const chromium = blink && (/ Chromium\/\d+\./).test(ua);
 const google = blink && !opera && !vivaldi && !chromium;
 
 const gecko = !blink && rootUrl.startsWith('moz-');
-const fennec = gecko && (info ? info.name === 'Fennec' : _api.extension.getBackgroundPage === 'function' ? !(_api.windows) : (/Android/).test(ua)); // shouldn't use userAgent (may be faked)
+const fennec = gecko && (info ? (/^fennec$/i).test(info.name) : _api.extension.getBackgroundPage === 'function' ? !(_api.windows) : (/Android/).test(ua)); // shouldn't use userAgent (may be faked)
 const firefox = gecko && !fennec;
 
 const edgeHTML = !blink && !gecko && rootUrl.startsWith('ms-browser-');

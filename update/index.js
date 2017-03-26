@@ -1,12 +1,11 @@
 (function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { runtime, Storage, },
+	'../browser/': { manifest, Storage, },
 	'../browser/version': { current: currentBrowser, version: browserVersion, },
 	'../utils/semver': Version,
 	'../utils/files': { readDir, },
 	require,
 }) => {
 
-const manifest = runtime.getManifest();
 let inProgress = { version: null, component: null, };
 
 // load data

@@ -93,6 +93,7 @@ const methods = {
 	shimRequire() {
 		resolveRequire((modules, done, failed) => Promise.all(modules.map(id => request('loadScript', rootUrl + id +'js'))).then(arg => done(arg.length), failed));
 	},
+	debug(v) { debug = v; },
 };
 
 function doUnload() {
@@ -151,13 +152,18 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 			define(({
 				module,
 			}) => {
-				({ debug, } = module.config() || { debug: false, });
-				debug && console.debug('loader', module.id);
+				let info; const config = module.config(); config && ({ debug, info, } = config);
+				debug && console.debug('loader', module.id, info);
+				global.require.config({
+					paths: { 'node_modules/web-ext-utils/loader/index': 'node_modules/web-ext-utils/loader/content', },
+					config: info && { 'node_modules/web-ext-utils/browser/index': info, },
+				});
+				resolveRequire(global.require);
 				return ({
 					onUnload,
+					get debug() { return debug; },
 				});
 			});
-			resolveRequire(global.require);
 		},
 	};
 }

@@ -93,10 +93,10 @@ function loadFrame(path, view) {
 	const frame = global.document.createElement('iframe');
 	frame.src = '/'+ path;
 	frame.style.border = 'none';
-	// frame.style.position = 'fixed';
 	frame.style.margin = 0;
 	frame.style.top    = frame.style.left  = '0';
 	frame.style.height = frame.style.width = '100%';
+	view.document.body.tagName === 'BODY' && (frame.style.position = 'fixed');
 	view.document.body.appendChild(frame);
 	frame.addEventListener('load', () => (view.document.title = frame.contentDocument.title), { once: true, });
 }

@@ -1,5 +1,6 @@
 (function(global) { 'use strict'; prepare() && define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { manifest, rootUrl, isGecko, runtime, WebNavigation, Tabs, },
+	'../browser/': { manifest, rootUrl, runtime, WebNavigation, Tabs, },
+	'../browser/version': { gecko, current, version, },
 	'../utils/event': { setEvent, },
 	require,
 	exports,
@@ -172,7 +173,8 @@ class ContentScript {
 //////// start of private implementation ////////
 /* eslint-disable no-throw-literal */ /* eslint-disable prefer-promise-reject-errors */
 
-const contentPath = new global.URL(require.toUrl('./content.js')).pathname;
+let contentPath = new global.URL(require.toUrl('./content.js')).pathname
++ (gecko ? '?debug=false&info='+ encodeURIComponent(JSON.stringify({ name: current, version, })) : ''); // query params don't work in chrome
 let requirePath = manifest.ext_tools && manifest.ext_tools.loader && manifest.ext_tools.loader.require;
 requirePath === undefined && (requirePath = '/node_modules/es6lib/require.js');
 const getScource = (x=>x).call.bind((x=>x).toString);
@@ -248,8 +250,7 @@ class Frame {
 	async getPort() {
 		let reject; this.gettingPort = new Promise((y, n) => ((this.gotPort = y), (reject = (this.cancelPort = n))));
 		Tabs.executeScript(this.tabId, {
-			file: contentPath + (debug && isGecko ? '?debug=true' : ''), // query params don't work in chrome
-			frameId: this.frameId, matchAboutBlank: true, runAt: 'document_start',
+			file: contentPath, frameId: this.frameId, matchAboutBlank: true, runAt: 'document_start',
 		}).catch(reject);
 		return this.gettingPort;
 	}
@@ -262,6 +263,7 @@ class Frame {
 		this.fireShow && this.fireShow([ this.eventArg, ]);
 	}
 	initContent() {
+		!gecko && debug && this.post('debug', true); // no query params in chrome
 		if (requirePath) {
 			Tabs.executeScript(this.tabId, { file: requirePath, frameId: this.frameId, matchAboutBlank: true, runAt: 'document_start', });
 		} else {
@@ -290,7 +292,7 @@ class Frame {
 			|| script.exclude.some(_=>_.test(url))
 		)) { return [ ]; }
 		try { if (!this.port) { (await (this.gettingPort || this.getPort())); } }
-		catch (error) { if (error !== this) { throw error; } else { return [ ]; } }
+		catch (error) { if (error !== this) { throw error; } else { return [ ]; } } // error === this if canceled due to pageshow
 		if (url && this.incognito && !script.incognito) { return [ ]; }
 		const done = Object.freeze((async () => {
 			script.modules && (await this.request('require', script.modules));
@@ -419,6 +421,12 @@ function checkEnum(choices, value) {
 	throw new Error(`This value must be one of: '`+ choices.join(`', `) +`'`);
 }
 
+function setDebug(value) {
+	value = !!value; if (debug === value) { return; } debug = value;
+	contentPath = contentPath.replace(/&debug=(true|false)/, '&debug='+ debug);
+	tabs.forEach(_=>_.forEach(frame => frame.port && !frame.hidden && frame.post('debug', debug)));
+}
+
 // copy from ../utils/index.js
 const escape = string => string.replace(/[\-\[\]\{\}\(\)\*\+\?\.\,\\\^\$\|\#]/g, '\\$&');
 const matchPattern = (/^(?:(\*|http|https|file|ftp|app):\/\/(\*|(?:\*\.)?[^\/\*]+|)\/(.*))$/i);
@@ -451,7 +459,7 @@ Object.assign(exports, {
 	getFrame,
 	parseMatchPatterns: parsePatterns,
 });
-Object.defineProperty(exports, 'debug', { set(v) { debug = !!v; }, get() { return debug; }, configurable: true, });
+Object.defineProperty(exports, 'debug', { set: setDebug, get() { return debug; }, configurable: true, });
 
 }); function prepare() {
 

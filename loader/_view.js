@@ -61,8 +61,7 @@ if (!main) {
 // failed to move to non-private window. This only happens in very weird situations (e.g. in the All-in-One Sidebar)
 if (!main) { throw new Error(`
 	This extension page can't be displayed here.
-	<br>Please try to open <a href="${ global.location.href.replace(/"/g, '&quot;') }">
-	${ global.location.href.replace(/\</g, '&lt;').replace(/\>/g, '&gt;') }</a> in a normal tab.
+	<br>Please try to open <a href="${ global.location.href }">${ global.location }</a> in a normal tab.
 `); }
 if (!main.initView) { throw new Error(`This extension did not start correctly. Disabling and enabling it may help.`); }
 
