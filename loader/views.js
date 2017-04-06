@@ -1,11 +1,13 @@
 (function(global) { 'use strict'; prepare() && define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { extension, manifest, },
+	'../browser/': { extension, manifest, rootUrl, },
 	'../utils/': { reportError, },
 	'../utils/files': FS,
+	'../utils/event': { setEventGetter, },
 	require,
 }) => {
+const Self = new WeakMap;
 
-const methods = {
+const methods = Object.freeze({
 	setHandler(name, handler) {
 		if (!handler) { handler = name; name = handler.name; }
 		if (typeof handler !== 'function' || (name === '' && arguments.length < 2) || typeof name !== 'string')
@@ -18,33 +20,100 @@ const methods = {
 	getHandler(name) {
 		return handlers[name];
 	},
-};
+});
+
+class Location {
+	constructor(target, href = target.location.hash) { new LocationP(this, target, href || '#'); }
+	get href  () { return Self.get(this).get({ }); } set href  (v) { const self = Self.get(this); self.href  !== v && self.replace({ href:  v, }, true); }
+	get name  () { return Self.get(this).name; }     set name  (v) { const self = Self.get(this); self.name  !== v && self.replace({ name:  v, }, true); }
+	get query () { return Self.get(this).query; }    set query (v) { const self = Self.get(this); self.query !== v && self.replace({ query: v, }, true); }
+	get hash  () { return Self.get(this).hash; }     set hash  (v) { const self = Self.get(this); self.hash  !== v ?  self.replace({ hash:  v, }, true) : self.updateHash(); }
+	assign(v)  { Self.get(this).replace({ href:  v, }, true); }
+	replace(v) { Self.get(this).replace({ href:  v, }, false); }
+}
+setEventGetter(Location, 'change', Self);
+setEventGetter(Location, 'nameChange', Self);
+setEventGetter(Location, 'queryChange', Self);
+setEventGetter(Location, 'hashChange', Self);
 
 //////// start of private implementation ////////
 
-function defaultError(view, options, name) {
-	const code = (/^[45]\d\d/).test(name) && name;
+class LocationP {
+	constructor(_this, target, href) {
+		Self.set(_this, this);
+		this._this = _this; this.target = target;
+		const { name, query, hash, } = LocationP.parse(href);
+		this.name = name; this.query = query; this.hash = hash;
+		target.addEventListener('hashchange', this);
+		target.addEventListener('unload', () => this.destroy());
+	}
+	get({ name = this.name, query = this.query, hash = this.hash, }) {
+		return viewPath + (name || '') + (query ? query.replace(/^\??/, '?') : '') + (hash ? hash.replace(/^\#?/, '#') : '');
+	}
+	replace({ name = this.name, query = this.query, hash = this.hash, href = this.get({ name, query, hash, }), }, push = false) {
+		// Object.assign(this, LocationP.parse(href || '#'));
+		this.target.location[push ? 'assign' : 'replace'](href);
+	}
+	updateHash() {
+		const target = this.target.document.getElementById(this.hash);
+		target && target.scrollIntoView();
+		this.target.document.querySelectorAll('.-pseudo-target').forEach(_=>_.classList.remove('-pseudo-target'));
+		target && target.classList.add('-pseudo-target');
+	}
+	handleEvent(event) { // reload if name changes to a different handler or the error handler
+		const { name, query, hash, } = this; Object.assign(this, LocationP.parse(this.target.location.hash || '#'));
+		if (handlers[name] !== handlers[this.name]) { event.stopImmediatePropagation(); this.target.location.reload(); return; }
+		this.fireChange  && this.fireChange([ this.target.location.hash, new global.URL(event.oldURL).hash, this.target, ]);
+		if (name  !== this.name)  { this.fireNameChange  && this.fireNameChange  ([ this.name,  name,  this.target, ]); }
+		if (query !== this.query) { this.fireQueryChange && this.fireQueryChange ([ this.query, query, this.target, ]); }
+		if (hash  !== this.hash)  { this.fireHashChange  && this.fireHashChange  ([ this.hash,  hash,  this.target, ]); }
+		if (hash  !== this.hash)  { this.updateHash(); }
+	}
+	destroy() {
+		this.fireChange      && this.fireChange      (null, { last: true, });
+		this.fireNameChange  && this.fireNameChange  (null, { last: true, });
+		this.fireQueryChange && this.fireQueryChange (null, { last: true, });
+		this.fireHashChange  && this.fireHashChange  (null, { last: true, });
+		Self.delete(this._this);
+	}
+
+	static parse(url) {
+		const string = typeof url === 'string' ? url.startsWith('#') ? url : new global.URL(url, rootUrl).hash : url.hash;
+		const [ , name, query, hash, ] = string.match(/^[#]?(.*?)(?:(?:[#!]|[?]([^#\s]*)#?)(.*))?$/);
+		return { name, query: query || '', hash, };
+	}
+}
+
+function defaultError(view, location) {
+	const code = (/^[45]\d\d/).test(location.name) && location.name;
 	view.document.body.innerHTML = `<h1>${ code || 404 }</h1>`;
 	!code && console.error(`Got unknown view "${ view.location.hash.slice(1) }"`);
+	location.onChange(() => view.location.reload());
 }
 
 const handlers = { }, pending = { };
+const viewPath = rootUrl +'view.html#';
 
-async function initView(view) { try {
-	let [ name, query, ] = view.location.hash.slice(1).split('?');
-	name === 'index' && (name = '');
-	const options = query ? parseQuery(query) : { };
+// location.hash format: #name?query#hash #?query#hash #name#hash ##hash #name?query!query #?query!query #name!hash #!hash
+async function initView(view, options = new global.URLSearchParams('')) { try {
+	const location = new Location(view); options = parseSearch(options);
+	const { id: tabId, windowId, } = ((await new Promise(got => (view.browser || view.chrome).tabs.getCurrent(got))) || { id: null, }); view.tabId = tabId;
 
-	const tabId = view.tabId = ((await new Promise(got => (view.browser || view.chrome).tabs.getCurrent(got))) || { id: null, }).id;
+	if (options.emulatePanel) {
+		view.addEventListener('blur', event => view.close());
+		view.resize = (width = view.document.scrollingElement.scrollWidth, height = view.document.scrollingElement.scrollHeight) => {
+			global.browser.windows.update(windowId, { width, height, }); // provide a function for the view to resize itself. TODO: should probably add some px as well
+		};
+		global.activeTab = options.originalActiveTab; // the "panel" can't query for the active tab itself, because that is now its own tab
+		(await global.browser.windows.update(windowId, { top: options.top, left: options.left, })); // firefox currently ignores top and left in .create(), so move it here
+	}
 
-	view.addEventListener('popstate', () => { // reload if name changes to a different handler
-		const newHandler = handlers[view.location.hash.replace(/^\#|\?.*$/g, '')] || handlers['404'] || defaultError;
-		if (newHandler !== handler) { view.location.reload(); }
-	});
+	view.document.querySelector('link[rel="icon"]').href = (manifest.icons[1] || manifest.icons[64]).replace(/^\/?/, '/');
 
-	let handler = handlers[name];
+	let handler = handlers[location.name];
 	if (handler) {
-		(await handler(view, options, name));
+		(await handler(view, location));
+		location.hash = location.hash; // update hash target
 	}
 
 	if (pending[tabId]) {
@@ -52,7 +121,8 @@ async function initView(view) { try {
 		delete pending[tabId];
 	} else if (!handler) {
 		handler = handlers['404'] || defaultError;
-		(await handler(view, options, name));
+		(await handler(view, location));
+		location.hash = location.hash; // update hash target
 	}
 
 } catch (error) { (await reportError(`Failed to display page "${ view.location.hash }"`, error)); console.error(error); } }
@@ -104,15 +174,15 @@ function loadFrame(path, view) {
 (async () => {
 	for (let i = 0; i < 10; i++) { (await null); } // give view modules that depend on this module some ticks time to work with it
 	global.initView = initView;
-	extension.getViews().forEach(view => view !== global && !prepare.queue.includes(view) && view.location.reload()); // reload old views
-	prepare.queue.forEach(initView);
+	extension.getViews().forEach(view => view !== global && !prepare.queue.find(_=>_[0] === view) && view.location.reload()); // reload old views
+	prepare.queue.forEach(args => initView(...args));
 	prepare.queue.splice(0, Infinity);
 })();
 
 return methods;
 
-function parseQuery(query) {
-	const search = new global.URLSearchParams(query.replace(/[?#]+/, '&')), config = { };
+function parseSearch(search) {
+	const config = { };
 	for (let [ key, value, ] of search) {
 		try { value = decodeURIComponent(value); } catch(_) { }
 		try { config[key] = JSON.parse(value); } catch(_) { config[key] = value; }
@@ -123,7 +193,7 @@ function parseQuery(query) {
 }); function prepare() {
 
 // enqueue all views that load before this module is ready
-const queue = prepare.queue = [ ]; global.initView = view => queue.push(view);
+const queue = prepare.queue = [ ]; global.initView = (...args) => queue.push(args);
 
 if (global.innerWidth || global.innerHeight) { // stop loading at once if the background page was opened in a tab or window
 	console.warn(`Background page opened in view`);

@@ -72,8 +72,8 @@ class Option {
 	}
 	whenChange(listener) {
 		const values = Self.get(this).values, added = this.onChange(...arguments);
-		added && listener(values, values, this);
-		return true;
+		added && listener(values, [ ], this);
+		return added;
 	}
 } Object.freeze(Option.prototype);
 
@@ -84,7 +84,7 @@ function whenToggleTo(option, should, listener, arg) {
 	};
 	option.onChange(wrapped, arg);
 	const values = Self.get(option).values;
-	!!values.find(x=>x) === should && listener(values, values, option);
+	!!values.find(x=>x) === should && listener(values, [ ], option);
 	return wrapped;
 }
 

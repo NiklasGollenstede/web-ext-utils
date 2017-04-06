@@ -6,11 +6,11 @@
  * @param  {object}   options.manifest  Optional. An object, e.g. `runtime.getManifest()` containing
  *                                      the `title` || `name`, `version`, `author`, `contributors`, `repository` and `license` keys from the manifest.json or package.json.
  *                                      `contributions` can be an Array listing external contributions as { what, who, license, }, of which each is an object of { name, url, [email, ], } or a string.
- *                                      Defaults to the `manifest.json`.
+ *                                      Defaults to `runtime.getManifest()`.
  * @param  {object}   options.browser   Optional. An object of { name, version, } describing the current browser.
  */
 return ({
-	host = document.querySelector('#about'),
+	host = global.document.querySelector('#about'),
 	manifest = (global.browser || global.chrome).runtime.getManifest(),
 	browser = null,
 } = { }) => {
@@ -85,7 +85,7 @@ function sanatize(html) {
  * @return {Element}                     The new DOM element.
  */
 function createElement(tagName, properties, childList) {
-	const element = document.createElement(tagName);
+	const element = global.document.createElement(tagName);
 	if (Array.isArray(properties)) { childList = properties; properties = null; }
 	properties && (function assign(target, source) { Object.keys(source).forEach(key => {
 		const value = source[key], now = target[key];
@@ -97,7 +97,7 @@ function createElement(tagName, properties, childList) {
 	}); })(element, properties);
 	childList && (function append(child) {
 		if (Array.isArray(child)) { return void child.forEach(append); }
-		child && element.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
+		child && element.appendChild(typeof child === 'string' ? global.document.createTextNode(child) : child);
 	})(childList);
 	return element;
 }

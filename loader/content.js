@@ -150,12 +150,13 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 		},
 		callback() {
 			define(({
+				require,
 				module,
 			}) => {
 				let info; const config = module.config(); config && ({ debug, info, } = config);
 				debug && console.debug('loader', module.id, info);
-				global.require.config({
-					paths: { 'node_modules/web-ext-utils/loader/index': 'node_modules/web-ext-utils/loader/content', },
+				require.config({
+					map: { '*': { './': module.id, './views': module.id, }, },
 					config: info && { 'node_modules/web-ext-utils/browser/index': info, },
 				});
 				resolveRequire(global.require);

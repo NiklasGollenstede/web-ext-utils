@@ -17,7 +17,7 @@ require([ 'node_modules/web-ext-utils/loader/views', ], ({ getHandler, setHandle
 	tabs.forEach(tab => (handlers[tab.id] = getHandler(tab.id)) === setHandler(tab.id, Home));
 });
 
-async function Home(window, options, name) {
+async function Home(window, location) {
 	const { document, } = window;
 
 	if (style.includes('dark')) { document.body.style.background = '#222'; }
@@ -27,7 +27,7 @@ async function Home(window, options, name) {
 
 	const tabView = new TabView({
 		host: document.body, template: document.createElement('iframe'),
-		active: name || index, tabs, style,
+		active: location.name || index, tabs, style,
 
 		async onLoad({ id, content: frame, }) { try {
 			const view = frame.contentWindow, { document, } = view;
@@ -41,17 +41,17 @@ async function Home(window, options, name) {
 			}
 			try { view.history.replaceState(window.history.state, null); } catch (_) { }
 
-			(await (handlers[id] || handlers['404'])(view, { }, window.document.location.hash.replace(/^\#|\?.*$/g, '') || id));
+			(await (handlers[id] || handlers['404'])(view, location));
 			global.setTimeout(() => document.documentElement.classList.remove('preload'), 500);
 		} catch (error) { reportError(`Failed to display tab "${ id }"`, error); } },
 
 		onShow({ id, title, }) {
-			id !== '404' && document.location.hash.replace(/^\#|\?.*$/g, '') !== id && (document.location.hash = id);
-			document.title = title +' - '+ manifest.name;
+			id !== '404' && (location.name = id);
+			document.title = title +' – '+ manifest.name;
 		},
 	});
 
-	window.addEventListener('popstate', () => (tabView.active = window.location.hash.replace(/^\#|\?.*$/g, '') || index));
+	location.onNameChange(name => (tabView.active = name || index));
 
 	window.tabs = tabView;
 }

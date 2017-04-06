@@ -5,9 +5,7 @@
 	about,
 	'common/options': options,
 	require,
-}) => window => {
-const { document, } = window;
-(window.browser || window.chrome) && (window.browser || window.chrome).tabs.getCurrent(tab => tab && (window.tabId = tab.id));
+}) => ({ document, }) => {
 
 document.title = 'Options - '+ manifest.name;
 
@@ -20,13 +18,13 @@ document.title = 'Options - '+ manifest.name;
 });
 
 new Editor({
-	options,
-	host: document.body.appendChild(document.createElement('form')),
+	options, prefix: '',
+	host: Object.assign(document.body.appendChild(document.createElement('form')), { id: 'options', }),
 });
 
 about({
 	manifest,
-	host: document.body.appendChild(document.createElement('div')),
+	host: Object.assign(document.body.appendChild(document.createElement('div')), { id: 'about', }),
 	browser: { name: currentBrowser.replace(/^./, c => c.toUpperCase()), version: browserVersion, },
 });
 

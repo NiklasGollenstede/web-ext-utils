@@ -63,19 +63,19 @@ async function attachAllContentScripts({ cleanup, } = { }) {
 /**
  * Shows or opens a tab containing an extension page.
  * Shows the fist tab whose .pathname equals 'match' and that has a window.tabId set, or opens a new tab containing 'url' if no such tab is found.
- * To set a window.tabId, include ``(window.browser || window.chrome).tabs.getCurrent(tab => tab && (window.tabId = tab.id))`` in a script in the tabs that should be matchable.
  * @param  {string}        url    The url to open in the new tab if no existing tab was found.
  * @param  {string}        match  Optional value of window.location.pathname a existing tab must have to be focused.
  * @return {Promise<Tab>}         The chrome.tabs.Tab that is now the active tab in the focused window.
  */
 async function showExtensionTab(url, match = url) {
 	match = extension.getURL(match || url); url = extension.getURL(url);
-	const window = extension.getViews({ type: 'tab', }).find(window =>
-		window && (typeof match === 'string' ? window.location.href === match : match.test(window.location.href)) && window.tabId != null
-	);
-	const tab = (await (window ? Tabs.update(window.tabId, { active: true, }) : Tabs.create({ url, })));
-	(await Windows.update(tab.windowId, { focused: true, }));
-	return tab;
+	for (const view of extension.getViews({ type: 'tab', })) {
+		if (view && (typeof match === 'string' ? view.location.href === match : match.test(view.location.href)) && view.tabId != null) {
+			const tab = (await new Promise(got => (view.browser || view.chrome).tabs.getCurrent(got)));
+			if (tab) { (await Tabs.update(tab.id, { active: true, })); (await Windows.update(tab.windowId, { focused: true, })); return tab; }
+		}
+	}
+	return Tabs.create({ url, });
 }
 
 /**
@@ -136,8 +136,8 @@ let errorIcon, successIcon; async function getIcon(name) {
 function debounce(callback, time) {
 	let timer = null;
 	return function() {
-		clearTimeout(timer);
-		timer = setTimeout(() => callback.apply(this, arguments), time); // eslint-disable-line no-invalid-this
+		global.clearTimeout(timer);
+		timer = global.setTimeout(() => callback.apply(this, arguments), time); // eslint-disable-line no-invalid-this
 	};
 }
 

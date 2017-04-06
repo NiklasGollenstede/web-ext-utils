@@ -15,7 +15,7 @@ const queryChild = (() => {
 
 const propsMap = new Map/*<id, props>*/;
 
-return function loadEditor({ host, options, onCommand, }) {
+return function loadEditor({ host, options, onCommand, prefix = '', }) {
 
 	host.classList.add('options-host');
 
@@ -80,7 +80,7 @@ return function loadEditor({ host, options, onCommand, }) {
 		options = options.constructor.name === 'OptionsRoot' ? options.children : [ options, ];
 	}
 
-	displayPreferences(options, host);
+	displayPreferences(options, host, prefix);
 	return host;
 };
 
@@ -304,7 +304,7 @@ function sanatize(html) {
 	);
 }
 
-function displayPreferences(prefs, host) { prefs.forEach(pref => {
+function displayPreferences(prefs, host, prefix) { prefs.forEach(pref => {
 	const { model, } = pref;
 	if (model.hidden) { return; }
 
@@ -314,6 +314,7 @@ function displayPreferences(prefs, host) { prefs.forEach(pref => {
 	let valuesContainer, childrenContainer;
 	const element = host.appendChild(createElement('div', {
 		className: 'pref-container pref-name-'+ pref.name,
+		id: prefix + pref.path,
 	}, [
 		labelId && createElement('input', {
 			type: 'checkbox', className: 'toggle-switch', id: labelId, checked: model.expanded,
@@ -364,7 +365,7 @@ function displayPreferences(prefs, host) { prefs.forEach(pref => {
 		setButtonDisabled(element);
 	}, { owner: host.ownerDocument.defaultView, });
 
-	childrenContainer && displayPreferences(pref.children, childrenContainer);
+	childrenContainer && displayPreferences(pref.children, childrenContainer, prefix);
 	childrenContainer && pref.when({
 		true: () => fieldsEnabled(childrenContainer, pref.path, true),
 		false: () => fieldsEnabled(childrenContainer, pref.path, false),
