@@ -1,5 +1,5 @@
 (function(global) { 'use strict'; prepare() && define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { extension, manifest, rootUrl, },
+	'../browser/': { extension, manifest, rootUrl, Windows, Tabs, },
 	'../utils/': { reportError, },
 	'../utils/files': FS,
 	'../utils/event': { setEventGetter, },
@@ -20,10 +20,28 @@ const methods = Object.freeze({
 	getHandler(name) {
 		return handlers[name];
 	},
+	getViews() { return Array.from(locations); },
+	getUrl({ name, query, hash, }) {
+		return viewPath + (name || '') + (query ? query.replace(/^\??/, '?') : '') + (hash ? hash.replace(/^\#?/, '#') : '');
+	},
+	async openView(location = '#', type = 'tab', options = { }) {
+		const url = typeof location === 'string' ? location .startsWith('#') ? viewPath + location.slice(1) : location : methods.getUrl(location);
+		type !== 'popup' || !Windows && (type = 'tab');
+		const tab = type === 'popup' ? (await Windows.create({
+			type: 'popup', url, focused: !!options.focused, state: options.state || undefined, // drawAttention: !!options.drawAttention,
+			width: options.width || undefined, height: options.height || undefined, left: options.left || undefined, top: options.top || undefined,
+		})).tabs[0] : (await Tabs.create({
+			url, active: options.active !== false, pinned: options.pinned || false, windowId: options.windowId || undefined,
+			openerTabId: 'openerTabId' in options ? options.openerTabId : undefined, index: options.index || undefined,
+		}));
+		return new Promise((resolve, reject) => (pending[tab.id] = { resolve, reject, }));
+	},
 });
 
+// location format: #name?query#hash #?query#hash #name#hash ##hash #name?query!query #?query!query #name!hash #!hash
+// view types: tab, popup, other
 class Location {
-	constructor(target, href = target.location.hash) { new LocationP(this, target, href || '#'); }
+	get view  () { return Self.get(this).target; }   get type   () { return Self.get(this).type; }
 	get href  () { return Self.get(this).get({ }); } set href  (v) { const self = Self.get(this); self.href  !== v && self.replace({ href:  v, }, true); }
 	get name  () { return Self.get(this).name; }     set name  (v) { const self = Self.get(this); self.name  !== v && self.replace({ name:  v, }, true); }
 	get query () { return Self.get(this).query; }    set query (v) { const self = Self.get(this); self.query !== v && self.replace({ query: v, }, true); }
@@ -39,10 +57,10 @@ setEventGetter(Location, 'hashChange', Self);
 //////// start of private implementation ////////
 
 class LocationP {
-	constructor(_this, target, href) {
-		Self.set(_this, this);
-		this._this = _this; this.target = target;
-		const { name, query, hash, } = LocationP.parse(href);
+	constructor(target, type = 'tab', href = target.location.hash) {
+		Self.set(this.public = new Location, this);
+		this.target = target; this.type = type;
+		const { name, query, hash, } = LocationP.parse(href || '#');
 		this.name = name; this.query = query; this.hash = hash;
 		target.addEventListener('hashchange', this);
 		target.addEventListener('unload', () => this.destroy());
@@ -57,7 +75,7 @@ class LocationP {
 	updateHash() {
 		const target = this.target.document.getElementById(this.hash);
 		target && target.scrollIntoView();
-		this.target.document.querySelectorAll('.-pseudo-target').forEach(_=>_.classList.remove('-pseudo-target'));
+		this.target.document.querySelectorAll('.-pseudo-target').forEach(node => node !== target && node.classList.remove('-pseudo-target'));
 		target && target.classList.add('-pseudo-target');
 	}
 	handleEvent(event) { // reload if name changes to a different handler or the error handler
@@ -67,14 +85,14 @@ class LocationP {
 		if (name  !== this.name)  { this.fireNameChange  && this.fireNameChange  ([ this.name,  name,  this.target, ]); }
 		if (query !== this.query) { this.fireQueryChange && this.fireQueryChange ([ this.query, query, this.target, ]); }
 		if (hash  !== this.hash)  { this.fireHashChange  && this.fireHashChange  ([ this.hash,  hash,  this.target, ]); }
-		if (hash  !== this.hash)  { this.updateHash(); }
+		this.updateHash();
 	}
 	destroy() {
 		this.fireChange      && this.fireChange      (null, { last: true, });
 		this.fireNameChange  && this.fireNameChange  (null, { last: true, });
 		this.fireQueryChange && this.fireQueryChange (null, { last: true, });
 		this.fireHashChange  && this.fireHashChange  (null, { last: true, });
-		Self.delete(this._this);
+		Self.delete(this.public);
 	}
 
 	static parse(url) {
@@ -91,41 +109,49 @@ function defaultError(view, location) {
 	location.onChange(() => view.location.reload());
 }
 
-const handlers = { }, pending = { };
+const handlers = { }, pending = { }, locations = new Set;
 const viewPath = rootUrl +'view.html#';
 
-// location.hash format: #name?query#hash #?query#hash #name#hash ##hash #name?query!query #?query!query #name!hash #!hash
 async function initView(view, options = new global.URLSearchParams('')) { try {
-	const location = new Location(view); options = parseSearch(options);
-	const { id: tabId, windowId, } = ((await new Promise(got => (view.browser || view.chrome).tabs.getCurrent(got))) || { id: null, }); view.tabId = tabId;
+	view.document.querySelector('link[rel="icon"]').href = (manifest.icons[1] || manifest.icons[64]).replace(/^\/?/, '/');
+	options = parseSearch(options);
+	let [ tab, window, ] = (await Promise.all([ 'tabs', 'windows', ].map(type => new Promise(got => (view.browser || view.chrome)[type].getCurrent(got)))));
+	view.tabId = tab ? tab.id : null;
 
 	if (options.emulatePanel) {
+		const { windowId, } = tab; tab = null; tab = view.tabId = null;
+
 		view.addEventListener('blur', event => view.close());
 		view.resize = (width = view.document.scrollingElement.scrollWidth, height = view.document.scrollingElement.scrollHeight) => {
-			global.browser.windows.update(windowId, { width, height, }); // provide a function for the view to resize itself. TODO: should probably add some px as well
+			Windows.update(windowId, { width, height, }); // provide a function for the view to resize itself. TODO: should probably add some px as well
 		};
-		global.activeTab = options.originalActiveTab; // the "panel" can't query for the active tab itself, because that is now its own tab
-		(await global.browser.windows.update(windowId, { top: options.top, left: options.left, })); // firefox currently ignores top and left in .create(), so move it here
+		global.activeTab = options.originalActiveTab; // the "panel" can't query for the active tab itself, because it's now a tab itself
+		(await Windows.update(windowId, { top: options.top, left: options.left, })); // firefox currently ignores top and left in .create(), so move it here
 	}
 
-	view.document.querySelector('link[rel="icon"]').href = (manifest.icons[1] || manifest.icons[64]).replace(/^\/?/, '/');
+	const location = new LocationP(view, tab ? [ 'popup', 'panel', ].includes(window.type) ? 'popup' : 'tab' : 'other');
+	locations.add(location); view.addEventListener('unload', () => locations.delete(location));
 
 	let handler = handlers[location.name];
 	if (handler) {
-		(await handler(view, location));
-		location.hash = location.hash; // update hash target
+		(await handler(view, location.public));
 	}
 
-	if (pending[tabId]) {
-		pending[tabId](view);
+	const tabId = options.originalTab || tab && tab.id;
+	if (tabId != null) {
+		pending[tabId].resolve(view);
 		delete pending[tabId];
 	} else if (!handler) {
 		handler = handlers['404'] || defaultError;
-		(await handler(view, location));
-		location.hash = location.hash; // update hash target
+		(await handler(view, location.public));
 	}
 
-} catch (error) { (await reportError(`Failed to display page "${ view.location.hash }"`, error)); console.error(error); } }
+	location.updateHash();
+
+} catch (error) {
+	const tabId = options.originalTab || view.tabId; if (tabId != null && pending[tabId]) { pending[tabId].reject(error); delete pending[tabId]; }
+	else { (await reportError(`Failed to display page "${ view.location.hash }"`, error)); console.error(error); }
+} }
 
 if ((await FS.exists('views'))) { for (const name of (await FS.readdir('views'))) {
 	const path = FS.resolve('views', name);

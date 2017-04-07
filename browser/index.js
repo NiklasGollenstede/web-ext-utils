@@ -8,7 +8,7 @@
  *     - some platform inconsistencies and bugs are fixed:
  *         - if storage.sync is missing or doesn't work, it is set to storage.local
  *         - `runtime.openOptionsPage` is polyfilled
- *         - TODO: in firefox, prevent tabs.create from defaulting the windowId to popups and private windows
+ *         - in firefox, prevent tabs.create from defaulting the windowId to popups and private windows
  *         - ...
  *
  * Furthermore, all browser APIs can also be addressed starting with a capital letter (e.g. `.Storage` instead if `.storage`),
@@ -25,19 +25,17 @@
  *     isEdge:              Boolean that is true if the current browser is Microsoft Edge.
  */
 
-const _chrome = typeof chrome !== 'undefined' && global.chrome;
-const _browser = typeof browser !== 'undefined' && global.browser;
-const _api = _browser || _chrome;
+const api = global.browser || global.chrome;
 
-const rootUrl = _api.extension.getURL('');
+const rootUrl = api.extension.getURL('');
 const gecko = rootUrl.startsWith('moz-');
 const edgeHTML = rootUrl.startsWith('ms-browser-');
-const inContent = typeof _api.extension.getBackgroundPage !== 'function';
-const good = gecko; // whether _api returns promises
+const inContent = typeof api.extension.getBackgroundPage !== 'function';
+const good = gecko; // whether api returns promises
 
-let sync = _api.storage.sync; try {
+let sync = api.storage.sync; try {
 	(await (good ? sync.get : promisify(sync.get, sync))('some_key'));
-} catch (_) { sync = _api.storage.local; }
+} catch (_) { sync = api.storage.local; }
 
 const schemas = {
 	// all async: bookmarks, browsingData, certificateProvider, commands, contextMenus, cookies, debugger, documentScan, fontSettings, gcm, history, instanceID, management, notifications, pageCapture, permissions, sessions, tabCapture, topSites, vpnProvider, webNavigation, webRequest, windows,
@@ -58,32 +56,36 @@ const schemas = {
 			openOptionsPage: !inContent && ((current, api) => current ? good ? current : promisify(current, api) : openOptionsPage),
 		},
 	},
+	sidebarAction: { async: key => (/^get[A-Z]|^setIcon$/).test(key), }, // TODO: check
 	storage: { children: { local: getStorage, sync: getStorage, managed: getStorage, }, },
 	system: { children: { cpu: api => getProxy(api), memory: api => getProxy(api), storage: api => getProxy(api), }, },
-	tabs: { async: key => key !== 'connect', },
+	tabs: { async: key => key !== 'connect', children: {
+		create: gecko && api.windows && (() => createTabInNormalWindow),
+	}, },
 	tts: { async: key => (/^(?:speak|isSpeaking|getVoices)$/).test(key), },
 };
 
 const Browser = new Proxy({
 	__proto__: null,
-	chrome: edgeHTML ? _browser : _chrome,
-	browser: gecko ? _browser : null,
+	chrome: edgeHTML ? global.browser : global.opr || global.chrome,
+	browser: gecko ? global.browser : null,
 	rootUrl, rootURL: rootUrl, inContent, isGecko: gecko, isEdge: edgeHTML,
+	sidebarAction: getProxy((global.opr || api).sidebarAction, schemas.sidebarAction),
 }, { get(cache, key) {
 	if (key in cache) { return cache[key]; }
 	const Key = key.replace(/^[a-z]/, s => s.toUpperCase()); key = key.replace(/^[A-Z]/, s => s.toLowerCase());
-	if (!_api[key]) {
+	if (!api[key]) {
 		if (key === 'messages') { return (cache[key] = (cache[Key] = getGlobalPort())); }
-		if (key === 'manifest') { return (cache[key] = (cache[Key] = freeze(_api.runtime.getManifest()))); }
+		if (key === 'manifest') { return (cache[key] = (cache[Key] = freeze(api.runtime.getManifest()))); }
 		return undefined; // eslint-disable-line consistent-return
 	}
-	return (cache[key] = (cache[Key] = getProxy(_api[key], schemas[key])));
+	return (cache[key] = (cache[Key] = getProxy(api[key], schemas[key])));
 }, set() { throw new TypeError(`Browser is read-only`); }, });
 
 return Browser;
 
 function getProxy(api, schema) {
-	if (good && (!schema || !schema.children)) { return api; }
+	if (typeof api !== 'object' || api === null || good && (!schema || !schema.children)) { return api; }
 	const cache = Object.create(null);
 
 	return new Proxy(api, { get(api, key) {
@@ -91,7 +93,7 @@ function getProxy(api, schema) {
 		const desc = Object.getOwnPropertyDescriptor(api, key);
 		if (!desc) { return (cache[key] = undefined); }
 		const value = desc.value || api[key];
-		if (schema && schema.children && key in schema.children) {
+		if (schema && schema.children && schema.children[key]) {
 			return (cache[key] = schema.children[key](value, api, key));
 		}
 		if (!good && typeof value === 'function' && (!schema || schema.async && schema.async(key))) {
@@ -103,16 +105,11 @@ function getProxy(api, schema) {
 	}, set(api, key) { throw new TypeError(`"${ key }" is read-only`); }, });
 }
 
-function promisify(method, thisArg) {
-	return function() {
-		return new Promise((resolve, reject) => {
-			method.call(thisArg, ...arguments, function() {
-				const error = _api.runtime.lastError || _api.extension.lastError;
-				return error ? reject(error) : resolve(...arguments);
-			});
-		});
-	};
-}
+function promisify(method, thisArg) { return function() {
+	return new Promise((resolve, reject) => method.call(thisArg, ...arguments, function() {
+		const error = api.runtime.lastError; error ? reject(error) : resolve(...arguments);
+	}));
+}; }
 
 function freeze(object) {
 	Object.freeze(object);
@@ -131,7 +128,20 @@ function getStorage(api, storage, key) {
 function openOptionsPage() {
 	const ui = Browser.manifest.options_ui;
 	if (!ui || !ui.page) { throw new Error(`Can't open an options page if none is specified!`); }
-	return Browser.Tabs.open(_api.runtime.getURL(ui.page)); // TODO: should focus if already open
+	return Browser.Tabs.open(api.runtime.getURL(ui.page)); // TODO: should focus if already open
+}
+
+async function createTabInNormalWindow(props) {
+	if (props.windowId == null) {
+		const wins = (await api.windows.getAll({ windowTypes: [ 'normal', ], })).filter(_=>_.type === 'normal'/* FF54 ignores the filter*/);
+		props.windowId = (wins.find(_=>_.focused && !_.incognito) || wins.find(_=>_.focused) || wins[0]).id;
+		props.active !== false && api.windows.update(props.windowId, { focused: true, });
+	}
+	if (props.openerTabId != null) {
+		const opener = (await api.tabs.get(props.openerTabId));
+		props.index = opener.index; delete props.openerTabId;
+	}
+	return api.tabs.create(props);
 }
 
 function getGlobalPort() {
