@@ -138,7 +138,7 @@ async function initView(view, options = new global.URLSearchParams('')) { try {
 	}
 
 	const tabId = options.originalTab || tab && tab.id;
-	if (tabId != null) {
+	if (tabId != null && pending[tabId]) {
 		pending[tabId].resolve(view);
 		delete pending[tabId];
 	} else if (!handler) {

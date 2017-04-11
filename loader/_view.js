@@ -63,7 +63,7 @@ if (!main.initView) { throw new Error(`This extension did not start correctly. D
 history.replaceState(history.state, '', getUrl(null));
 main.initView(global, options); // work with the background page
 
-function getUrl(query = options) { return location.href.replace(/(?:\?.*?)?(?=#.*|$)/, query ? '?'+ query : '').replace(/#(?:index)?/, '#'); } // update query
+function getUrl(query = options) { return location.href.replace(/(?:\?.*?)?(?=#.*|$)/, query ? '?'+ query : ''); } // update query
 
 // inline scripts are not allowed (CSP, firefox), so this is not a security problem
 } catch (error) { (global.document.body.innerHTML = `
