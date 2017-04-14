@@ -19,8 +19,15 @@ const onUnload = Object.freeze({
 	},
 });
 
+async function getUrl(url) {
+	const id = url.slice(rootUrl.length - 1);
+	if (objectUrls[id]) { return objectUrls[id]; }
+	const blob = (await (await global.fetch((await request('getUrl', url)))).blob());
+	return global.URL.createObjectURL(blob);
+}
+
 //////// start of private implementation ////////
-/* global window, document, CustomEvent, */
+/* global window, document, CustomEvent, XMLHttpRequest, ProgressEvent, */
 
 if (global.require) {
 	if (global.reRegisteringLoaderAfterPageShow) { return; }
@@ -34,6 +41,10 @@ const readystates = [ 'interactive', 'complete', ]; // document.readystate value
 const rootUrl = chrome.extension.getURL('');
 const gecko = rootUrl.startsWith('moz-');
 const FunctionConstructor = (() => 0).constructor; // avoid to be flagged by static analysis
+const xhr_open = XMLHttpRequest.prototype.__original_open__ = XMLHttpRequest.prototype.__original_open__ || XMLHttpRequest.prototype.open;
+const xhr_send = XMLHttpRequest.prototype.__original_send__ = XMLHttpRequest.prototype.__original_send__ || XMLHttpRequest.prototype.send;
+const _fetch = global.__original_fetch__ = global.__original_fetch__ || global.fetch;
+const objectUrls = Object.create(null);
 
 const port = chrome.runtime.connect({ name: 'require.scriptLoader', });
       port.requests = new Map/*<random, [ resolve, reject, ]>*/;
@@ -100,6 +111,9 @@ function doUnload() {
 	if (unloaded) { return; } unloaded = true;
 	debug && console.debug('unloading content');
 	delete global.require; delete global.define;
+	XMLHttpRequest.prototype.open = xhr_open;
+	XMLHttpRequest.prototype.send = xhr_send;
+	global.fetch = _fetch;
 	Object.keys(methods).forEach(key => delete methods[key]);
 
 	unloadListeners.forEach(listener => { try { listener(); } catch (error) { console.error(error); } });
@@ -161,12 +175,43 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 				});
 				resolveRequire(global.require);
 				return ({
-					onUnload,
+					onUnload, getUrl,
 					get debug() { return debug; },
 				});
 			});
 		},
 	};
+
+	const ignoreSend = new WeakSet;
+	XMLHttpRequest.prototype.open = new Proxy(xhr_open, {
+		apply(target, self, args) {
+			const [ method, url, async, user, password, ] = args;
+			if (!(/^get$/i).test(method) || typeof url !== 'string' || !url.startsWith(rootUrl) || async === false || user != null || password != null)
+			{ return void target.apply(self, args); }
+
+			ignoreSend.add(self);
+			request('getUrl', url).then(url => {
+				ignoreSend.delete(self);
+				self.open('get', url, true); self.send(null);
+			})
+			.catch(error => {
+				console.error(`Failed to load "${ url }" from background`, error);
+				self.dispatchEvent(new ProgressEvent('error'));
+			});
+		},
+	});
+	XMLHttpRequest.prototype.send = new Proxy(xhr_send, {
+		apply(target, self, args) {
+			if (ignoreSend.has(self)) { return; }
+			return void target.apply(self, args);
+		},
+	});
+	global.fetch = new Proxy(_fetch, {
+		async apply(target, self, [ url, arg, ]) {
+			if (typeof url === 'string' && url.startsWith(rootUrl)) { url = (await request('getUrl', url)); }
+			return _fetch(url, arg);
+		},
+	});
 }
 
 })(this);

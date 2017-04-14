@@ -43,7 +43,9 @@ const schemas = {
 	browserAction: { async: key => (/^get[A-Z]|^setIcon$/).test(key), },
 	desktopCapture: { async: key => key === 'chooseDesktopMedia', },
 	downloads: { async: key => !(/^(?:open|show|showDefaultFolder|drag|setShelfEnabled)$/).test(key), },
-	extension: { async: key => (/^isAllowed(?:Incognito|FileScheme)Access$/).test(key), },
+	extension: { async: key => (/^isAllowed(?:Incognito|FileScheme)Access$/).test(key), children: {
+		getUrl: () => Browser.extension.getURL,
+	}, },
 	i18n: { async: key => (/^(?:getAcceptLanguages|detectLanguage)$/).test(key), },
 	identity: { async: key => key !== 'getRedirectURL', },
 	idle: { async: key => key === 'queryState', },
@@ -63,6 +65,7 @@ const schemas = {
 		create: gecko && api.windows && (() => createTabInNormalWindow),
 	}, },
 	tts: { async: key => (/^(?:speak|isSpeaking|getVoices)$/).test(key), },
+	windows: gecko && { children: { create: create => arg => { delete arg.focused; return create(arg); }, }, },
 };
 
 const Browser = new Proxy({
@@ -91,14 +94,14 @@ function getProxy(api, schema) {
 	return new Proxy(api, { get(api, key) {
 		if (key in cache) { return cache[key]; }
 		const desc = Object.getOwnPropertyDescriptor(api, key);
-		if (!desc) { return (cache[key] = undefined); }
-		const value = desc.value || api[key];
+		const value = desc && desc.value || api[key];
 		if (schema && schema.children && schema.children[key]) {
 			return (cache[key] = schema.children[key](value, api, key));
 		}
 		if (!good && typeof value === 'function' && (!schema || schema.async && schema.async(key))) {
 			return (cache[key] = promisify(value, api));
 		}
+		if (!desc) { return (cache[key] = undefined); }
 		if ('value' in desc) { return (cache[key] = value); }
 		if ('get' in desc) { const get = () => api[key]; Object.defineProperty(cache, key, { get, }); return value; }
 		throw new TypeError(`Failed to clone .${ key }`);

@@ -20,18 +20,22 @@ const methods = Object.freeze({
 	getHandler(name) {
 		return handlers[name];
 	},
-	getViews() { return Array.from(locations); },
 	getUrl({ name, query, hash, }) {
 		return viewPath + (name || '') + (query ? query.replace(/^\??/, '?') : '') + (hash ? hash.replace(/^\#?/, '#') : '');
 	},
+	getViews() { return Array.from(locations); },
 	async openView(location = '#', type = 'tab', options = { }) {
-		const url = typeof location === 'string' ? location .startsWith('#') ? viewPath + location.slice(1) : location : methods.getUrl(location);
+		if (typeof location === 'string') {
+			if (!location.startsWith(viewPath) || location === viewPath.slice(-1)) { location = viewPath + location.replace(/^#/, ''); }
+		} else {
+			location = methods.getUrl(location);
+		}
 		type !== 'popup' || !Windows && (type = 'tab');
 		const tab = type === 'popup' ? (await Windows.create({
-			type: 'popup', url, focused: !!options.focused, state: options.state || undefined, // drawAttention: !!options.drawAttention,
+			type: 'popup', url: location, focused: options.focused !== false, state: options.state || undefined, // drawAttention: !!options.drawAttention,
 			width: options.width || undefined, height: options.height || undefined, left: options.left || undefined, top: options.top || undefined,
 		})).tabs[0] : (await Tabs.create({
-			url, active: options.active !== false, pinned: options.pinned || false, windowId: options.windowId || undefined,
+			url: location, active: options.active !== false, pinned: options.pinned || false, windowId: options.windowId || undefined,
 			openerTabId: 'openerTabId' in options ? options.openerTabId : undefined, index: options.index || undefined,
 		}));
 		return new Promise((resolve, reject) => (pending[tab.id] = { resolve, reject, }));
@@ -42,6 +46,7 @@ const methods = Object.freeze({
 // view types: tab, popup, other
 class Location {
 	get view  () { return Self.get(this).target; }   get type   () { return Self.get(this).type; }
+	get tabId () { return Self.get(this).tabId; } get windowId () { return Self.get(this).windowId; } get activeTab() { return Self.get(this).activeTab; }
 	get href  () { return Self.get(this).get({ }); } set href  (v) { const self = Self.get(this); self.href  !== v && self.replace({ href:  v, }, true); }
 	get name  () { return Self.get(this).name; }     set name  (v) { const self = Self.get(this); self.name  !== v && self.replace({ name:  v, }, true); }
 	get query () { return Self.get(this).query; }    set query (v) { const self = Self.get(this); self.query !== v && self.replace({ query: v, }, true); }
@@ -57,9 +62,10 @@ setEventGetter(Location, 'hashChange', Self);
 //////// start of private implementation ////////
 
 class LocationP {
-	constructor(target, type = 'tab', href = target.location.hash) {
+	constructor(target, { type = 'tab', href = target.location.hash, tabId, activeTab, windowId, }) {
 		Self.set(this.public = new Location, this);
-		this.target = target; this.type = type;
+		this.target = target; this.type = type; this.tabId = tabId; this.tabId = tabId; this.activeTab = activeTab;
+		this.windowId = type === 'popup' ? windowId : null;
 		const { name, query, hash, } = LocationP.parse(href || '#');
 		this.name = name; this.query = query; this.hash = hash;
 		target.addEventListener('hashchange', this);
@@ -98,7 +104,7 @@ class LocationP {
 	static parse(url) {
 		const string = typeof url === 'string' ? url.startsWith('#') ? url : new global.URL(url, rootUrl).hash : url.hash;
 		const [ , name, query, hash, ] = string.match(/^[#]?(.*?)(?:(?:[#!]|[?]([^#\s]*)#?)(.*))?$/);
-		return { name, query: query || '', hash, };
+		return { name, query: query || '', hash: hash || '', };
 	}
 }
 
@@ -116,7 +122,6 @@ async function initView(view, options = new global.URLSearchParams('')) { try {
 	view.document.querySelector('link[rel="icon"]').href = (manifest.icons[1] || manifest.icons[64]).replace(/^\/?/, '/');
 	options = parseSearch(options);
 	let [ tab, window, ] = (await Promise.all([ 'tabs', 'windows', ].map(type => new Promise(got => (view.browser || view.chrome)[type].getCurrent(got)))));
-	view.tabId = tab ? tab.id : null;
 
 	if (options.emulatePanel) {
 		const { windowId, } = tab; tab = null; tab = view.tabId = null;
@@ -125,11 +130,14 @@ async function initView(view, options = new global.URLSearchParams('')) { try {
 		view.resize = (width = view.document.scrollingElement.scrollWidth, height = view.document.scrollingElement.scrollHeight) => {
 			Windows.update(windowId, { width, height, }); // provide a function for the view to resize itself. TODO: should probably add some px as well
 		};
-		global.activeTab = options.originalActiveTab; // the "panel" can't query for the active tab itself, because it's now a tab itself
 		(await Windows.update(windowId, { top: options.top, left: options.left, })); // firefox currently ignores top and left in .create(), so move it here
 	}
 
-	const location = new LocationP(view, tab ? [ 'popup', 'panel', ].includes(window.type) ? 'popup' : 'tab' : 'other');
+	const location = new LocationP(view, {
+		type: tab ? [ 'popup', 'panel', ].includes(window.type) ? 'popup' : 'tab' : 'other',
+		tabId: tab && tab.id, activeTab: options.originalActiveTab,
+		windowId: window.id,
+	});
 	locations.add(location); view.addEventListener('unload', () => locations.delete(location));
 
 	let handler = handlers[location.name];
@@ -139,7 +147,7 @@ async function initView(view, options = new global.URLSearchParams('')) { try {
 
 	const tabId = options.originalTab || tab && tab.id;
 	if (tabId != null && pending[tabId]) {
-		pending[tabId].resolve(view);
+		pending[tabId].resolve(location.public);
 		delete pending[tabId];
 	} else if (!handler) {
 		handler = handlers['404'] || defaultError;

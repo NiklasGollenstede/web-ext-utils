@@ -178,6 +178,7 @@ let contentPath = new global.URL(require.toUrl('./content.js')).pathname
 let requirePath = manifest.ext_tools && manifest.ext_tools.loader && manifest.ext_tools.loader.require;
 requirePath === undefined && (requirePath = '/node_modules/es6lib/require.js');
 const getScource = (x=>x).call.bind((x=>x).toString);
+const objectUrls = Object.create(null);
 let debug = false;
 
 const tabs = new Map/*<tabId, Map<frameId, Frame>>*/;
@@ -401,6 +402,13 @@ const methods = {
 	},
 	pageshow() {
 		this.frame.show();
+	},
+	async getUrl(url) {
+		if (!url.startsWith(rootUrl)) { throw { message: 'Can only load local resources', }; }
+		const id = url.slice(rootUrl.length - 1);
+		if (objectUrls[id]) { return objectUrls[id]; }
+		const blob = (await (await global.fetch(url)).blob());
+		return global.URL.createObjectURL(blob);
 	},
 };
 
