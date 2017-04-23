@@ -1,5 +1,6 @@
 (function(global) { 'use strict'; prepare() && define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../browser/': { extension, manifest, rootUrl, Windows, Tabs, },
+	'../browser/version': { fennec, },
 	'../utils/': { reportError, },
 	'../utils/files': FS,
 	'../utils/event': { setEventGetter, },
@@ -121,7 +122,7 @@ const viewPath = rootUrl +'view.html#';
 async function initView(view, options = new global.URLSearchParams('')) { try {
 	view.document.querySelector('link[rel="icon"]').href = (manifest.icons[1] || manifest.icons[64]).replace(/^\/?/, '/');
 	options = parseSearch(options);
-	let [ tab, window, ] = (await Promise.all([ 'tabs', 'windows', ].map(type => new Promise(got => (view.browser || view.chrome)[type].getCurrent(got)))));
+	let [ tab, window, ] = (await Promise.all([ 'tabs', ...(fennec ? [ ] : ['windows', ]), ].map(type => new Promise(got => (view.browser || view.chrome)[type].getCurrent(got)))));
 
 	if (options.emulatePanel) {
 		const { windowId, } = tab; tab = null; tab = view.tabId = null;
@@ -134,9 +135,9 @@ async function initView(view, options = new global.URLSearchParams('')) { try {
 	}
 
 	const location = new LocationP(view, {
-		type: tab ? [ 'popup', 'panel', ].includes(window.type) ? 'popup' : 'tab' : 'other',
+		type: tab ? [ 'popup', 'panel', ].includes(window && window.type) ? 'popup' : 'tab' : 'other',
 		tabId: tab && tab.id, activeTab: options.originalActiveTab,
-		windowId: window.id,
+		windowId: window && window.id,
 	});
 	locations.add(location); view.addEventListener('unload', () => locations.delete(location));
 

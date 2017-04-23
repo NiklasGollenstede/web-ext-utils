@@ -355,6 +355,7 @@ class Frame {
 
 function onConnect(port) {
 	if (port.name !== 'require.scriptLoader') { return; }
+	if (!port.sender.tab) { port.sender.tab = { id: Math.random(), }; } // happens sometimes in fennec 55. This will also break incognito handling
 	const { id: tabId, } = port.sender.tab;
 	const { frameId, } = port.sender;
 	port.requests = new Map/*<random, [ resolve, reject, ]>*/;

@@ -40,7 +40,12 @@ let sync = api.storage.sync; try {
 const schemas = {
 	// all async: bookmarks, browsingData, certificateProvider, commands, contextMenus, cookies, debugger, documentScan, fontSettings, gcm, history, instanceID, management, notifications, pageCapture, permissions, sessions, tabCapture, topSites, vpnProvider, webNavigation, webRequest, windows,
 	alarms: { async: key => key !== 'create', },
-	browserAction: { async: key => (/^get[A-Z]|^setIcon$/).test(key), },
+	browserAction: { async: key => (/^get[A-Z]|^setIcon$/).test(key), children: api.browserAction && {
+		setBadgeBackgroundColor: !api.browserAction.setBadgeBackgroundColor && (() => () => Promise.resolve()),
+		setBadgeText: !api.browserAction.setBadgeText && (() => () => Promise.resolve()),
+		setIcon: !api.browserAction.setIcon && (() => () => Promise.resolve()),
+		setTitle: !api.browserAction.setTitle && (() => () => Promise.resolve()),
+	}, },
 	desktopCapture: { async: key => key === 'chooseDesktopMedia', },
 	downloads: { async: key => !(/^(?:open|show|showDefaultFolder|drag|setShelfEnabled)$/).test(key), },
 	extension: { async: key => (/^isAllowed(?:Incognito|FileScheme)Access$/).test(key), children: {
@@ -55,14 +60,14 @@ const schemas = {
 	runtime: {
 		async: key => (/^get(?:BackgroundPage|BrowserInfo|PlatformInfo)$|^(?:openOptionsPage|send(?:Native)?Message|setUninstallURL|requestUpdateCheck)$/).test(key),
 		children: {
-			openOptionsPage: !inContent && ((current, api) => current ? good ? current : promisify(current, api) : openOptionsPage),
+			openOptionsPage: !inContent && ((current, api) => !current || !api.windows /* fennec */ ? openOptionsPage : good ? current : promisify(current, api)),
 		},
 	},
 	sidebarAction: { async: key => (/^get[A-Z]|^setIcon$/).test(key), }, // TODO: check
 	storage: { children: { local: getStorage, sync: getStorage, managed: getStorage, }, },
 	system: { children: { cpu: api => getProxy(api), memory: api => getProxy(api), storage: api => getProxy(api), }, },
 	tabs: { async: key => key !== 'connect', children: {
-		create: gecko && api.windows && (() => createTabInNormalWindow),
+		create: gecko && (() => createTabInNormalWindow),
 	}, },
 	tts: { async: key => (/^(?:speak|isSpeaking|getVoices)$/).test(key), },
 	windows: gecko && { children: { create: create => arg => { delete arg.focused; return create(arg); }, }, },
@@ -128,14 +133,21 @@ function getStorage(api, storage, key) {
 	return getProxy(api);
 }
 
-function openOptionsPage() {
+async function openOptionsPage() {
 	const ui = Browser.manifest.options_ui;
 	if (!ui || !ui.page) { throw new Error(`Can't open an options page if none is specified!`); }
-	return Browser.Tabs.open(api.runtime.getURL(ui.page)); // TODO: should focus if already open
+	const url = api.extension.getURL(ui.page), prefix = (/^[^#]*/).exec(url)[1] +'#';
+	for (const view of api.extension.getViews({ type: 'tab', })) {
+		if (view && (view.location.href === url || view.location.href.startsWith(prefix))) {
+			const tab = (await new Promise(got => (view.browser || view.chrome).tabs.getCurrent(got)));
+			if (tab) { (await Browser.tabs.update(tab.id, { active: true, })); Browser.windows && (await Browser.windows.update(tab.windowId, { focused: true, })); return tab; }
+		}
+	}
+	return Browser.tabs.create({ url, });
 }
 
 async function createTabInNormalWindow(props) {
-	if (props.windowId == null) {
+	if (api.windows && props.windowId == null) {
 		const wins = (await api.windows.getAll({ windowTypes: [ 'normal', ], })).filter(_=>_.type === 'normal'/* FF54 ignores the filter*/);
 		props.windowId = (wins.find(_=>_.focused && !_.incognito) || wins.find(_=>_.focused) || wins[0]).id;
 		props.active !== false && api.windows.update(props.windowId, { focused: true, });
