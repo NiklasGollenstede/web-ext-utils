@@ -11,6 +11,7 @@
  * @param  {natural}       tabId    The id of the tab to run in.
  * @param  {natural}       frameId  Optional. The id of the frame within the tab to run in. Defaults to the top level frame.
  * @param  {function}      script   A function that will be decompiled and run as content script.
+ *                                  If the "contentEval" manifest permission is set, this may also be a code string that will be wrapped in a function.
  * @param  {...any}        args     Arguments that will be cloned to call the function with.
  *                                  `this` in the function will be the global object (not necessarily `window`).
  * @return {any}                    The value returned or promised by `script`.
@@ -18,7 +19,7 @@
  */
 async function runInTab(tabId, frameId, script, ...args) {
 	if (typeof frameId !== 'number') { args.unshift(script); script = frameId; frameId = 0; }
-	return Frame.get(tabId, frameId).request('run', getScource(script), args);
+	return Frame.get(tabId, frameId).run({ code: `(`+ getScource(script) +`)(`+ JSON.stringify(args).slice(1, -1) +`)`, });
 }
 
 /**
@@ -107,13 +108,13 @@ class ContentScript {
 	 * @param  {function|null}  script  Same as the script parameter to runInTab().
 	 * @return {string|null}            The decompiled source of the function, if set.
 	 */
-	set script(v)    { Self.get(this).script = v == null ? v : getScource(v); }
+	set script(v)    { const self = Self.get(this); self.script = v == null ? null : getScource(v); self.code = self.script ? `(`+ self.script +`)(`+ self.args +`)` : null; }
 	get script()     { return Self.get(this).script; }
 
 	/**
-	 * Arguments to `.script`. Set as iterable, returned as Array. Default is empty.
+	 * Arguments to `.script`. Set as iterable, returned as comma separated JSON-string. Default is empty.
 	 */
-	set args(v)      { Self.get(this).args = Array.from(v); }
+	set args(v)      { const self = Self.get(this); self.args = JSON.stringify(Array.from(v)).slice(-1, 1); self.code = self.script ? `(`+ self.script +`)(`+ self.args +`)` : null; }
 	get args()       { return Self.get(this).args; }
 
 	/**
@@ -177,8 +178,11 @@ let contentPath = new global.URL(require.toUrl('./content.js')).pathname
 + (gecko ? '?debug=false&info='+ encodeURIComponent(JSON.stringify({ name: current, version, })) : ''); // query params don't work in chrome
 let requirePath = manifest.ext_tools && manifest.ext_tools.loader && manifest.ext_tools.loader.require;
 requirePath === undefined && (requirePath = '/node_modules/es6lib/require.js');
-const getScource = (x=>x).call.bind((x=>x).toString);
 const objectUrls = Object.create(null);
+const allowContentEval = manifest.permissions.includes('contentEval');
+const getScource = ((f = x=>x, fromFunction = f.call.bind(f.toString)) =>
+	code => allowContentEval && typeof code === 'string' ? `function() { ${ code } }` : fromFunction(code)
+)();
 let debug = false;
 
 const tabs = new Map/*<tabId, Map<frameId, Frame>>*/;
@@ -187,7 +191,7 @@ const Self = new Map/*<ContentScript, object>*/;
 function initScript(_this) {
 	const self = {
 		include: [ ], exclude: [ ], incognito: false, frames: 'top',
-		modules: null, script: null, args: [ ],
+		modules: null, script: null, args: '', code: null,
 		onMatch: null, fireMatch: null,
 		onShow: null, fireShow: null,
 		onHide: null, fireHide: null,
@@ -284,6 +288,11 @@ class Frame {
 		if (!this.inited) { this.inited = true; this.initContent(); }
 		this.port.postMessage([ method, 0, args, ]);
 	}
+	async run(options) {
+		if (!this.port) { (await (this.gettingPort || this.getPort())); }
+		if (!this.inited) { this.inited = true; this.initContent(); }
+		return Tabs.executeScript(this.tabId, Object.assign({ frameId: this.frameId, matchAboutBlank: true, runAt: 'document_start', }, options));
+	}
 
 	async applyIfMatches(script, url = null, incognito = false) {
 		if (url && (
@@ -297,7 +306,7 @@ class Frame {
 		if (url && this.incognito && !script.incognito) { return [ ]; }
 		const done = Object.freeze((async () => {
 			script.modules && (await this.request('require', script.modules));
-			return script.script ? this.request('run', script.script, script.args) : undefined;
+			return script.script ? this.run({ code: script.code, }) : undefined;
 		})());
 		url && script.fireMatch && script.fireMatch([ this.eventArg, url, done, ]);
 		this.scripts.add(script);

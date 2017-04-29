@@ -81,10 +81,6 @@ function post(method, ...args) { // eslint-disable-line no-unused-vars
 }
 
 const methods = {
-	async run(script, args) {
-		if (!require) { (await getRequire); }
-		return new FunctionConstructor(`return (${ script }).apply(this, arguments)`).apply(global, args);
-	},
 	async require(modules) {
 		if (!require) { (await getRequire); }
 		if (!Array.isArray(modules)) {

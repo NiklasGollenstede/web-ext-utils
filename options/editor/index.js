@@ -187,7 +187,7 @@ function createInput(props, pref) {
 			input.type = ({
 				control: 'button',
 				random: 'button',
-				bool: 'checkbox',
+				boolean: 'checkbox',
 				boolInt: 'checkbox',
 				integer: 'number',
 				string: 'text',
@@ -231,7 +231,7 @@ function setInputValue(input, value) {
 	const props = propsMap.get(input.id);
 	switch (props.type) {
 		case 'checkbox':
-		case 'bool':    input.firstChild.checked = value; break;
+		case 'boolean': input.firstChild.checked = value; break;
 		case 'boolInt': input.firstChild.checked = (value === props.on); break;
 		case 'menulist':input.selectedIndex = (props.options || Array.from(input)).findIndex(option => option.value == value); break; // eslint-disable-line eqeqeq
 		case 'random':  input.dataset.value = value; break;
@@ -249,7 +249,7 @@ function getInputValue(input) {
 	const props = propsMap.get(input.id);
 	switch (props.type) {
 		case 'checkbox':
-		case 'bool':      return input.firstChild.checked;
+		case 'boolean':   return input.firstChild.checked;
 		case 'boolInt':   return input.firstChild.checked ? props.on : props.off;
 		case 'menulist':  return (props.map || (_=>_))(((props.options || Array.from(input))[input.selectedIndex] || { }).value);
 		case 'number':    return +input.value;
