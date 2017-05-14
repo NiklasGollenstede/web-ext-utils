@@ -1,6 +1,6 @@
 (function(global) { 'use strict'; prepare() && define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../browser/': { extension, manifest, rootUrl, Windows, Tabs, },
-	'../browser/version': { fennec, },
+	'../browser/version': { fennec, opera, },
 	'../utils/': { reportError, },
 	'../utils/files': FS,
 	'../utils/event': { setEventGetter, },
@@ -44,7 +44,7 @@ const methods = Object.freeze({
 });
 
 // location format: #name?query#hash #?query#hash #name#hash ##hash #name?query!query #?query!query #name!hash #!hash
-// view types: tab, popup, other
+// view types: 'tab', 'popup', 'panel', 'sidebar'
 class Location {
 	get view  () { return Self.get(this).target; }   get type   () { return Self.get(this).type; }
 	get tabId () { return Self.get(this).tabId; } get windowId () { return Self.get(this).windowId; } get activeTab() { return Self.get(this).activeTab; }
@@ -65,8 +65,7 @@ setEventGetter(Location, 'hashChange', Self);
 class LocationP {
 	constructor(target, { type = 'tab', href = target.location.hash, tabId, activeTab, windowId, }) {
 		Self.set(this.public = new Location, this);
-		this.target = target; this.type = type; this.tabId = tabId; this.tabId = tabId; this.activeTab = activeTab;
-		this.windowId = type === 'popup' ? windowId : null;
+		this.target = target; this.type = type; this.tabId = tabId; this.tabId = tabId; this.windowId = windowId; this.activeTab = activeTab;
 		const { name, query, hash, } = LocationP.parse(href || '#');
 		this.name = name; this.query = query; this.hash = hash;
 		target.addEventListener('hashchange', this);
@@ -118,27 +117,38 @@ function defaultError(view, location) {
 
 const handlers = { }, pending = { }, locations = new Set;
 const viewPath = rootUrl +'view.html#';
+const { TAB_ID_NONE, } = Tabs, { WINDOW_ID_NONE, } = Windows;
 
 async function initView(view, options = new global.URLSearchParams('')) { try {
 	view.document.querySelector('link[rel="icon"]').href = (manifest.icons[1] || manifest.icons[64]).replace(/^\/?/, '/');
 	options = parseSearch(options);
-	let [ tab, window, ] = (await Promise.all([ 'tabs', ...(fennec ? [ ] : ['windows', ]), ].map(type => new Promise(got => (view.browser || view.chrome)[type].getCurrent(got)))));
 
+	const get = type => new Promise(got => (view.browser || view.chrome)[type +'s'].getCurrent(got));
+
+	let type = 'other', tabId = TAB_ID_NONE, windowId = WINDOW_ID_NONE, activeTab = TAB_ID_NONE;
 	if (options.emulatePanel) {
-		const { windowId, } = tab; tab = null; tab = view.tabId = null;
+		({ windowId, } = (await get('tab')));
+		'originalActiveTab' in options && (activeTab = options.originalActiveTab);
+		type = 'panel';
 
 		view.addEventListener('blur', event => view.close());
 		view.resize = (width = view.document.scrollingElement.scrollWidth, height = view.document.scrollingElement.scrollHeight) => {
 			Windows.update(windowId, { width, height, }); // provide a function for the view to resize itself. TODO: should probably add some px as well
 		};
 		(await Windows.update(windowId, { top: options.top, left: options.left, })); // firefox currently ignores top and left in .create(), so move it here
+	} else if (fennec) {
+		type = 'tab'; tabId = (await get('tab')).id;
+	} else {
+		const [ tab, window, ] = (await Promise.all([ get('tab'), get('window'), ]));
+		if (tab) {
+			tabId = tab.id; windowId = window.id; type = [ 'popup', 'panel', ].includes(window.type) ? 'popup' : 'tab';
+		} else {
+			windowId = window.id; type = view.document.body.clientWidth < 15 ? 'panel' : 'sidebar';
+			opera && view.document.body.clientWidth === 0 && (type = 'sidebar');
+		}
 	}
 
-	const location = new LocationP(view, {
-		type: tab ? [ 'popup', 'panel', ].includes(window && window.type) ? 'popup' : 'tab' : 'other',
-		tabId: tab && tab.id, activeTab: options.originalActiveTab,
-		windowId: window && window.id,
-	});
+	const location = new LocationP(view, { type, tabId, windowId, activeTab, });
 	locations.add(location); view.addEventListener('unload', () => locations.delete(location));
 
 	let handler = handlers[location.name];
@@ -146,7 +156,7 @@ async function initView(view, options = new global.URLSearchParams('')) { try {
 		(await handler(view, location.public));
 	}
 
-	const tabId = options.originalTab || tab && tab.id;
+	'originalTab' in options && (tabId = options.originalTab);
 	if (tabId != null && pending[tabId]) {
 		pending[tabId].resolve(location.public);
 		delete pending[tabId];
@@ -170,13 +180,13 @@ if ((await FS.exists('views'))) { for (const name of (await FS.readdir('views'))
 		  name.endsWith('.html')
 		? loadFrame.bind(null, path)
 		: name.endsWith('.js')
-		? (await require.async(path.slice(0, -3)))
+		? (...args) => require.async(path.slice(0, -3)).then(_=>_(...args))
 		: null
 	) : (
 		  (await FS.exists(path +'/index.html'))
 		? loadFrame.bind(null, path +'/index.html')
 		: (await FS.exists(path +'/index.js'))
-		? (await require.async(path +'/'))
+		? (...args) => require.async(path +'/').then(_=>_(...args))
 		: null
 	);
 	if (handler) {

@@ -1,9 +1,9 @@
 (function(global) { 'use strict'; prepare() && define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../browser/': { manifest, rootUrl, runtime, WebNavigation, Tabs, },
 	'../browser/version': { gecko, current, version, },
+	'../utils/': { matchPatternToRegExp, },
 	'../utils/event': { setEvent, },
 	require,
-	exports,
 }) => {
 
 /**
@@ -445,21 +445,6 @@ function setDebug(value) {
 	tabs.forEach(_=>_.forEach(frame => frame.port && !frame.hidden && frame.post('debug', debug)));
 }
 
-// copy from ../utils/index.js
-const escape = string => string.replace(/[\-\[\]\{\}\(\)\*\+\?\.\,\\\^\$\|\#]/g, '\\$&');
-const matchPattern = (/^(?:(\*|http|https|file|ftp|app):\/\/(\*|(?:\*\.)?[^\/\*]+|)\/(.*))$/i);
-function matchPatternToRegExp(pattern) {
-	if (pattern === '<all_urls>') { return (/^(?:https?|file|ftp|app):\/\//); } // TODO: this is from mdn, check if chrome behaves the same
-	const match = matchPattern.exec(pattern);
-	if (!match) { throw new TypeError(`"${ pattern }" is not a valid MatchPattern`); }
-	const [ , scheme, host, path, ] = match;
-	return new RegExp('^(?:'
-		+ (scheme === '*' ? 'https?' : escape(scheme)) +':\/\/'
-		+ (host === '*' ? '[^\/]+?' : escape(host).replace(/^\\\*\\./g, '(?:[^\/]+?.)?'))
-		+ (path ? '\/'+ escape(path).replace(/\\\*/g, '.*') : '\/?')
-	+')$');
-}
-
 global.addEventListener('unload', () => {
 	tabs.forEach(_=>_.forEach(frame => Frame.prototype.destroy.call(frame, true)));
 	tabs.clear();
@@ -469,15 +454,15 @@ global.addEventListener('unload', () => {
 	runtime.onConnect.addListener(onConnect);
 }
 
-Object.assign(exports, {
+return Object.freeze({
 	ContentScript,
 	runInTab,
 	requireInTab,
 	detachFormTab,
 	getFrame,
 	parseMatchPatterns: parsePatterns,
+	set debug(v) { setDebug(v); }, get debug() { return debug; },
 });
-Object.defineProperty(exports, 'debug', { set: setDebug, get() { return debug; }, configurable: true, });
 
 }); function prepare() {
 

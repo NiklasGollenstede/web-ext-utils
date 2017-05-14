@@ -5,7 +5,7 @@
 	about,
 	'common/options': options,
 	require,
-}) => ({ document, }) => {
+}) => ({ document, onCommand, }) => {
 
 document.title = 'Options - '+ manifest.name;
 
@@ -18,7 +18,7 @@ document.title = 'Options - '+ manifest.name;
 });
 
 new Editor({
-	options, prefix: '',
+	options, prefix: '', onCommand,
 	host: Object.assign(document.body.appendChild(document.createElement('form')), { id: 'options', }),
 });
 

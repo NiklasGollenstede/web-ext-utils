@@ -10,7 +10,7 @@ function split(path) {
 	for (
 		let i = 0;
 		i < parts.length;
-		parts[i] === '.' ?
+		parts[i] === '.' || parts[i] === '' ?
 		parts.splice(i, 1)
 		: parts[i] === '..' && i > 0 && parts[i -1] !== '..' ?
 		parts.splice(--i, 2)

@@ -1,6 +1,4 @@
-(function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	require,
-}) => {
+(function(global) { 'use strict'; const factory = async function webExtUtils_browser(require) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 /**
  * This is cross-platform clone/polyfill/bug-fix of the WebExtension `browser.*` API:
@@ -160,10 +158,10 @@ async function createTabInNormalWindow(props) {
 }
 
 function getGlobalPort() {
-	const Port = global.es6lib_port || require('node_modules/es6lib/port');
+	const Port = global.es6lib_port || require('../../es6lib/port');
 	const port = new Port({ runtime: Browser.Runtime, tabs: Browser.Tabs, }, Port.web_ext_Runtime);
 	Object.getOwnPropertyNames(Port.prototype).forEach(key => typeof port[key] === 'function' && (port[key] = port[key].bind(port)));
 	return port;
 }
 
-}); })(this);
+}; if (typeof define === 'function' && define.amd) { define([ 'require', ], factory); } else { global[factory.name] = factory(); } })(this);
