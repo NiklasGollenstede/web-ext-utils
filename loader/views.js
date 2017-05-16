@@ -24,7 +24,7 @@ const methods = Object.freeze({
 	getUrl({ name, query, hash, }) {
 		return viewPath + (name || '') + (query ? query.replace(/^\??/, '?') : '') + (hash ? hash.replace(/^\#?/, '#') : '');
 	},
-	getViews() { return Array.from(locations); },
+	getViews() { return Array.from(locations, _=>_.public); },
 	async openView(location = '#', type = 'tab', options = { }) {
 		if (typeof location === 'string') {
 			if (!location.startsWith(viewPath) || location === viewPath.slice(-1)) { location = viewPath + location.replace(/^#/, ''); }
@@ -123,7 +123,7 @@ async function initView(view, options = new global.URLSearchParams('')) { try {
 	view.document.querySelector('link[rel="icon"]').href = (manifest.icons[1] || manifest.icons[64]).replace(/^\/?/, '/');
 	options = parseSearch(options);
 
-	const get = type => new Promise(got => (view.browser || view.chrome)[type +'s'].getCurrent(got));
+	const get = what => new Promise(got => (view.browser || view.chrome)[what +'s'].getCurrent(got));
 
 	let type = 'other', tabId = TAB_ID_NONE, windowId = WINDOW_ID_NONE, activeTab = TAB_ID_NONE;
 	if (options.emulatePanel) {
