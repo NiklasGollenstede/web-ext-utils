@@ -3,12 +3,12 @@
 	'../browser/version': { fennec, opera, },
 	'../utils/': { reportError, },
 	'../utils/files': FS,
-	'../utils/event': { setEventGetter, },
+	'../utils/event': { setEvent, setEventGetter, },
 	require,
 }) => {
 const Self = new WeakMap;
 
-const methods = Object.freeze({
+const methods = {
 	setHandler(name, handler) {
 		if (!handler) { handler = name; name = handler.name; }
 		if (typeof handler !== 'function' || (name === '' && arguments.length < 2) || typeof name !== 'string')
@@ -41,13 +41,16 @@ const methods = Object.freeze({
 		}));
 		return new Promise((resolve, reject) => (pending[tab.id] = { resolve, reject, }));
 	},
-});
+};
+const fireOpen  = setEvent(methods, 'onOpen', { lazy: false, });
+const fireClose = setEvent(methods, 'onClose', { lazy: false, });
+Object.freeze(methods);
 
 // location format: #name?query#hash #?query#hash #name#hash ##hash #name?query!query #?query!query #name!hash #!hash
 // view types: 'tab', 'popup', 'panel', 'sidebar'
 class Location {
-	get view  () { return Self.get(this).target; }   get type   () { return Self.get(this).type; }
-	get tabId () { return Self.get(this).tabId; } get windowId () { return Self.get(this).windowId; } get activeTab() { return Self.get(this).activeTab; }
+	get view  () { return Self.get(this).view; }     get type   () { return Self.get(this).type; }
+	get tabId () { return Self.get(this).tabId; }    get windowId () { return Self.get(this).windowId; } get activeTab() { return Self.get(this).activeTab; }
 	get href  () { return Self.get(this).get({ }); } set href  (v) { const self = Self.get(this); self.href  !== v && self.replace({ href:  v, }, true); }
 	get name  () { return Self.get(this).name; }     set name  (v) { const self = Self.get(this); self.name  !== v && self.replace({ name:  v, }, true); }
 	get query () { return Self.get(this).query; }    set query (v) { const self = Self.get(this); self.query !== v && self.replace({ query: v, }, true); }
@@ -63,34 +66,35 @@ setEventGetter(Location, 'hashChange', Self);
 //////// start of private implementation ////////
 
 class LocationP {
-	constructor(target, { type = 'tab', href = target.location.hash, tabId, activeTab, windowId, }) {
+	constructor(view, { type = 'tab', href = view.location.hash, tabId, activeTab, windowId, }) {
 		Self.set(this.public = new Location, this);
-		this.target = target; this.type = type; this.tabId = tabId; this.tabId = tabId; this.windowId = windowId; this.activeTab = activeTab;
+		this.view = view; this.type = type; this.tabId = tabId; this.tabId = tabId; this.windowId = windowId; this.activeTab = activeTab;
 		const { name, query, hash, } = LocationP.parse(href || '#');
 		this.name = name; this.query = query; this.hash = hash;
-		target.addEventListener('hashchange', this);
-		target.addEventListener('unload', () => this.destroy());
+		view.addEventListener('hashchange', this);
+		view.addEventListener('unload', () => this.destroy());
+		locations.add(this);
 	}
 	get({ name = this.name, query = this.query, hash = this.hash, }) {
 		return viewPath + (name || '') + (query ? query.replace(/^\??/, '?') : '') + (hash ? hash.replace(/^\#?/, '#') : '');
 	}
 	replace({ name = this.name, query = this.query, hash = this.hash, href = this.get({ name, query, hash, }), }, push = false) {
 		// Object.assign(this, LocationP.parse(href || '#'));
-		this.target.location[push ? 'assign' : 'replace'](href);
+		this.view.location[push ? 'assign' : 'replace'](href);
 	}
 	updateHash() {
-		const target = this.target.document.getElementById(this.hash);
+		const target = this.hash ? this.view.document.getElementById(this.hash) : null;
 		target && target.scrollIntoView();
-		this.target.document.querySelectorAll('.-pseudo-target').forEach(node => node !== target && node.classList.remove('-pseudo-target'));
+		this.view.document.querySelectorAll('.-pseudo-target').forEach(node => node !== target && node.classList.remove('-pseudo-target'));
 		target && target.classList.add('-pseudo-target');
 	}
-	handleEvent(event) { // reload if name changes to a different handler or the error handler
-		const { name, query, hash, } = this; Object.assign(this, LocationP.parse(this.target.location.hash || '#'));
-		if (handlers[name] !== handlers[this.name]) { event.stopImmediatePropagation(); this.target.location.reload(); return; }
-		this.fireChange  && this.fireChange([ this.target.location.hash, new global.URL(event.oldURL).hash, this.target, ]);
-		if (name  !== this.name)  { this.fireNameChange  && this.fireNameChange  ([ this.name,  name,  this.target, ]); }
-		if (query !== this.query) { this.fireQueryChange && this.fireQueryChange ([ this.query, query, this.target, ]); }
-		if (hash  !== this.hash)  { this.fireHashChange  && this.fireHashChange  ([ this.hash,  hash,  this.target, ]); }
+	handleEvent(event) { // hashchange; reload if name changes to a different handler or the error handler
+		const { name, query, hash, } = this; Object.assign(this, LocationP.parse(this.view.location.hash || '#'));
+		if (handlers[name] !== handlers[this.name]) { event.stopImmediatePropagation(); this.view.location.reload(); return; }
+		this.fireChange  && this.fireChange([ this.view.location.hash, new global.URL(event.oldURL).hash, this.view, ]);
+		if (name  !== this.name)  { this.fireNameChange  && this.fireNameChange  ([ this.name,  name,  this.view, ]); }
+		if (query !== this.query) { this.fireQueryChange && this.fireQueryChange ([ this.query, query, this.view, ]); }
+		if (hash  !== this.hash)  { this.fireHashChange  && this.fireHashChange  ([ this.hash,  hash,  this.view, ]); }
 		this.updateHash();
 	}
 	destroy() {
@@ -98,7 +102,9 @@ class LocationP {
 		this.fireNameChange  && this.fireNameChange  (null, { last: true, });
 		this.fireQueryChange && this.fireQueryChange (null, { last: true, });
 		this.fireHashChange  && this.fireHashChange  (null, { last: true, });
-		Self.delete(this.public);
+		fireClose([ this.public, ]);
+		Self.delete(this.public); locations.delete(this);
+		this.public = this.view = null;
 	}
 
 	static parse(url) {
@@ -147,17 +153,13 @@ async function initView(view, options = new global.URLSearchParams('')) { try {
 			opera && view.document.body.clientWidth === 0 && (type = 'sidebar');
 		}
 	}
-
 	const location = new LocationP(view, { type, tabId, windowId, activeTab, });
-	locations.add(location); view.addEventListener('unload', () => locations.delete(location));
 
 	let handler = handlers[location.name];
-	if (handler) {
-		(await handler(view, location.public));
-	}
+	handler && (await handler(view, location.public));
 
 	'originalTab' in options && (tabId = options.originalTab);
-	if (tabId != null && pending[tabId]) {
+	if (tabId !== TAB_ID_NONE && pending[tabId]) {
 		pending[tabId].resolve(location.public);
 		delete pending[tabId];
 	} else if (!handler) {
@@ -167,9 +169,11 @@ async function initView(view, options = new global.URLSearchParams('')) { try {
 
 	location.updateHash();
 
+	fireOpen([ location.public, ]);
+
 } catch (error) {
 	const tabId = options.originalTab || view.tabId; if (tabId != null && pending[tabId]) { pending[tabId].reject(error); delete pending[tabId]; }
-	else { (await reportError(`Failed to display page "${ view.location.hash }"`, error)); console.error(error); }
+	else { (await reportError(`Failed to display page "${ view.location.hash }"`, error)); }
 } }
 
 if ((await FS.exists('views'))) { for (const name of (await FS.readdir('views'))) {

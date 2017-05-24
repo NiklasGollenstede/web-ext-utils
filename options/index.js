@@ -1,5 +1,5 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { Storage, },
+	'../browser/': { Storage, inContent, },
 	'../utils/event': { setEvent, },
 	require,
 }) => {
@@ -33,7 +33,7 @@ class Option {
 
 		this.restrict = model.restrict === 'inherit' ? parent.restrict : model.restrict ? new Restriction(this, model.restrict) : null;
 
-		this.children = new OptionList(model.children || [ ], this);
+		this.children = model.children === 'dynamic' ? [ ] : new OptionList(model.children || [ ], this);
 
 		currentRoot.options.set(this.path, this);
 		this.values = null; // ValueList, set by root
@@ -260,16 +260,18 @@ function inContext(root, callback) {
 }
 
 return class OptionsRoot {
-	/*async*/ constructor({ model, prefix, storage, onChanged, }) { return (async () => {
-		this.model = deepFreeze(model);
-		this.options = new Map;
-		if (!storage && !onChanged) { try {
+	/*async*/ constructor({
+		model,
+		storage = Storage.sync,
+		prefix = storage === Storage.sync || storage === Storage.local ? 'options' : '',
+		onChanged = storage === Storage.sync || storage === Storage.local ? Storage.onChanged : null,
+	}) { return (async () => {
+		if (inContent) { try {
 			require('../loader/content')
 			.onUnload.addListener(() => this.destroy());
-		} catch (_) { /* not in content */ } }
-		this.prefix = prefix = prefix == null ? 'options' : prefix;
-		this.storage = storage = storage || Storage.sync;
-		this._onChanged = onChanged = onChanged || (storage === Storage.sync || storage === Storage.local ? Storage.onChanged : null);
+		} catch (_) { } }
+		this.model = deepFreeze(model); this.storage = storage; this.prefix = prefix; this._onChanged = onChanged;
+		this.options = new Map;
 		this.onChanged = this.onChanged.bind(this);
 		onChanged && onChanged.addListener(this.onChanged);
 		this._shadow = inContext(this, () => new Option({ children: model, }, null));
