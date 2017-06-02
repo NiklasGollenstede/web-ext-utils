@@ -40,7 +40,6 @@ const resolved = Promise.resolve();
 const readystates = [ 'interactive', 'complete', ]; // document.readystate values, ascending
 const rootUrl = chrome.extension.getURL('');
 const gecko = rootUrl.startsWith('moz-');
-const FunctionConstructor = (() => 0).constructor; // avoid to be flagged by static analysis
 const xhr_open = XMLHttpRequest.prototype.__original_open__ = XMLHttpRequest.prototype.__original_open__ || XMLHttpRequest.prototype.open;
 const xhr_send = XMLHttpRequest.prototype.__original_send__ = XMLHttpRequest.prototype.__original_send__ || XMLHttpRequest.prototype.send;
 const _fetch = global.__original_fetch__ = global.__original_fetch__ || global.fetch;
@@ -205,7 +204,12 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 	global.fetch = new Proxy(_fetch, {
 		async apply(target, self, [ url, arg, ]) {
 			if (typeof url === 'string' && url.startsWith(rootUrl)) { url = (await request('getUrl', url)); }
-			return _fetch(url, arg);
+			try { return (await _fetch(url, arg)); }
+			catch (error) {
+				if (url.startsWith('data:')) { throw error; }
+				post('useDataUrls');
+				return global.fetch(...arguments[2]);
+			}
 		},
 	});
 }

@@ -3,6 +3,7 @@
 	'../browser/version': { gecko, current, version, },
 	'../utils/': { matchPatternToRegExp, },
 	'../utils/event': { setEvent, },
+	'../utils/files': FS,
 	require,
 }) => {
 
@@ -50,6 +51,14 @@ async function detachFormTab(tabId, frameId) {
 
 function getFrame(tabId, frameId) {
 	return Frame.get(tabId, frameId).eventArg;
+}
+
+function register(prefix, files) {
+	if (typeof prefix === 'string') {
+		prefix = prefix.split('/'); if (prefix.shift() !== '' || prefix.pop() !== '') { throw new TypeError(`"prefix" must be an absolute path prefix`); }
+	} else { prefix = prefix.slice(); }
+	if (typeof files !== 'object') { throw new TypeError(`"files" must be an object`); }
+	virtualFiles.add(prefix, files);
 }
 
 /**
@@ -178,11 +187,11 @@ let contentPath = new global.URL(require.toUrl('./content.js')).pathname
 + (gecko ? '?debug=false&info='+ encodeURIComponent(JSON.stringify({ name: current, version, })) : ''); // query params don't work in chrome
 let requirePath = manifest.ext_tools && manifest.ext_tools.loader && manifest.ext_tools.loader.require;
 requirePath === undefined && (requirePath = '/node_modules/es6lib/require.js');
-const objectUrls = Object.create(null);
 const allowContentEval = manifest.permissions.includes('contentEval');
 const getScource = ((f = x=>x, fromFunction = f.call.bind(f.toString)) =>
 	code => allowContentEval && typeof code === 'string' ? `function() { ${ code } }` : fromFunction(code)
 )();
+const objectUrls = Object.create(null), virtualFiles = new Map; let useDataUrls = false;
 let debug = false;
 
 const tabs = new Map/*<tabId, Map<frameId, Frame>>*/;
@@ -400,9 +409,25 @@ const methods = {
 	loadScript(url) {
 		if (!url.startsWith(rootUrl)) { throw { message: 'Can only load local resources', }; }
 		const file = url.slice(rootUrl.length - 1);
-		return Tabs.executeScript(this.sender.tab.id, {
+		if (FS.exists(file)) { return Tabs.executeScript(this.sender.tab.id, {
 			file, frameId: this.sender.frameId, matchAboutBlank: true, runAt: 'document_start',
-		});
+		}); }
+
+		const segments = file.split('/'); let length = 0, found = null;
+		for (const [ prefix, files, ] of virtualFiles) {
+			if (prefix.length > segments.length && prefix.some((v, i) => v !== segments[i])) { continue; }
+			if (!files || prefix.length > length) { length = prefix.length; found = [ files, ]; }
+			else if (prefix.length === length) { found.push(files); }
+		}
+		const suffix = segments.slice(length).join('/');
+		for (const files of found || [ ]) {
+			const code = files[suffix]; if (code == null) { continue; }
+			if (!allowContentEval) { throw { message: `Refused to load dynamic content script "${ file }" (manifest permission missing)`, }; }
+			return Tabs.executeScript(this.sender.tab.id, {
+				code, frameId: this.sender.frameId, matchAboutBlank: true, runAt: 'document_start',
+			});
+		}
+		throw { message: `Could not find file "${ file }"`, };
 	},
 	ping() {
 		return true;
@@ -413,12 +438,21 @@ const methods = {
 	pageshow() {
 		this.frame.show();
 	},
+	useDataUrls() {
+		if (useDataUrls) { return; }
+		console.warn(`Failed to load "blob:moz-extension:..." URL in content, using data:-URLs instead`);
+		useDataUrls = true;
+		Object.keys(objectUrls).forEach(key => delete objectUrls[key]);
+	},
 	async getUrl(url) {
 		if (!url.startsWith(rootUrl)) { throw { message: 'Can only load local resources', }; }
 		const id = url.slice(rootUrl.length - 1);
 		if (objectUrls[id]) { return objectUrls[id]; }
-		const blob = (await (await global.fetch(url)).blob());
-		return global.URL.createObjectURL(blob);
+		const response = (await global.fetch(url));
+		return (objectUrls[id] = (async () => useDataUrls
+			? `data:${ response.headers.get('content-type') },${ (await response.text()) }`
+			: global.URL.createObjectURL((await response.blob()))
+		)());
 	},
 };
 
@@ -441,7 +475,7 @@ function checkEnum(choices, value) {
 
 function setDebug(value) {
 	value = !!value; if (debug === value) { return; } debug = value;
-	contentPath = contentPath.replace(/&debug=(true|false)/, '&debug='+ debug);
+	gecko && (contentPath = contentPath.replace(/&debug=(true|false)/, '&debug='+ debug));
 	tabs.forEach(_=>_.forEach(frame => frame.port && !frame.hidden && frame.post('debug', debug)));
 }
 
@@ -461,6 +495,7 @@ return Object.freeze({
 	detachFormTab,
 	getFrame,
 	parseMatchPatterns: parsePatterns,
+	register,
 	set debug(v) { setDebug(v); }, get debug() { return debug; },
 });
 

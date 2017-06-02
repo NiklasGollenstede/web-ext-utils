@@ -28,6 +28,7 @@ const api = global.browser || global.chrome;
 const rootUrl = api.extension.getURL('');
 const gecko = rootUrl.startsWith('moz-');
 const edgeHTML = rootUrl.startsWith('ms-browser-');
+const blink = !gecko && !edgeHTML;
 const inContent = typeof api.extension.getBackgroundPage !== 'function';
 const good = gecko; // whether api returns promises
 
@@ -38,12 +39,17 @@ let sync = api.storage.sync; try {
 const schemas = {
 	// all async: bookmarks, browsingData, certificateProvider, commands, contextMenus, cookies, debugger, documentScan, fontSettings, gcm, history, instanceID, management, notifications, pageCapture, permissions, sessions, tabCapture, topSites, vpnProvider, webNavigation, webRequest, windows,
 	alarms: { async: key => key !== 'create', },
-	browserAction: { async: key => (/^get[A-Z]|^setIcon$/).test(key), children: api.browserAction && {
-		setBadgeBackgroundColor: !api.browserAction.setBadgeBackgroundColor && (() => () => Promise.resolve()),
-		setBadgeText: !api.browserAction.setBadgeText && (() => () => Promise.resolve()),
-		setIcon: !api.browserAction.setIcon && (() => () => Promise.resolve()),
-		setTitle: !api.browserAction.setTitle && (() => () => Promise.resolve()),
-	}, },
+	browserAction: {
+		fill: !inContent && { },
+		async: key => (/^get[A-Z]|^setIcon$/).test(key),
+		children: new Proxy({
+			map: ((value, api, key) => blink && typeof value === 'function' && (/^set[A-Z]/).test(key)
+			? (...args) => (value.apply(api, args), Promise.resolve())
+			: value || ((/^[gs]et[A-Z]/).test(key) ? () => Promise.resolve() : (/^on[A-Z]/).test(key) ? { addListener() { }, hasListener() { }, removeListener() { }, } : value)),
+		}, { get(self, key) {
+			return (/^(on|[gs]et)[A-Z]/).test(key) && self.map;
+		}, }),
+	},
 	desktopCapture: { async: key => key === 'chooseDesktopMedia', },
 	downloads: { async: key => !(/^(?:open|show|showDefaultFolder|drag|setShelfEnabled)$/).test(key), },
 	extension: { async: key => (/^isAllowed(?:Incognito|FileScheme)Access$/).test(key), children: {
@@ -83,7 +89,7 @@ const Browser = new Proxy({
 	if (!api[key]) {
 		if (key === 'messages') { return (cache[key] = (cache[Key] = getGlobalPort())); }
 		if (key === 'manifest') { return (cache[key] = (cache[Key] = freeze(api.runtime.getManifest()))); }
-		return undefined; // eslint-disable-line consistent-return
+		// return undefined; // eslint-disable-line consistent-return
 	}
 	return (cache[key] = (cache[Key] = getProxy(api[key], schemas[key])));
 }, set() { throw new TypeError(`Browser is read-only`); }, });
@@ -91,7 +97,8 @@ const Browser = new Proxy({
 return Browser;
 
 function getProxy(api, schema) {
-	if (typeof api !== 'object' || api === null || good && (!schema || !schema.children)) { return api; }
+	if (good && (!schema || !schema.children)) { return api; }
+	if (typeof api !== 'object' || api === null) { if (schema && schema.fill) { api = schema.fill; } else { return api; } }
 	const cache = Object.create(null);
 
 	return new Proxy(api, { get(api, key) {
