@@ -27,7 +27,7 @@ async function getUrl(url) {
 }
 
 //////// start of private implementation ////////
-/* global window, document, CustomEvent, XMLHttpRequest, ProgressEvent, */
+/* global window, document, CustomEvent, */
 
 if (global.require) {
 	if (global.reRegisteringLoaderAfterPageShow) { return; }
@@ -40,10 +40,8 @@ const resolved = Promise.resolve();
 const readystates = [ 'interactive', 'complete', ]; // document.readystate values, ascending
 const rootUrl = chrome.extension.getURL('');
 const gecko = rootUrl.startsWith('moz-');
-const xhr_open = XMLHttpRequest.prototype.__original_open__ = XMLHttpRequest.prototype.__original_open__ || XMLHttpRequest.prototype.open;
-const xhr_send = XMLHttpRequest.prototype.__original_send__ = XMLHttpRequest.prototype.__original_send__ || XMLHttpRequest.prototype.send;
 const _fetch = global.__original_fetch__ = global.__original_fetch__ || global.fetch;
-const objectUrls = Object.create(null);
+const objectUrls = Object.create(null), scripts = Object.create(null);
 
 const port = chrome.runtime.connect({ name: 'require.scriptLoader', });
       port.requests = new Map/*<random, [ resolve, reject, ]>*/;
@@ -79,6 +77,10 @@ function post(method, ...args) { // eslint-disable-line no-unused-vars
 	port.postMessage([ method, 0, args, ]);
 }
 
+function setScript(id, script) {
+	scripts[id] = script;
+}
+
 const methods = {
 	async require(modules) {
 		if (!require) { (await getRequire); }
@@ -87,6 +89,10 @@ const methods = {
 			modules = Object.keys(modules);
 		}
 		return new Promise((done, failed) => require(modules, (...args) => done(args.length), failed));
+	},
+	callScript(id, args) {
+		const script = scripts[id]; delete script[id];
+		return script(...args);
 	},
 	waitFor(state) { return new Promise(ready => {
 		if (readystates.indexOf(document.readystate) <= readystates.indexOf(state)) { return void ready(); }
@@ -106,8 +112,6 @@ function doUnload() {
 	if (unloaded) { return; } unloaded = true;
 	debug && console.debug('unloading content');
 	delete global.require; delete global.define;
-	XMLHttpRequest.prototype.open = xhr_open;
-	XMLHttpRequest.prototype.send = xhr_send;
 	global.fetch = _fetch;
 	Object.keys(methods).forEach(key => delete methods[key]);
 
@@ -116,8 +120,8 @@ function doUnload() {
 
 	port.onDisconnect.removeListener(doUnload);
 	port.onMessage.removeListener(onMessage);
-	window.addEventListener('pagehide', onPageHide, true);
-	window.addEventListener('pageshow', onPageShow, true);
+	window.removeEventListener('pagehide', onPageHide, true);
+	window.removeEventListener('pageshow', onPageShow, true);
 	gecko && window.removeEventListener(rootUrl +'unload', onAfterReload, true);
 	gecko && window.removeEventListener('visibilitychange', onVisibilityChange, true);
 	port.disconnect();
@@ -170,37 +174,13 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 				});
 				resolveRequire(global.require);
 				return ({
-					onUnload, getUrl,
+					onUnload, getUrl, setScript,
 					get debug() { return debug; },
 				});
 			});
 		},
 	};
 
-	const ignoreSend = new WeakSet;
-	XMLHttpRequest.prototype.open = new Proxy(xhr_open, {
-		apply(target, self, args) {
-			const [ method, url, async, user, password, ] = args;
-			if (!(/^get$/i).test(method) || typeof url !== 'string' || !url.startsWith(rootUrl) || async === false || user != null || password != null)
-			{ return void target.apply(self, args); }
-
-			ignoreSend.add(self);
-			request('getUrl', url).then(url => {
-				ignoreSend.delete(self);
-				self.open('get', url, true); self.send(null);
-			})
-			.catch(error => {
-				console.error(`Failed to load "${ url }" from background`, error);
-				self.dispatchEvent(new ProgressEvent('error'));
-			});
-		},
-	});
-	XMLHttpRequest.prototype.send = new Proxy(xhr_send, {
-		apply(target, self, args) {
-			if (ignoreSend.has(self)) { return; }
-			return void target.apply(self, args);
-		},
-	});
 	global.fetch = new Proxy(_fetch, {
 		async apply(target, self, [ url, arg, ]) {
 			if (typeof url === 'string' && url.startsWith(rootUrl)) { url = (await request('getUrl', url)); }

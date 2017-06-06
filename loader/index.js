@@ -1,11 +1,12 @@
 (function(global) { 'use strict'; prepare() && define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../browser/': { manifest, rootUrl, runtime, WebNavigation, Tabs, },
 	'../browser/version': { gecko, current, version, },
-	'../utils/': { matchPatternToRegExp, },
-	'../utils/event': { setEvent, },
+	'../utils/': { parseMatchPatterns, },
+	'../utils/event': { setEvent, setEventGetter, },
 	'../utils/files': FS,
 	require,
 }) => {
+const Self = new Map/*<ContentScript, object>*/;
 
 /**
  * Dynamically executes functions as content scripts.
@@ -20,7 +21,7 @@
  */
 async function runInTab(tabId, frameId, script, ...args) {
 	if (typeof frameId !== 'number') { args.unshift(script); script = frameId; frameId = 0; }
-	return Frame.get(tabId, frameId).run({ code: `(`+ getScource(script) +`)(`+ JSON.stringify(args).slice(1, -1) +`)`, });
+	return (await Frame.get(tabId, frameId)).call(getScource(script), args);
 }
 
 /**
@@ -34,7 +35,7 @@ async function runInTab(tabId, frameId, script, ...args) {
  */
 async function requireInTab(tabId, frameId, modules) {
 	if (typeof frameId !== 'number') { modules = frameId; frameId = 0; }
-	return Frame.get(tabId, frameId).request('require', modules);
+	return (await Frame.get(tabId, frameId)).request('require', modules);
 }
 
 /**
@@ -44,13 +45,12 @@ async function requireInTab(tabId, frameId, modules) {
  * @param  {natural}   frameId  Optional. The id of the frame within the tab to run in. Defaults to the top level frame.
  */
 async function detachFormTab(tabId, frameId) {
-	const frames = tabs.get(tabId);
-	const frame = frames && frames.get(frameId);
+	const frame = (await Frame.getIf(tabId, frameId));
 	frame && frame.destroy();
 }
 
-function getFrame(tabId, frameId) {
-	return Frame.get(tabId, frameId).eventArg;
+async function getFrame(tabId, frameId) {
+	return (await Frame.get(tabId, frameId)).eventArg;
 }
 
 function register(prefix, files) {
@@ -117,13 +117,13 @@ class ContentScript {
 	 * @param  {function|null}  script  Same as the script parameter to runInTab().
 	 * @return {string|null}            The decompiled source of the function, if set.
 	 */
-	set script(v)    { const self = Self.get(this); self.script = v == null ? null : getScource(v); self.code = self.script ? `(`+ self.script +`)(`+ self.args +`)` : null; }
+	set script(v)    { Self.get(this).script = v == null ? null : getScource(v); }
 	get script()     { return Self.get(this).script; }
 
 	/**
-	 * Arguments to `.script`. Set as iterable, returned as comma separated JSON-string. Default is empty.
+	 * Arguments to `.script`. Mutable array. Default is empty.
 	 */
-	set args(v)      { const self = Self.get(this); self.args = JSON.stringify(Array.from(v)).slice(-1, 1); self.code = self.script ? `(`+ self.script +`)(`+ self.args +`)` : null; }
+	set args(v)      { if (!Array.isArray(v)) { throw new Error(`'args' must be an Array`); } Self.get(this).args = v; }
 	get args()       { return Self.get(this).args; }
 
 	/**
@@ -141,30 +141,18 @@ class ContentScript {
 	 * @return {[Frame, null, Promise]}  The Frame applied to, null (unknown URL), and a Promise that resolves after all `.modules` resolved, with the return value of `.script`, if set.
 	 */
 	async applyToFrame(tabId, frameId = 0) {
-		return Frame.get(tabId, frameId).applyIfMatches(Self.get(this), null);
+		return applyIfMatches(tabId, frameId, Self.get(this), null);
 	}
 
 	/**
-	 * Event that is fired whenever and as soon as this ContentSchript matches a frame.
-	 * The arguments to the listeners are:
-	 * @param  {Frame}    frame  The Frame that was matched.
-	 * @param  {string}   url    The url of the matched frame at the time it was matched.
-	 * @param  {Promise}  value  Promise that resolved after `.modules` resolved, with the return value of `.script`, if set.
-	 * @return {Event}    Read-only.
+	 * Checks whether this ContentScript has been applied to a frame.
+	 * @param  {natural}   tabId    The id of the tab to run in.
+	 * @param  {natural}   frameId  Optional. The id of the frame within the tab to run in. Defaults to the top level frame.
+	 * @return {boolean}            True iff this content script was applied to the given tab/frame.
 	 */
-	get onMatch() {
-		const self = Self.get(this); if (self.onMatch) { return self.onMatch; }
-		self.fireMatch = setEvent(self, 'onMatch', { lazy: false, }); return self.onMatch;
-	}
-
-	get onShow() {
-		const self = Self.get(this); if (self.onShow) { return self.onShow; }
-		self.fireShow = setEvent(self, 'onShow', { lazy: false, }); return self.onShow;
-	}
-
-	get onHide() {
-		const self = Self.get(this); if (self.onHide) { return self.onHide; }
-		self.fireHide = setEvent(self, 'onHide', { lazy: false, }); return self.onHide;
+	async appliedToFrame(tabId, frameId = 0) {
+		const frame = tabs.has(tabId) && (await tabs.get(tabId).get(frameId));
+		return frame && frame.scripts.has(Self.get(this)) || false;
 	}
 
 	/**
@@ -178,13 +166,24 @@ class ContentScript {
 		self.fireHide && self.fireHide(null, { last: true, });
 		self.include.length && listenToNavigation();
 	}
+} {
+	/**
+	 * Event that is fired whenever and as soon as this ContentSchript matches a frame.
+	 * The arguments to the listeners are:
+	 * @param  {Frame}    frame  The Frame that was matched.
+	 * @param  {string}   url    The url of the matched frame at the time it was matched.
+	 * @param  {Promise}  value  Promise that resolved after `.modules` resolved, with the return value of `.script`, if set.
+	 */
+	setEventGetter(ContentScript, 'match', Self);
+	setEventGetter(ContentScript, 'show', Self);
+	setEventGetter(ContentScript, 'hide', Self);
 }
 
 //////// start of private implementation ////////
 /* eslint-disable no-throw-literal */ /* eslint-disable prefer-promise-reject-errors */
 
-let contentPath = new global.URL(require.toUrl('./content.js')).pathname
-+ (gecko ? '?debug=false&info='+ encodeURIComponent(JSON.stringify({ name: current, version, })) : ''); // query params don't work in chrome
+const contentPath = new global.URL(require.toUrl('./content.js')).pathname;
+let cpWithArgs = contentPath + (gecko ? '?debug=false&info='+ encodeURIComponent(JSON.stringify({ name: current, version, })) : ''); // query params don't work in chrome
 let requirePath = manifest.ext_tools && manifest.ext_tools.loader && manifest.ext_tools.loader.require;
 requirePath === undefined && (requirePath = '/node_modules/es6lib/require.js');
 const allowContentEval = manifest.permissions.includes('contentEval');
@@ -194,17 +193,25 @@ const getScource = ((f = x=>x, fromFunction = f.call.bind(f.toString)) =>
 const objectUrls = Object.create(null), virtualFiles = new Map; let useDataUrls = false;
 let debug = false;
 
-const tabs = new Map/*<tabId, Map<frameId, Frame>>*/;
-const Self = new Map/*<ContentScript, object>*/;
+const tabs = new Map/*<tabId, Map<frameId, Promise<Frame>{ setPort(), }>>*/;
 
 function initScript(_this) {
 	const self = {
 		include: [ ], exclude: [ ], incognito: false, frames: 'top',
-		modules: null, script: null, args: '', code: null,
+		modules: null, script: null, args: [ ],
 		onMatch: null, fireMatch: null,
 		onShow: null, fireShow: null,
 		onHide: null, fireHide: null,
 	}; Self.set(_this, self);
+}
+
+function listenToNavigation() {
+	if (!WebNavigation) { return; }
+	const filters = [ ];
+	Self.forEach(self => filters.push(...self.include.map(exp => ({ urlMatches: exp.source, }))));
+	WebNavigation.onCommitted.removeListener(onNavigation); // always remove to avoid duplicate
+	if (!filters.length) { return; }
+	WebNavigation.onCommitted.addListener(onNavigation, { url: filters, });
 }
 
 async function applyScript(self) {
@@ -212,127 +219,124 @@ async function applyScript(self) {
 	(await Promise.all(tabs.map(async ({ id: tabId, incognito, }) => Promise.all(
 		(await WebNavigation.getAllFrames({ tabId, }))
 		.map(async ({ frameId, url, }) => { try {
-			const [ frame, , done, ] = (await Frame.get(tabId, frameId).applyIfMatches(self, url, incognito));
+			const [ frame, , done, ] = (await applyIfMatches(tabId, frameId, self, url, incognito));
 			(await done); applied.add(frame);
 		} catch (error) { console.error(error); } })
 	))));
 	applied.delete(null); return applied;
 }
 
-function listenToNavigation() {
-	if (!WebNavigation) { return; }
-	const filters = [ ];
-	Self.forEach(self => filters.push(...self.include.map(exp => ({ urlMatches: exp.source, }))));
-	WebNavigation.onCommitted.removeListener(onNavigation); // must remove first to avoid duplicate
-	if (!filters.length) { return; }
-	WebNavigation.onCommitted.addListener(onNavigation, { url: filters, });
+async function onNavigation({ tabId, frameId, url, }) {
+	if (!(/^(?:https?|file|ftp|app):\/\//).test(url) || gecko && url.startsWith('https://addons.mozilla.org')) { return; } // i.e. not '<all_urls>'
+	frameId === 0 && Frame.resetTab(tabId);
+	Self.forEach(self => applyIfMatches(tabId, frameId, self, url));
 }
 
-function onNavigation({ tabId, frameId, url, }) {
-	if (!(/^(?:https?|file|ftp|app):\/\//).test(url)) { return; } // i.e. '<all_urls>'
-	const frame = Frame.get(tabId, frameId, true);
-	Self.forEach(self => frame.applyIfMatches(self, url));
+async function applyIfMatches(tabId, frameId, script, url = null, incognito = false) {
+	if (url && (
+		(script.frames === 'top' && frameId >= 1)
+		|| incognito && !script.incognito
+		|| !script.include.some(_=>_.test(url))
+		|| script.exclude.some(_=>_.test(url))
+	)) { return [ ]; }
+	const frame = (await Frame.get(tabId, frameId));
+	const done = Object.freeze((async () => {
+		script.modules && (await (frame.requireReady = frame.request('require', script.modules)));
+		return script.script ? frame.call(script.script, script.args) : undefined;
+	})());
+	url && script.fireMatch && script.fireMatch([ frame.eventArg, url, done, ]);
+	frame.scripts.add(script);
+	return [ frame.eventArg, null, done, ];
 }
 
 class Frame {
-	constructor(tabId, frameId) {
+	constructor(tabId, frameId, port, promise) {
 		this.tabId = tabId;
 		this.frameId = frameId;
-		this.incognito = true;
+		this.port = port; port.frame = this;
+		this.ready = promise;
+		this.incognito = port.sender.tab.incognito;
 		this.hidden = false;
 		// this._parent = null;
-		this.port = null;
-		this.gettingPort = null;
-		this.gotPort = null;
-		this.cancelPort = null;
-		this.inited = false;
-		this.onhide = null;
-		this.onshow = null;
-		this.onremove = null;
+		this.requireReady = null;
+		this.onHide = null; this.fireHide = null;
+		this.onShow = null; this.fireShow = null;
+		this.onRemove = null; this.fireRemove = null;
 		this.arg = null;
 		this.scripts = new Set;
 		this.destroy = this.destroy.bind(this);
+		port.onDisconnect.addListener(this.destroy);
+		global.addEventListener('unload', this.destroy);
 	}
 
-	static get(tabId, frameId, refresh) {
+	static async get(tabId, frameId) {
 		let frames = tabs.get(tabId); if (!frames) { frames = new Map; tabs.set(tabId, frames); }
-		refresh && frameId === 0 && frames.delete(frameId);
-		let frame = frames.get(frameId); if (!frame) { frame = new Frame(tabId, frameId); frames.set(frameId, frame); }
-		return frame;
+		const frame = frames.get(frameId); if (frame) { return frame; }
+		const promise = (async () => {
+			const [ port, ] = (await Promise.all([
+				new Promise(async got => (await null) === (promise.setPort = got)),
+				Frame.prototype.run.call({ tabId, frameId, }, cpWithArgs),
+			]));
+			if (port instanceof Frame) { return port; }
+
+			if (frames.get(frameId) !== promise) { throw new Error(`Failed to attach to tab: Tab was navigated`); }
+			const frame = new Frame(tabId, frameId, port, promise);
+
+			!gecko && debug && this.post('debug', true); // no query params in chrome
+			if (requirePath) {
+				frame.run(requirePath);
+			} else {
+				this.post('shimRequire');
+			}
+
+			if (frames.get(frameId) !== promise) { throw new Error(`Failed to attach to tab: Tab was navigated`); }
+			return frame;
+		})();
+		frames.set(frameId, promise);
+		return promise;
 	}
 
-	async getPort() {
-		let reject; this.gettingPort = new Promise((y, n) => ((this.gotPort = y), (reject = (this.cancelPort = n))));
-		Tabs.executeScript(this.tabId, {
-			file: contentPath, frameId: this.frameId, matchAboutBlank: true, runAt: 'document_start',
-		}).catch(reject);
-		return this.gettingPort;
+	static getIf(tabId, frameId) {
+		const frames = tabs.get(tabId);
+		return frames && frames.get(frameId) || null;
 	}
-	setPort(port) {
-		this.port = port;
-		port.frame = this;
-		this.incognito = port.sender.tab.incognito;
-		this.gotPort && this.gotPort();
-		this.gotPort = null;
-		this.fireShow && this.fireShow([ this.eventArg, ]);
-	}
-	initContent() {
-		!gecko && debug && this.post('debug', true); // no query params in chrome
-		if (requirePath) {
-			Tabs.executeScript(this.tabId, { file: requirePath, frameId: this.frameId, matchAboutBlank: true, runAt: 'document_start', });
-		} else {
-			this.post('shimRequire');
-		}
+
+	static resetTab(tabId) {
+		const frames = tabs.get(tabId);
+		frames && frames.delete(0);
 	}
 
 	async request(method, ...args) {
-		if (!this.port) { (await (this.gettingPort || this.getPort())); }
-		if (!this.inited) { this.inited = true; this.initContent(); }
 		const id = Math.random() * 0x100000000000000;
 		this.port.postMessage([ method, id, args, ]);
 		return new Promise((resolve, reject) => this.port.requests.set(id, [ resolve, reject, ]));
 	}
 	async post(method, ...args) {
-		if (!this.port) { (await (this.gettingPort || this.getPort())); }
-		if (!this.inited) { this.inited = true; this.initContent(); }
 		this.port.postMessage([ method, 0, args, ]);
 	}
-	async run(options) {
-		if (!this.port) { (await (this.gettingPort || this.getPort())); }
-		if (!this.inited) { this.inited = true; this.initContent(); }
-		return Tabs.executeScript(this.tabId, Object.assign({ frameId: this.frameId, matchAboutBlank: true, runAt: 'document_start', }, options));
+	async run(file) {
+		return Tabs.executeScript(this.tabId, { file, frameId: this.frameId, matchAboutBlank: true, runAt: 'document_start', });
 	}
-
-	async applyIfMatches(script, url = null, incognito = false) {
-		if (url && (
-			(script.frames === 'top' && this.frameId >= 1)
-			|| incognito && !script.incognito
-			|| !script.include.some(_=>_.test(url))
-			|| script.exclude.some(_=>_.test(url))
-		)) { return [ ]; }
-		try { if (!this.port) { (await (this.gettingPort || this.getPort())); } }
-		catch (error) { if (error !== this) { throw error; } else { return [ ]; } } // error === this if canceled due to pageshow
-		if (url && this.incognito && !script.incognito) { return [ ]; }
-		const done = Object.freeze((async () => {
-			script.modules && (await this.request('require', script.modules));
-			return script.script ? this.run({ code: script.code, }) : undefined;
-		})());
-		url && script.fireMatch && script.fireMatch([ this.eventArg, url, done, ]);
-		this.scripts.add(script);
-		return [ this.eventArg, null, done, ];
+	async call(code, args) {
+		!this.requireReady && (await (this.requireReady = this.request('require', [ ])));
+		const id = Math.random() * 0x100000000000000;
+		code = `require("${ contentPath.slice(0, -3) }").setScript(${ id }, ${ code })`;
+		(await Tabs.executeScript(this.tabId, { code, frameId: this.frameId, matchAboutBlank: true, runAt: 'document_start', }));
+		return this.request('callScript', id, args);
 	}
 
 	hide() {
 		if (this.hidden) { return; } this.hidden = true;
 		this.fireHide && this.fireHide([ this.eventArg, ]);
 		this.scripts.forEach(script => script.fireHide && script.fireHide([ this.eventArg, ]));
+		if (this.frameId !== 0) { return; }
 		const frames = tabs.get(this.tabId);
-		this.frameId === 0 && frames.get(this.frameId) === this && frames.delete(this.frameId);
+		frames.get(this.frameId) === this.ready && frames.delete(this.frameId);
 	}
 	show() {
 		if (!this.hidden) { return; } this.hidden = false;
-		const frames = tabs.get(this.tabId), old = frames.get(this.frameId);
-		old && old !== this && old.cancelPort && old.cancelPort(old);
+		const frames = tabs.get(this.tabId), pending = frames.get(this.frameId);
+		pending && pending !== this.ready && pending.setPort(this);
 		this.frameId === 0 && frames.set(this.frameId, this);
 		this.fireShow && this.fireShow([ this.eventArg, ]);
 		this.scripts.forEach(script => script.fireShow && script.fireShow([ this.eventArg, ]));
@@ -358,6 +362,7 @@ class Frame {
 	}); } return this.arg; }
 
 	destroy(unload) {
+		global.removeEventListener('unload', this.destroy);
 		this.hide();
 		const frames = tabs.get(this.tabId);
 		frames && frames.get(this.frameId) === this && frames.delete(this.frameId);
@@ -379,10 +384,9 @@ function onConnect(port) {
 	port.requests = new Map/*<random, [ resolve, reject, ]>*/;
 	port.onMessage.addListener(onMessage.bind(null, port));
 
-	const frame = Frame.get(tabId, frameId);
-	if (frame.port) { console.error(`Frame already has a port`, frame.port, frame); } // if onDisconnect gets fired correctly, this can't happen
-	frame.setPort(port);
-	port.onDisconnect.addListener(frame.destroy);
+	const pending = Frame.getIf(tabId, frameId); // will be null for static content_scripts
+	if (!pending || !pending.setPort) { return void console.error(`Unexpected port connection for tab`, tabId, 'frame', frameId); } // if onDisconnect gets fired correctly, this can't happen
+	pending.setPort(port); delete pending.setPort;
 }
 
 async function onMessage(port, [ method, id, args, ]) {
@@ -458,13 +462,7 @@ const methods = {
 
 function parsePatterns(patterns) {
 	!WebNavigation && console.warn(`Using ContentScripts without "WebNavigation"!`);
-	!Array.isArray(patterns) && (patterns = [ patterns, ]);
-	return patterns.map(pattern => {
-		if (typeof pattern === 'object' && typeof pattern.test === 'function') { return new RegExp(pattern); }
-		if (typeof pattern === 'string' && pattern[0] === '^' && pattern.slice(-1) === '$') { return new RegExp(pattern, 'i'); }
-		try { return matchPatternToRegExp(pattern); }
-		catch (_) { throw new TypeError(`Expected (Array of) RegExp objects, MatchPattern strings or regexp strings framed with '^' and '$', got "${ pattern }"`); }
-	});
+	return parseMatchPatterns(patterns);
 }
 
 function checkEnum(choices, value) {
@@ -475,14 +473,9 @@ function checkEnum(choices, value) {
 
 function setDebug(value) {
 	value = !!value; if (debug === value) { return; } debug = value;
-	gecko && (contentPath = contentPath.replace(/&debug=(true|false)/, '&debug='+ debug));
+	gecko && (cpWithArgs = cpWithArgs.replace(/&debug=(true|false)/, '&debug='+ debug));
 	tabs.forEach(_=>_.forEach(frame => frame.port && !frame.hidden && frame.post('debug', debug)));
 }
-
-global.addEventListener('unload', () => {
-	tabs.forEach(_=>_.forEach(frame => Frame.prototype.destroy.call(frame, true)));
-	tabs.clear();
-});
 
 {
 	runtime.onConnect.addListener(onConnect);
@@ -494,7 +487,6 @@ return Object.freeze({
 	requireInTab,
 	detachFormTab,
 	getFrame,
-	parseMatchPatterns: parsePatterns,
 	register,
 	set debug(v) { setDebug(v); }, get debug() { return debug; },
 });

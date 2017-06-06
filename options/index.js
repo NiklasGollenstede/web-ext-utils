@@ -1,6 +1,6 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../browser/': { Storage, inContent, },
-	'../utils/event': { setEvent, },
+	'../utils/event': { setEventGetter, },
 	require,
 }) => {
 
@@ -49,17 +49,6 @@ class Option {
 		return root.storage.remove(root.keys.filter(_=>_.startsWith(path)));
 	}
 
-	get onChange() {
-		const self = Self.get(this); if (self.onChange) { return self.onChange; }
-		self.fireChange = setEvent(self, 'onChange', { lazy: false, });
-		return self.onChange;
-	}
-	get onAnyChange() {
-		const self = Self.get(this); if (self.onAnyChange) { return self.onAnyChange; }
-		self.fireAnyChange = setEvent(self, 'onAnyChange', { lazy: false, });
-		return self.onAnyChange;
-	}
-
 	whenTrue(listener, arg) {
 		return whenToggleTo(this, true, listener, arg);
 	}
@@ -75,7 +64,10 @@ class Option {
 		added && listener(values, [ ], this);
 		return added;
 	}
-} Object.freeze(Option.prototype);
+}
+setEventGetter(Option, 'change', Self);
+setEventGetter(Option, 'anyChange', Self);
+Object.freeze(Option.prototype);
 
 function whenToggleTo(option, should, listener, arg) {
 	const wrapped = (now, old) => {

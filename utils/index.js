@@ -28,6 +28,16 @@ function matchPatternToRegExp(pattern) {
 	+')$');
 }
 
+function parseMatchPatterns(patterns) {
+	!Array.isArray(patterns) && (patterns = [ patterns, ]);
+	return patterns.map(pattern => {
+		if (typeof pattern === 'object' && typeof pattern.test === 'function') { return new RegExp(pattern); }
+		if (typeof pattern === 'string' && pattern[0] === '^' && pattern.slice(-1) === '$') { return new RegExp(pattern, 'i'); }
+		try { return matchPatternToRegExp(pattern); }
+		catch (_) { throw new TypeError(`Expected (Array of) RegExp objects, MatchPattern strings or regexp strings framed with '^' and '$', got "${ pattern }"`); }
+	});
+}
+
 /**
  * Can be called during the extension startup to immediately attach all content scripts as they are specified in the 'manifest.json',
  * which does not happen automatically in chromium browsers. In firefox it is not necessary to call this function.
@@ -143,6 +153,7 @@ function debounce(callback, time) {
 
 return {
 	matchPatternToRegExp,
+	parseMatchPatterns,
 	attachAllContentScripts,
 	showExtensionTab,
 	reportError,
