@@ -123,7 +123,7 @@ function defaultError(view, location) {
 
 const handlers = { }, pending = { }, locations = new Set;
 const viewPath = rootUrl +'view.html#';
-const { TAB_ID_NONE, } = Tabs, { WINDOW_ID_NONE, } = Windows;
+const { TAB_ID_NONE = -1, } = Tabs, { WINDOW_ID_NONE = -1, } = Windows || { };
 
 async function initView(view, options = new global.URLSearchParams('')) { try {
 	view.document.querySelector('link[rel="icon"]').href = (manifest.icons[1] || manifest.icons[64]).replace(/^\/?/, '/');

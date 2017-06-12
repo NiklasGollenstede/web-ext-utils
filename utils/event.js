@@ -38,7 +38,7 @@ function setEventGetter(Class, name, Self, { async = false, once = false, } = { 
 	name = name[0].toUpperCase() + name.slice(1); const on = 'on'+ name, fire = 'fire'+ name;
 	return Object.defineProperty(Class.prototype, on, { get() {
 		const self = Self.get(this); if (self[on]) { return self[on]; }
-		self[fire] = setEvent(self, on, { lazy: false, async, once, });
+		self[fire] = setEvent(self, on, { lazy: false, async: async, once, });
 		return self[on];
 	}, configurable: true, });
 }

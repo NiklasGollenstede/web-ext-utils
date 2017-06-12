@@ -159,8 +159,9 @@ async function createTabInNormalWindow(props) {
 	}
 	if (props.openerTabId != null) {
 		const opener = (await api.tabs.get(props.openerTabId));
-		props.index = opener.index; delete props.openerTabId;
+		props.index = opener.index;
 	}
+	delete props.openerTabId;
 	return api.tabs.create(props);
 }
 

@@ -191,7 +191,7 @@ const getScource = ((f = x=>x, fromFunction = f.call.bind(f.toString)) =>
 	code => allowContentEval && typeof code === 'string' ? `function() { ${ code } }` : fromFunction(code)
 )();
 const objectUrls = Object.create(null), virtualFiles = new Map; let useDataUrls = false;
-let debug = false;
+const silentErrors = new WeakSet; let debug = false;
 
 const tabs = new Map/*<tabId, Map<frameId, Promise<Frame>{ setPort(), }>>*/;
 
@@ -217,11 +217,11 @@ function listenToNavigation() {
 async function applyScript(self) {
 	const applied = new Set, tabs = (await Tabs.query({ }));
 	(await Promise.all(tabs.map(async ({ id: tabId, incognito, }) => Promise.all(
-		(await WebNavigation.getAllFrames({ tabId, }))
+		(self.fraames === 'top' ? [ 0, ] : (await WebNavigation.getAllFrames({ tabId, })))
 		.map(async ({ frameId, url, }) => { try {
 			const [ frame, , done, ] = (await applyIfMatches(tabId, frameId, self, url, incognito));
 			(await done); applied.add(frame);
-		} catch (error) { console.error(error); } })
+		} catch (error) { !silentErrors.has(error) && console.error(error); } })
 	))));
 	applied.delete(null); return applied;
 }
@@ -232,7 +232,7 @@ async function onNavigation({ tabId, frameId, url, }) {
 	Self.forEach(self => applyIfMatches(tabId, frameId, self, url));
 }
 
-async function applyIfMatches(tabId, frameId, script, url = null, incognito = false) {
+async function applyIfMatches(tabId, frameId, script, url = null, incognito = false/*not yet known*/) {
 	if (url && (
 		(script.frames === 'top' && frameId >= 1)
 		|| incognito && !script.incognito
@@ -240,6 +240,7 @@ async function applyIfMatches(tabId, frameId, script, url = null, incognito = fa
 		|| script.exclude.some(_=>_.test(url))
 	)) { return [ ]; }
 	const frame = (await Frame.get(tabId, frameId));
+	if (url && frame.incognito && !script.incognito) { return [ ]; }
 	const done = Object.freeze((async () => {
 		script.modules && (await (frame.requireReady = frame.request('require', script.modules)));
 		return script.script ? frame.call(script.script, script.args) : undefined;
@@ -274,9 +275,12 @@ class Frame {
 		const frame = frames.get(frameId); if (frame) { return frame; }
 		const promise = (async () => {
 			const [ port, ] = (await Promise.all([
-				new Promise(async got => (await null) === (promise.setPort = got)),
+				new Promise(async got => { (await null); promise.setPort = got; }),
 				Frame.prototype.run.call({ tabId, frameId, }, cpWithArgs),
-			]));
+			]).catch(error => {
+				gecko && (error = new Error(`Can't access frame in tab ${ tabId }`));
+				silentErrors.add(error); throw error;
+			}));
 			if (port instanceof Frame) { return port; }
 
 			if (frames.get(frameId) !== promise) { throw new Error(`Failed to attach to tab: Tab was navigated`); }
@@ -452,13 +456,20 @@ const methods = {
 		if (!url.startsWith(rootUrl)) { throw { message: 'Can only load local resources', }; }
 		const id = url.slice(rootUrl.length - 1);
 		if (objectUrls[id]) { return objectUrls[id]; }
-		const response = (await global.fetch(url));
-		return (objectUrls[id] = (async () => useDataUrls
-			? `data:${ response.headers.get('content-type') },${ (await response.text()) }`
-			: global.URL.createObjectURL((await response.blob()))
-		)());
+		const blob = (await (await global.fetch(url)).blob());
+		return (objectUrls[id] = useDataUrls
+			? blobToDataUrl(blob)
+			: global.URL.createObjectURL(blob)
+		);
 	},
 };
+
+function blobToDataUrl(blob) { return new Promise((resolve, reject) => {
+	const reader = new global.FileReader();
+	reader.onloadend = () => resolve(reader.result);
+	reader.onerror = () => reject(new Error(`Failed to convert blob to data:-URL`));
+	reader.readAsDataURL(blob);
+}); }
 
 function parsePatterns(patterns) {
 	!WebNavigation && console.warn(`Using ContentScripts without "WebNavigation"!`);
