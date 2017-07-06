@@ -1,4 +1,4 @@
-'use strict'; /* globals describe, it, assert */
+/*eslint strict: ["error", "global"], no-implicit-globals: "off"*/ 'use strict'; /* globals require, describe, it, assert, */ // license: MPL-2.0
 
 const file = require('fs').readFileSync('utils/index.js', 'utf8').split((/\r?\n|\r/g)).slice(4, -3).join('\n');
 
@@ -24,7 +24,7 @@ JSON.stringify(Array.prototype.map.call($0.querySelector('tbody').querySelectorA
 }), null, '\t').replace(/"([\$a-z\_]\w*)":/g, '$1:').replace(/\}\,\s+\{/g, '}, {') +';';
 
  */
-[
+[ /* eslint-disable comma-dangle */
 	{
 		pattern: "<all_urls>",
 		desc: "Match all URLs.",
@@ -235,7 +235,7 @@ JSON.stringify(Array.prototype.map.call($0.querySelector('tbody').querySelectorA
 ];
 
 
-describe('The `matchPatternToRegExp` of', function() {
+describe('The `matchPatternToRegExp` of', () => {
 	tests.forEach(test => {
 		const exp = matchPatternToRegExp(test.pattern);
 		it(`'${ test.pattern }' should ${ test.desc.replace((/^./), c => c.toLowerCase()) }`, () => {

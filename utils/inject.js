@@ -27,7 +27,7 @@ function inject(_function, ...args) {
 	script.dataset.source = _function +''; // get the functions source
 	script.textContent = (`(`+ function (script) { try {
 		const args = JSON.parse(script.dataset.args);
-		const value = new Function('return ('+ script.dataset.source +').apply(this, arguments);').apply(self, args);
+		const value = new Function('return ('+ script.dataset.source +').apply(this, arguments);').apply(this, args); // eslint-disable-line no-invalid-this
 		script.dataset.value = JSON.stringify(value) || 'null';
 		script.dataset.done = true;
 	} catch (error) {
@@ -64,16 +64,16 @@ function injectAsync(_function, ...args) { return new Promise((resolve, reject) 
 		const args = JSON.parse(script.dataset.args);
 		const _function = new Function('return ('+ script.dataset.source +').apply(this, arguments);');
 		script.dataset.done = true;
-		Promise.resolve().then(() => _function.apply(self, args))
+		Promise.resolve().then(() => _function.apply(this, args)) // eslint-disable-line no-invalid-this
 		.then(value => report('value', value))
 		.catch(error => report('error', error));
 		function report(type, value) {
 			value = type === 'error' && (value instanceof Error)
 			? '$_ERROR_$'+ JSON.stringify({ name: value.name, message: value.message, stack: value.stack, })
 			: JSON.stringify(value);
-			script.dispatchEvent(new CustomEvent(type, { detail: value, }));
+			script.dispatchEvent(new this.CustomEvent(type, { detail: value, })); // eslint-disable-line no-invalid-this
 		}
-	} +`).call(document.currentScript)`);
+	} +`).call(this, document.currentScript)`);
 	document.documentElement.appendChild(script).remove(); // evaluates .textContent synchronously in the page context
 
 	if (!script.dataset.done) {
@@ -103,7 +103,7 @@ function injectAsync(_function, ...args) { return new Promise((resolve, reject) 
 function parseError(string) {
 	if (!string.startsWith('$_ERROR_$')) { return JSON.parse(string); }
 	const object = JSON.parse(string.slice(9));
-	const error = Object.create((object.name ? self[object.name] || Error : Error).prototype);
+	const error = Object.create((object.name ? global[object.name] || Error : Error).prototype);
 	Object.assign(error, object);
 	return error;
 }

@@ -4,14 +4,20 @@
 	"description": "a collection of utilities to use with web extensions",
 	"author": "Niklas Gollenstede",
 	"license": "MPL-2.0",
-	"repository" : {
-		"type" : "git",
-		"url" : "git@github.com:NiklasGollenstede/web-ext-utils.git"
+	"repository": {
+		"type": "git",
+		"url": "git@github.com:NiklasGollenstede/web-ext-utils.git"
+	},
+	"dependencies": {
+		"multiport": "0.1.0",
+		"pbq": "0.1.0"
 	},
 	"devDependencies": {
-		"chai": "^3.5.0",
-		"mocha": "^2.5.3",
-		"eslintrc": "NiklasGollenstede/eslintrc"
+		"chai": "3.5.0",
+		"mocha": "2.5.3",
+		"babel-eslint": "7.1.1",
+		"eslint": "3.14.1",
+		"eslintrc": "NiklasGollenstede/eslintrc#c36e3e8"
 	},
 	"scripts": {
 		"test": "mocha --harmony-async-await",

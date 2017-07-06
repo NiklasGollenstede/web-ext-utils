@@ -1,5 +1,5 @@
-(function(global) { 'use strict'; prepare() && define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { manifest, rootUrl, runtime, WebNavigation, Tabs, },
+(function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	'../browser/': { manifest, rootUrl, runtime, WebNavigation, Tabs, }, '../browser/': Browser,
 	'../browser/version': { gecko, current, version, },
 	'../utils/': { parseMatchPatterns, },
 	'../utils/event': { setEvent, setEventGetter, },
@@ -45,7 +45,7 @@ async function requireInTab(tabId, frameId, modules) {
  * @param  {natural}   frameId  Optional. The id of the frame within the tab to run in. Defaults to the top level frame.
  */
 async function detachFormTab(tabId, frameId) {
-	const frame = (await Frame.getIf(tabId, frameId));
+	const frame = (await Frame.get(tabId, frameId, 'existing'));
 	frame && frame.destroy();
 }
 
@@ -141,7 +141,7 @@ class ContentScript {
 	 * @return {[Frame, null, Promise]}  The Frame applied to, null (unknown URL), and a Promise that resolves after all `.modules` resolved, with the return value of `.script`, if set.
 	 */
 	async applyToFrame(tabId, frameId = 0) {
-		return applyIfMatches(tabId, frameId, Self.get(this), null);
+		return applyIfMatches({ tabId, frameId, script: Self.get(this), });
 	}
 
 	/**
@@ -174,26 +174,41 @@ class ContentScript {
 	 * @param  {string}   url    The url of the matched frame at the time it was matched.
 	 * @param  {Promise}  value  Promise that resolved after `.modules` resolved, with the return value of `.script`, if set.
 	 */
-	setEventGetter(ContentScript, 'match', Self);
-	setEventGetter(ContentScript, 'show', Self);
-	setEventGetter(ContentScript, 'hide', Self);
+	setEventGetter(ContentScript, 'Match', Self);
+	/**
+	 * Event that gets fired after the content frame receives an `.isTrusted` "pagehide" event.
+	 */
+	setEventGetter(ContentScript, 'Hide', Self);
+	/**
+	 * Event that gets fired after the content frame receives an `.isTrusted` "pageshow" event. Not fired on the initial page load.
+	 */
+	setEventGetter(ContentScript, 'Show', Self);
 }
 
 //////// start of private implementation ////////
 /* eslint-disable no-throw-literal */ /* eslint-disable prefer-promise-reject-errors */
 
 const contentPath = new global.URL(require.toUrl('./content.js')).pathname;
-let cpWithArgs = contentPath + (gecko ? '?debug=false&info='+ encodeURIComponent(JSON.stringify({ name: current, version, })) : ''); // query params don't work in chrome
-let requirePath = manifest.ext_tools && manifest.ext_tools.loader && manifest.ext_tools.loader.require;
-requirePath === undefined && (requirePath = '/node_modules/es6lib/require.js');
-const allowContentEval = manifest.permissions.includes('contentEval');
+const requirePath = new global.URL(require.toUrl('../node_modules/pbq/require.js')).pathname + (!gecko ? '' : '?ifExisting=replace');
+const allowContentEval = (gecko ? (await Browser.rawManifest) : manifest).permissions.includes('contentEval');
 const getScource = ((f = x=>x, fromFunction = f.call.bind(f.toString)) =>
 	code => allowContentEval && typeof code === 'string' ? `function() { ${ code } }` : fromFunction(code)
 )();
 const objectUrls = Object.create(null), virtualFiles = new Map; let useDataUrls = false;
 const silentErrors = new WeakSet; let debug = false;
-
 const tabs = new Map/*<tabId, Map<frameId, Promise<Frame>{ setPort(), }>>*/;
+const options = { }; let optionsAsGlobal = '', optionsAsQuery = '';
+setOptions({ s: Math.random().toString(32).slice(2).padStart(11, '0'), }); console.log('options', options);
+gecko && (setOptions({ b: current, v: version, }));
+function setOptions(props) {
+	Object.assign(options, props);
+	if (gecko) { // query params don't work in chrome
+		optionsAsQuery = '?'+ Object.keys(options).map(key => encodeURIComponent(key) +'='+ encodeURIComponent(JSON.stringify(options[key]))).join('&');
+	} else {
+		optionsAsGlobal = `this.__options__ = ${ JSON.stringify(options) }`;
+	}
+	tabs.forEach(_=>_.forEach(frame => frame.port && !frame.hidden && frame.post('setOptions', props)));
+}
 
 function initScript(_this) {
 	const self = {
@@ -214,12 +229,13 @@ function listenToNavigation() {
 	WebNavigation.onCommitted.addListener(onNavigation, { url: filters, });
 }
 
-async function applyScript(self) {
+async function applyScript(script) {
 	const applied = new Set, tabs = (await Tabs.query({ }));
-	(await Promise.all(tabs.map(async ({ id: tabId, incognito, }) => Promise.all(
-		(self.fraames === 'top' ? [ 0, ] : (await WebNavigation.getAllFrames({ tabId, })))
+	(await Promise.all(tabs.map(async ({ id: tabId, url, incognito, }) => Promise.all(
+		(script.frames === 'top' ? [ { frameId: 0, url, }, ] : (await WebNavigation.getAllFrames({ tabId, })))
 		.map(async ({ frameId, url, }) => { try {
-			const [ frame, , done, ] = (await applyIfMatches(tabId, frameId, self, url, incognito));
+			if (!isScripable(url)) { return; } // i.e. not '<all_urls>'
+			const [ frame, , done, ] = (await applyIfMatches({ tabId, frameId, script, url, incognito, }));
 			(await done); applied.add(frame);
 		} catch (error) { !silentErrors.has(error) && console.error(error); } })
 	))));
@@ -227,19 +243,20 @@ async function applyScript(self) {
 }
 
 async function onNavigation({ tabId, frameId, url, }) {
-	if (!(/^(?:https?|file|ftp|app):\/\//).test(url) || gecko && url.startsWith('https://addons.mozilla.org')) { return; } // i.e. not '<all_urls>'
+	if (!isScripable(url)) { return; } // i.e. not '<all_urls>'
 	frameId === 0 && Frame.resetTab(tabId);
-	Self.forEach(self => applyIfMatches(tabId, frameId, self, url));
+	Self.forEach(script => applyIfMatches({ tabId, frameId, script, url, }));
 }
 
-async function applyIfMatches(tabId, frameId, script, url = null, incognito = false/*not yet known*/) {
+async function applyIfMatches({ tabId, frameId, script, url = null, incognito = false/*not yet known*/, allowOld = true, }) {
 	if (url && (
 		(script.frames === 'top' && frameId >= 1)
 		|| incognito && !script.incognito
 		|| !script.include.some(_=>_.test(url))
 		|| script.exclude.some(_=>_.test(url))
 	)) { return [ ]; }
-	const frame = (await Frame.get(tabId, frameId));
+	const frame = (await Frame.get(tabId, frameId, allowOld ? 'fresh-only' : null));
+	if (frame === null) { return [ ]; }
 	if (url && frame.incognito && !script.incognito) { return [ ]; }
 	const done = Object.freeze((async () => {
 		script.modules && (await (frame.requireReady = frame.request('require', script.modules)));
@@ -251,13 +268,15 @@ async function applyIfMatches(tabId, frameId, script, url = null, incognito = fa
 }
 
 class Frame {
-	constructor(tabId, frameId, port, promise) {
+	constructor(tabId, frameId, port, promise, _id) {
+		this._id = _id;
 		this.tabId = tabId;
 		this.frameId = frameId;
 		this.port = port; port.frame = this;
 		this.ready = promise;
 		this.incognito = port.sender.tab.incognito;
 		this.hidden = false;
+		this.wasHidden = false;
 		// this._parent = null;
 		this.requireReady = null;
 		this.onHide = null; this.fireHide = null;
@@ -270,39 +289,41 @@ class Frame {
 		global.addEventListener('unload', this.destroy);
 	}
 
-	static async get(tabId, frameId) {
+	static async get(tabId, frameId, effort) {
+		if (effort === 'existing') {
+			const frames = tabs.get(tabId);
+			return frames && frames.get(frameId) || null;
+		}
 		let frames = tabs.get(tabId); if (!frames) { frames = new Map; tabs.set(tabId, frames); }
 		const frame = frames.get(frameId); if (frame) { return frame; }
 		const promise = (async () => {
-			const [ port, ] = (await Promise.all([
+			const _id = Math.random().toString(32).slice(2).padStart(11, '0');
+			console.log('start Frame.get', _id);
+			const [ port, , [ loaded, ], ] = (await Promise.all([
 				new Promise(async got => { (await null); promise.setPort = got; }),
-				Frame.prototype.run.call({ tabId, frameId, }, cpWithArgs),
+				optionsAsGlobal && Tabs.executeScript(tabId, { frameId, matchAboutBlank: true, runAt: 'document_start', code: optionsAsGlobal, }),
+				Frame.run(tabId, frameId, contentPath + optionsAsQuery/* + (gecko ? '&_id='+ _id : '')*/),
+				Frame.run(tabId, frameId, requirePath),
 			]).catch(error => {
+				gecko && console.error(`Can't access frame in tab ${ tabId }`,  error);
 				gecko && (error = new Error(`Can't access frame in tab ${ tabId }`));
 				silentErrors.add(error); throw error;
 			}));
-			if (port instanceof Frame) { return port; }
-
-			if (frames.get(frameId) !== promise) { throw new Error(`Failed to attach to tab: Tab was navigated`); }
-			const frame = new Frame(tabId, frameId, port, promise);
-
-			!gecko && debug && this.post('debug', true); // no query params in chrome
-			if (requirePath) {
-				frame.run(requirePath);
-			} else {
-				this.post('shimRequire');
+			if (loaded === false) {
+				if (port !== null) { console.error('Assertion failed'); debugger; } // TODO: remove assertion
+				if (effort === 'fresh-only') { return null; }
+				return Frame.get(tabId, frameId, 'existing') || (() => { throw new Error('Assertion failed'); })();  // TODO: remove assertion
 			}
+			if (loaded !== true) { console.error('Assertion failed'); debugger; } // TODO: remove assertion
 
 			if (frames.get(frameId) !== promise) { throw new Error(`Failed to attach to tab: Tab was navigated`); }
-			return frame;
+			return new Frame(tabId, frameId, port, promise, _id);
 		})();
 		frames.set(frameId, promise);
 		return promise;
 	}
-
-	static getIf(tabId, frameId) {
-		const frames = tabs.get(tabId);
-		return frames && frames.get(frameId) || null;
+	static async run(tabId, frameId, file) {
+		return Tabs.executeScript(tabId, { file, frameId, matchAboutBlank: true, runAt: 'document_start', });
 	}
 
 	static resetTab(tabId) {
@@ -319,7 +340,7 @@ class Frame {
 		this.port.postMessage([ method, 0, args, ]);
 	}
 	async run(file) {
-		return Tabs.executeScript(this.tabId, { file, frameId: this.frameId, matchAboutBlank: true, runAt: 'document_start', });
+		return Frame.run(this.tabId, this.frameId, file);
 	}
 	async call(code, args) {
 		!this.requireReady && (await (this.requireReady = this.request('require', [ ])));
@@ -331,6 +352,7 @@ class Frame {
 
 	hide() {
 		if (this.hidden) { return; } this.hidden = true;
+		this.wasHidden = true;
 		this.fireHide && this.fireHide([ this.eventArg, ]);
 		this.scripts.forEach(script => script.fireHide && script.fireHide([ this.eventArg, ]));
 		if (this.frameId !== 0) { return; }
@@ -340,13 +362,14 @@ class Frame {
 	show() {
 		if (!this.hidden) { return; } this.hidden = false;
 		const frames = tabs.get(this.tabId), pending = frames.get(this.frameId);
-		pending && pending !== this.ready && pending.setPort(this);
+		pending && pending !== this.ready && pending.setPort(null);
 		this.frameId === 0 && frames.set(this.frameId, this);
 		this.fireShow && this.fireShow([ this.eventArg, ]);
 		this.scripts.forEach(script => script.fireShow && script.fireShow([ this.eventArg, ]));
 	}
 
 	get eventArg() { const self = this; if (!this.arg) { this.arg = Object.freeze({
+		_id: self._id,
 		tabId: self.tabId,
 		frameId: self.frameId,
 		incognito: self.incognito,
@@ -380,7 +403,7 @@ class Frame {
 	}
 }
 
-function onConnect(port) {
+async function onConnect(port) {
 	if (port.name !== 'require.scriptLoader') { return; }
 	if (!port.sender.tab) { port.sender.tab = { id: Math.random(), }; } // happens sometimes in fennec 55. This will also break incognito handling
 	const { id: tabId, } = port.sender.tab;
@@ -388,7 +411,7 @@ function onConnect(port) {
 	port.requests = new Map/*<random, [ resolve, reject, ]>*/;
 	port.onMessage.addListener(onMessage.bind(null, port));
 
-	const pending = Frame.getIf(tabId, frameId); // will be null for static content_scripts
+	const pending = tabs.has(tabId) && tabs.get(tabId).get(frameId) || null;
 	if (!pending || !pending.setPort) { return void console.error(`Unexpected port connection for tab`, tabId, 'frame', frameId); } // if onDisconnect gets fired correctly, this can't happen
 	pending.setPort(port); delete pending.setPort;
 }
@@ -464,6 +487,10 @@ const methods = {
 	},
 };
 
+function isScripable(url) {
+	return (/^(?:https?|file|ftp|app):\/\//).test(url) || gecko && url.startsWith('https://addons.mozilla.org');
+}
+
 function blobToDataUrl(blob) { return new Promise((resolve, reject) => {
 	const reader = new global.FileReader();
 	reader.onloadend = () => resolve(reader.result);
@@ -482,12 +509,6 @@ function checkEnum(choices, value) {
 	throw new Error(`This value must be one of: '`+ choices.join(`', `) +`'`);
 }
 
-function setDebug(value) {
-	value = !!value; if (debug === value) { return; } debug = value;
-	gecko && (cpWithArgs = cpWithArgs.replace(/&debug=(true|false)/, '&debug='+ debug));
-	tabs.forEach(_=>_.forEach(frame => frame.port && !frame.hidden && frame.post('debug', debug)));
-}
-
 {
 	runtime.onConnect.addListener(onConnect);
 }
@@ -499,16 +520,7 @@ return Object.freeze({
 	detachFormTab,
 	getFrame,
 	register,
-	set debug(v) { setDebug(v); }, get debug() { return debug; },
+	set debug(v) { v = !!v; if (debug === v) { return; } debug = v; setOptions({ d: v ? 1 : 0, }); }, get debug() { return debug; },
 });
 
-}); function prepare() {
-
-if (global.innerWidth || global.innerHeight) { // stop loading at once if the background page was opened in a tab or window
-	console.warn(`Background page opened in view`);
-	global.history.replaceState({ from: global.location.href.slice(global.location.origin.length), }, null, '/view.html#403');
-	global.stop(); global.location.reload();
-	return false;
-} else { return true; }
-
-} })(this);
+}); })(this);

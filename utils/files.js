@@ -1,9 +1,8 @@
 (function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	'fetch!files.json:json': files,
 }) => {
 
 const browser = (global.browser || global.chrome);
-
-const files = JSON.parse((await readFile('files.json', 'utf-8')));
 
 function split(path) {
 	const parts = path.split(/\/|\\/g);
@@ -59,7 +58,7 @@ async function readFile(path, encoding) {
 	const url = browser.extension.getURL(path);
 
 	return new Promise((resolve, reject) => {
-		const xhr = new XMLHttpRequest;
+		const xhr = new global.XMLHttpRequest;
 		xhr.responseType = encoding == null ? 'arraybuffer' : 'text';
 		xhr.addEventListener('load', () => resolve(xhr.response));
 		xhr.addEventListener('error', reject);

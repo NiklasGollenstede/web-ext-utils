@@ -1,4 +1,4 @@
-(function(global) { 'use strict'; prepare() && define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; prepare(); define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../browser/': { extension, manifest, rootUrl, Windows, Tabs, },
 	'../browser/version': { fennec, opera, },
 	'../utils/': { reportError, },
@@ -243,12 +243,5 @@ function parseSearch(search) {
 
 // enqueue all views that load before this module is ready
 const queue = prepare.queue = [ ]; global.initView = (...args) => queue.push(args);
-
-if (global.innerWidth || global.innerHeight) { // stop loading at once if the background page was opened in a tab or window
-	console.warn(`Background page opened in view`);
-	global.history.replaceState({ from: global.location.href.slice(global.location.origin.length), }, null, '/view.html#403');
-	global.stop(); global.location.reload();
-	return false;
-} else { return true; }
 
 } })(this);

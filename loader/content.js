@@ -15,7 +15,7 @@ const onUnload = Object.freeze({
 	removeListener(listener) { unloadListeners.delete(listener); },
 	probe() {
 		try { post('ping'); return false; }
-		catch (_) { resolved.then(doUnload); return true; }
+		catch (_) { Promise.resolve().then(doUnload); return true; }
 	},
 });
 
@@ -29,17 +29,24 @@ async function getUrl(url) {
 //////// start of private implementation ////////
 /* global window, document, CustomEvent, */
 
-if (global.require) {
-	if (global.reRegisteringLoaderAfterPageShow) { return; }
-	throw new Error(`Loading content loader in a frame that is already loaded`);
-}
-
 let debug = false, require = null, resolveRequire; const getRequire = new Promise(_=>(resolveRequire = _)).then(_=>(require = _));
 const chrome = (global.browser || global.chrome);
-const resolved = Promise.resolve();
-const readystates = [ 'interactive', 'complete', ]; // document.readystate values, ascending
 const rootUrl = chrome.extension.getURL('');
 const gecko = rootUrl.startsWith('moz-');
+const options = { }; function setOptions(props) {
+	Object.assign(options, props);
+	if ('d' in props) { debug = options.d; }
+}
+if ('__options__' in global) { setOptions(global.__options__); delete global.__options__; }
+
+const session = options.s || ((/\bs=%22([0-9a-v]{11})%22/).exec((new Error).stack) || [ '', '<no_session>', ])[1];
+
+if (global.__content_loadedd__) {
+	if (global.__content_loadedd__.session === session) { debug && console.info('skip due to same session', session); return false; }
+	debug && console.info('unloading from old session', global.__content_loadedd__.session); global.__content_loadedd__.doUnload();
+}
+Object.defineProperty(global, '__content_loadedd__', { value: { session, doUnload, }, configurable: true, });
+
 const _fetch = global.__original_fetch__ = global.__original_fetch__ || global.fetch;
 const objectUrls = Object.create(null), scripts = Object.create(null);
 
@@ -94,24 +101,13 @@ const methods = {
 		const script = scripts[id]; delete script[id];
 		return script(...args);
 	},
-	waitFor(state) { return new Promise(ready => {
-		if (readystates.indexOf(document.readystate) <= readystates.indexOf(state)) { return void ready(); }
-		document.addEventListener('readystatechange', function check() {
-			if (document.readystate !== state) { return; }
-			document.removeEventListener('readystatechange', check);
-			ready();
-		});
-	}); },
-	shimRequire() {
-		resolveRequire((modules, done, failed) => Promise.all(modules.map(id => request('loadScript', rootUrl + id +'js'))).then(arg => done(arg.length), failed));
-	},
-	debug(v) { debug = v; },
+	setOptions,
 };
 
 function doUnload() {
 	if (unloaded) { return; } unloaded = true;
-	debug && console.debug('unloading content');
-	delete global.require; delete global.define;
+	debug && console.info('unloading content', session);
+	delete global.require; delete global.define; delete global.__content_loadedd__;
 	global.fetch = _fetch;
 	Object.keys(methods).forEach(key => delete methods[key]);
 
@@ -129,20 +125,20 @@ function doUnload() {
 
 function onPageHide({ isTrusted, }) {
 	if (!isTrusted) { return; }
-	debug && console.debug('content hide');
+	debug && console.info('content hide');
 	window.addEventListener('pageshow', onPageShow, true);
-	request('pagehide').then(() => debug && console.debug('got reply for pagehide'));
+	request('pagehide').then(() => debug && console.info('got reply for pagehide'));
 }
 function onPageShow({ isTrusted, }) {
 	if (!isTrusted) { return; }
-	debug && console.debug('content show');
-	global.reRegisteringLoaderAfterPageShow = true;
-	request('pageshow').then(() => debug && console.debug('got reply for pageshow'))
+	debug && console.info('content show');
+	global.reRegisteringLoaderAfterPageShow = true; // TODO: remove this
+	request('pageshow').then(() => debug && console.info('got reply for pageshow'))
 	.catch(error => console.error(error)).then(() => delete global.reRegisteringLoaderAfterPageShow);
 }
 
-function onAfterReload() { onUnload.probe(); debug && console.debug('onAfterReload'); }
-function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && console.debug('onVisibilityChange'); }
+function onAfterReload() { onUnload.probe(); debug && console.info('onAfterReload'); }
+function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && console.info('onVisibilityChange'); }
 
 {
 	port.onDisconnect.addListener(doUnload);
@@ -157,20 +153,27 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 		window.addEventListener('visibilitychange', onVisibilityChange, true); // and to update the view when the extension was disabled, also probe when the window becomes visible again
 	}
 
-	global.require = {
+	const config = {
+		baseUrl: rootUrl,
 		async defaultLoader(url) {
 			return request('loadScript', url);
 		},
-		callback() {
-			define(({
-				require,
-				module,
-			}) => {
-				let info; const config = module.config(); config && ({ debug, info, } = config);
-				debug && console.debug('loader', module.id, info);
+		async callback() {
+			const stack = (new Error).stack.split(/$/m);
+			const line = stack[0+(/^Error/).test(stack[0])];
+			const parts = line.split(/\@(?![^\/]*?\.xpi)|\(|\ /g);
+			const url = parts[parts.length - 1].replace(/\:\d+(?:\:\d+)?\)?$/, '');
+			if (!url.startsWith(rootUrl)) { global.require.config({
+				hiddenBaseUrl: new global.URL('../../../', url).href,
+			}); }
+
+			define((require, exports, module) => {
+				const config = module.config();
+				config && setOptions(config);
+				debug && console.info('loader', module.id, options);
 				require.config({
 					map: { '*': { './': module.id, './views': module.id, }, },
-					config: info && { 'node_modules/web-ext-utils/browser/index': info, },
+					config: config && config.v && { 'node_modules/web-ext-utils/browser/index': { name: config.b, version: config.v, }, },
 				});
 				resolveRequire(global.require);
 				return ({
@@ -180,6 +183,12 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 			});
 		},
 	};
+
+	if (typeof global.require === 'function') {
+		global.require.config(config);
+	} {
+		global.require = config;
+	}
 
 	global.fetch = new Proxy(_fetch, {
 		async apply(target, self, [ url, arg, ]) {
@@ -194,4 +203,4 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 	});
 }
 
-})(this);
+return true; })(this); // must be last statement

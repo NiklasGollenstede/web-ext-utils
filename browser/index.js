@@ -1,4 +1,4 @@
-(function(global) { 'use strict'; const factory = async function webExtUtils_browser(require) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; const factory = async function webExtUtils_browser(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 /**
  * This is cross-platform clone/polyfill/bug-fix of the WebExtension `browser.*` API:
@@ -11,9 +11,6 @@
  *
  * Furthermore, all browser APIs can also be addressed starting with a capital letter (e.g. `.Storage` instead if `.storage`),
  * and the following properties are added:
- *
- *     messages/Messages:   An es6lib/Port that wrapps the runtime/tabs.on/sendMessage API for more convenient message sending and receiving.
- *                          'es6lib/port.js' to be loaded at the time of accessing. @see https://github.com/NiklasGollenstede/es6lib/blob/master/port.js
  *
  *     rootUrl/rootURL:     The extensions file root URL, ends with '/'.
  *     chrome:              Non Promise-capable native chrome/browser API.
@@ -87,8 +84,9 @@ const Browser = new Proxy({
 	if (key in cache) { return cache[key]; }
 	const Key = key.replace(/^[a-z]/, s => s.toUpperCase()); key = key.replace(/^[A-Z]/, s => s.toLowerCase());
 	if (!api[key]) {
-		if (key === 'messages') { return (cache[key] = (cache[Key] = getGlobalPort())); }
+		if (key === 'messages') { throw new Error(`use browser/messages instead`); }
 		if (key === 'manifest') { return (cache[key] = (cache[Key] = freeze(api.runtime.getManifest()))); }
+		if (key === 'rawManifest') { return (cache[key] = (cache[Key] = global.fetch(rootUrl +'manifest.json').then(_=>_.json()).then(freeze))); }
 		// return undefined; // eslint-disable-line consistent-return
 	}
 	return (cache[key] = (cache[Key] = getProxy(api[key], schemas[key])));
@@ -165,11 +163,4 @@ async function createTabInNormalWindow(props) {
 	return api.tabs.create(props);
 }
 
-function getGlobalPort() {
-	const Port = global.es6lib_port || require('../../es6lib/port');
-	const port = new Port({ runtime: Browser.Runtime, tabs: Browser.Tabs, }, Port.web_ext_Runtime);
-	Object.getOwnPropertyNames(Port.prototype).forEach(key => typeof port[key] === 'function' && (port[key] = port[key].bind(port)));
-	return port;
-}
-
-}; if (typeof define === 'function' && define.amd) { define([ 'require', ], factory); } else { global[factory.name] = factory(); } })(this);
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { /* eslint-disable */ module.exports = result; /* eslint-enable */ } else { global[factory.name] = result; } } })(this);

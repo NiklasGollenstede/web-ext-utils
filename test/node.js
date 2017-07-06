@@ -1,4 +1,4 @@
-'use strict'; // license: MIT
+/*eslint strict: ["error", "global"], no-implicit-globals: "off"*/ 'use strict'; /* globals global, require, */ // license: MPL-2.0
 
 const chai = require('chai');
 chai.should();
