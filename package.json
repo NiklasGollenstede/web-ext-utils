@@ -10,7 +10,7 @@
 	},
 	"dependencies": {
 		"multiport": "0.1.0",
-		"pbq": "0.1.0"
+		"pbq": "0.2.0"
 	},
 	"devDependencies": {
 		"chai": "3.5.0",

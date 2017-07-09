@@ -29,7 +29,7 @@ async function getUrl(url) {
 //////// start of private implementation ////////
 /* global window, document, CustomEvent, */
 
-let debug = false, require = null, resolveRequire; const getRequire = new Promise(_=>(resolveRequire = _)).then(_=>(require = _));
+let debug = false, lRequire = null, gRequire = null, loaded; const loading = new Promise(_=>(loaded = _));
 const chrome = (global.browser || global.chrome);
 const rootUrl = chrome.extension.getURL('');
 const gecko = rootUrl.startsWith('moz-');
@@ -55,6 +55,7 @@ const port = chrome.runtime.connect({ name: 'require.scriptLoader', });
 const unloadListeners = new Set; let unloaded = false;
 
 async function onMessage([ method, id, args, ]) {
+	if (method.includes('$')) { return; } // for multiplexed Port
 	if (method === '') { // handle responses
 		const [ value, ] = args;
 		const threw = id < 0; threw && (id = -id);
@@ -90,12 +91,12 @@ function setScript(id, script) {
 
 const methods = {
 	async require(modules) {
-		if (!require) { (await getRequire); }
+		if (!gRequire) { (await loading); }
 		if (!Array.isArray(modules)) {
-			require.config({ config: modules, });
+			gRequire.config({ config: modules, });
 			modules = Object.keys(modules);
 		}
-		return new Promise((done, failed) => require(modules, (...args) => done(args.length), failed));
+		return new Promise((done, failed) => gRequire(modules, (...args) => done(args.length), failed));
 	},
 	callScript(id, args) {
 		const script = scripts[id]; delete script[id];
@@ -103,6 +104,32 @@ const methods = {
 	},
 	setOptions,
 };
+
+async function connect(name, { wait = true, } = { }) {
+	const Port = (await lRequire.async('../node_modules/multiport/'));
+	if (!(await request('connect', name, { wait, }))) { return null; }
+	return new Port({ port, channel: name, }, web_ext_PortMulti);
+}
+
+class web_ext_PortMulti {
+	constructor({ port, channel, }, onData, onEnd) {
+		this.port = port;
+		this.onMessage = data => data[0].startsWith(channel) && onData(data[0].slice(channel.length), data[1], JSON.parse(data[2]));
+		this.onDisconnect = () => onEnd();
+		this.port.onMessage.addListener(this.onMessage);
+		this.port.onDisconnect.addListener(this.onDisconnect);
+		this.channel = (channel += '$');
+	}
+	send(name, id, args) {
+		args = JSON.stringify(args); // explicitly stringify args to throw any related errors here.
+		try { this.port.postMessage([ this.channel + name, id, args, ]); }
+		catch (error) { this.onDisconnect(); }
+	}
+	destroy() {
+		this.port.onMessage.removeListener(this.onMessage);
+		this.port.onDisconnect.removeListener(this.onDisconnect);
+	}
+}
 
 function doUnload() {
 	if (unloaded) { return; } unloaded = true;
@@ -175,9 +202,11 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 					map: { '*': { './': module.id, './views': module.id, }, },
 					config: config && config.v && { 'node_modules/web-ext-utils/browser/index': { name: config.b, version: config.v, }, },
 				});
-				resolveRequire(global.require);
+				lRequire = require;
+				gRequire = global.require;
+				loaded();
 				return ({
-					onUnload, getUrl, setScript,
+					onUnload, getUrl, setScript, connect,
 					get debug() { return debug; },
 				});
 			});

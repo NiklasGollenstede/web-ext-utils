@@ -259,7 +259,7 @@ async function applyIfMatches({ tabId, frameId, script, url = null, incognito = 
 	if (frame === null) { return [ ]; }
 	if (url && frame.incognito && !script.incognito) { return [ ]; }
 	const done = Object.freeze((async () => {
-		script.modules && (await (frame.requireReady = frame.request('require', script.modules)));
+		script.modules && (await frame.request('require', script.modules));
 		return script.script ? frame.call(script.script, script.args) : undefined;
 	})());
 	url && script.fireMatch && script.fireMatch([ frame.eventArg, url, done, ]);
@@ -276,9 +276,8 @@ class Frame {
 		this.ready = promise;
 		this.incognito = port.sender.tab.incognito;
 		this.hidden = false;
-		this.wasHidden = false;
+		this.connections = Object.create(null);
 		// this._parent = null;
-		this.requireReady = null;
 		this.onHide = null; this.fireHide = null;
 		this.onShow = null; this.fireShow = null;
 		this.onRemove = null; this.fireRemove = null;
@@ -343,16 +342,14 @@ class Frame {
 		return Frame.run(this.tabId, this.frameId, file);
 	}
 	async call(code, args) {
-		!this.requireReady && (await (this.requireReady = this.request('require', [ ])));
-		const id = Math.random() * 0x100000000000000;
-		code = `require("${ contentPath.slice(0, -3) }").setScript(${ id }, ${ code })`;
+		const id = Math.random().toString(32).slice(2);
+		code = `require("${ contentPath.slice(0, -3) }").setScript("${ id }", ${ code })`;
 		(await Tabs.executeScript(this.tabId, { code, frameId: this.frameId, matchAboutBlank: true, runAt: 'document_start', }));
 		return this.request('callScript', id, args);
 	}
 
 	hide() {
 		if (this.hidden) { return; } this.hidden = true;
-		this.wasHidden = true;
 		this.fireHide && this.fireHide([ this.eventArg, ]);
 		this.scripts.forEach(script => script.fireHide && script.fireHide([ this.eventArg, ]));
 		if (this.frameId !== 0) { return; }
@@ -366,6 +363,20 @@ class Frame {
 		this.frameId === 0 && frames.set(this.frameId, this);
 		this.fireShow && this.fireShow([ this.eventArg, ]);
 		this.scripts.forEach(script => script.fireShow && script.fireShow([ this.eventArg, ]));
+	}
+
+	async connect({ name, wait, content, }) {
+		const pending = this.connections[name];
+		if (pending) {
+			if (!pending.resolve || pending.content === content) { throw new Error(`Connection name "${ name }" is already in use`); }
+			pending.resolve(); pending.resolve = null;
+		} else if (wait) {
+			(await new Promise((resolve, reject) => {
+				const pending = this.connections[name] = { content, resolve, };
+				this.eventArg.onRemove(() => pending.resolve && reject({ message: 'Frame navigated', }));
+			}));
+		} else { return false; }
+		return true;
 	}
 
 	get eventArg() { const self = this; if (!this.arg) { this.arg = Object.freeze({
@@ -385,6 +396,11 @@ class Frame {
 		get onRemove() {
 			if (self.onRemove) { return self.onRemove; }
 			self.fireRemove = setEvent(self, 'onRemove', { lazy: false, once: true, }); return self.onRemove;
+		},
+		async connect(name, { wait = true, } = { }) {
+			const Port = (await require.async('../node_modules/multiport/'));
+			if (!(await self.connect({ name, wait, content: false, }))) { return null; }
+			return new Port({ port: self.port, frame: self.arg, channel: name, }, web_ext_PortMulti);
 		},
 	}); } return this.arg; }
 
@@ -417,6 +433,7 @@ async function onConnect(port) {
 }
 
 async function onMessage(port, [ method, id, args, ]) {
+	if (method.includes('$')) { return; } // for multiplexed Port
 	if (method === '') { // handle responses
 		const [ value, ] = args;
 		const threw = id < 0; threw && (id = -id);
@@ -437,12 +454,12 @@ async function onMessage(port, [ method, id, args, ]) {
 }
 
 const methods = {
-	loadScript(url) {
+	async loadScript(url) {
 		if (!url.startsWith(rootUrl)) { throw { message: 'Can only load local resources', }; }
 		const file = url.slice(rootUrl.length - 1);
-		if (FS.exists(file)) { return Tabs.executeScript(this.sender.tab.id, {
+		if (FS.exists(file)) { return void (await Tabs.executeScript(this.sender.tab.id, {
 			file, frameId: this.sender.frameId, matchAboutBlank: true, runAt: 'document_start',
-		}); }
+		})); }
 
 		const segments = file.split('/'); let length = 0, found = null;
 		for (const [ prefix, files, ] of virtualFiles) {
@@ -454,9 +471,9 @@ const methods = {
 		for (const files of found || [ ]) {
 			const code = files[suffix]; if (code == null) { continue; }
 			if (!allowContentEval) { throw { message: `Refused to load dynamic content script "${ file }" (manifest permission missing)`, }; }
-			return Tabs.executeScript(this.sender.tab.id, {
+			return void (await Tabs.executeScript(this.sender.tab.id, {
 				code, frameId: this.sender.frameId, matchAboutBlank: true, runAt: 'document_start',
-			});
+			}));
 		}
 		throw { message: `Could not find file "${ file }"`, };
 	},
@@ -485,7 +502,30 @@ const methods = {
 			: global.URL.createObjectURL(blob)
 		);
 	},
+	connect(name, { wait, }) {
+		return this.frame.connect({ name, wait, content: true, });
+	},
 };
+
+class web_ext_PortMulti {
+	constructor({ port, frame, channel, }, onData, onEnd) {
+		this.port = port;
+		this.onMessage = data => data[0].startsWith(channel) && onData(data[0].slice(channel.length), data[1], JSON.parse(data[2]), frame);
+		this.onDisconnect = () => onEnd();
+		this.port.onMessage.addListener(this.onMessage);
+		this.port.onDisconnect.addListener(this.onDisconnect);
+		this.channel = (channel += '$');
+	}
+	send(name, id, args) {
+		args = JSON.stringify(args); // explicitly stringify args to throw any related errors here.
+		try { this.port.postMessage([ this.channel + name, id, args, ]); }
+		catch (error) { this.onDisconnect(); }
+	}
+	destroy() {
+		this.port.onMessage.removeListener(this.onMessage);
+		this.port.onDisconnect.removeListener(this.onDisconnect);
+	}
+}
 
 function isScripable(url) {
 	return (/^(?:https?|file|ftp|app):\/\//).test(url) || gecko && url.startsWith('https://addons.mozilla.org');
