@@ -20,7 +20,7 @@
  *     isEdge:              Boolean that is true if the current browser is Microsoft Edge.
  */
 
-const api = global.browser || global.chrome;
+const api = typeof browser !== 'undefined' ? browser : global.chrome; /* global browser, */
 
 const rootUrl = api.extension.getURL('');
 const gecko = rootUrl.startsWith('moz-');

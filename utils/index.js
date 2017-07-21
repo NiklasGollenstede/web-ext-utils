@@ -1,5 +1,5 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { runtime, extension, tabs, Tabs, Windows, Notifications, },
+	'../browser/': { runtime, extension, Tabs, Windows, Notifications, },
 	require,
 }) => {
 
@@ -62,8 +62,8 @@ async function attachAllContentScripts({ cleanup, } = { }) {
 			.map(async ({ id, }) => {
 				try { (await Tabs.executeScript(id, { code: `(${ cleanup })();`, })); }
 				catch (error) { console.warn('skipped tab', error); return false; } // not allowed to execute
-				css && css.forEach(file => tabs.insertCSS(id, { file, }));
-				js && js.forEach(file => tabs.executeScript(id, { file, }));
+				css && css.forEach(file => Tabs.insertCSS(id, { file, }));
+				js && js.forEach(file => Tabs.executeScript(id, { file, }));
 				return true;
 			})
 		).then(_=>_.filter(_=>_).length);

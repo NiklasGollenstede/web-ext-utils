@@ -164,7 +164,7 @@ function createInput(props, pref) {
 		placeholder: props.placeholder || '',
 	};
 	let input; switch (props.type) {
-		case 'menulist': {
+		case 'select': case 'menulist': {
 			input = createElement('select', inputProps);
 			if (typeof props.getOptions === 'function') {
 				input.classList.add('dynamic-select');

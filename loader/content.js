@@ -106,7 +106,7 @@ const methods = {
 };
 
 async function connect(name, { wait = true, } = { }) {
-	const Port = (await lRequire.async('../node_modules/multiport/'));
+	const Port = (await lRequire.async('../lib/multiport/'));
 	if (!(await request('connect', name, { wait, }))) { return null; }
 	return new Port({ port, channel: name, }, web_ext_PortMulti);
 }
@@ -180,19 +180,24 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 		window.addEventListener('visibilitychange', onVisibilityChange, true); // and to update the view when the extension was disabled, also probe when the window becomes visible again
 	}
 
+	let hiddenBaseUrl = null;
+
 	const config = {
 		baseUrl: rootUrl,
 		async defaultLoader(url) {
 			return request('loadScript', url);
 		},
-		async callback() {
+		callingScriptResolver(offset) {
 			const stack = (new Error).stack.split(/$/m);
-			const line = stack[0+(/^Error/).test(stack[0])];
+			const line = stack[(/^Error/).test(stack[0]) + 1 + offset];
 			const parts = line.split(/\@(?![^\/]*?\.xpi)|\(|\ /g);
 			const url = parts[parts.length - 1].replace(/\:\d+(?:\:\d+)?\)?$/, '');
-			if (!url.startsWith(rootUrl)) { global.require.config({
-				hiddenBaseUrl: new global.URL('../../../', url).href,
-			}); }
+			if (hiddenBaseUrl !== null && url.startsWith(hiddenBaseUrl)) { return url.replace(hiddenBaseUrl, rootUrl); }
+			return url;
+		},
+		async callback() {
+			const url = config.callingScriptResolver(0);
+			if (!url.startsWith(rootUrl)) { hiddenBaseUrl = new global.URL('../../../', url).href; }
 
 			define((require, exports, module) => {
 				const config = module.config();

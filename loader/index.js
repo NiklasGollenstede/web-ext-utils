@@ -189,7 +189,7 @@ class ContentScript {
 /* eslint-disable no-throw-literal */ /* eslint-disable prefer-promise-reject-errors */
 
 const contentPath = new global.URL(require.toUrl('./content.js')).pathname;
-const requirePath = new global.URL(require.toUrl('../node_modules/pbq/require.js')).pathname + (!gecko ? '' : '?ifExisting=replace');
+const requirePath = new global.URL(require.toUrl('../lib/pbq/require.js')).pathname + (!gecko ? '' : '?ifExisting=replace');
 const allowContentEval = (gecko ? (await Browser.rawManifest) : manifest).permissions.includes('contentEval');
 const getScource = ((f = x=>x, fromFunction = f.call.bind(f.toString)) =>
 	code => allowContentEval && typeof code === 'string' ? `function() { ${ code } }` : fromFunction(code)
@@ -231,13 +231,13 @@ function listenToNavigation() {
 
 async function applyScript(script) {
 	const applied = new Set, tabs = (await Tabs.query({ }));
-	(await Promise.all(tabs.map(async ({ id: tabId, url, incognito, }) => Promise.all(
+	(await Promise.all(tabs.map(async ({ id: tabId, url, incognito, title, }) => Promise.all(
 		(script.frames === 'top' ? [ { frameId: 0, url, }, ] : (await WebNavigation.getAllFrames({ tabId, })))
 		.map(async ({ frameId, url, }) => { try {
 			if (!isScripable(url)) { return; } // i.e. not '<all_urls>'
 			const [ frame, , done, ] = (await applyIfMatches({ tabId, frameId, script, url, incognito, }));
 			(await done); applied.add(frame);
-		} catch (error) { !silentErrors.has(error) && console.error(error); } })
+		} catch (error) { !silentErrors.has(error) && console.error(`Error injecting into tab ${ tabId } (${ title }) frame ${ frameId }`, error); } })
 	))));
 	applied.delete(null); return applied;
 }
@@ -297,7 +297,6 @@ class Frame {
 		const frame = frames.get(frameId); if (frame) { return frame; }
 		const promise = (async () => {
 			const _id = Math.random().toString(32).slice(2).padStart(11, '0');
-			console.log('start Frame.get', _id);
 			const [ port, , [ loaded, ], ] = (await Promise.all([
 				new Promise(async got => { (await null); promise.setPort = got; }),
 				optionsAsGlobal && Tabs.executeScript(tabId, { frameId, matchAboutBlank: true, runAt: 'document_start', code: optionsAsGlobal, }),
@@ -398,7 +397,7 @@ class Frame {
 			self.fireRemove = setEvent(self, 'onRemove', { lazy: false, once: true, }); return self.onRemove;
 		},
 		async connect(name, { wait = true, } = { }) {
-			const Port = (await require.async('../node_modules/multiport/'));
+			const Port = (await require.async('../lib/multiport/'));
 			if (!(await self.connect({ name, wait, content: false, }))) { return null; }
 			return new Port({ port: self.port, frame: self.arg, channel: name, }, web_ext_PortMulti);
 		},

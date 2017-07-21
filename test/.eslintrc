@@ -1,0 +1,6 @@
+{
+	"extends": "../node_modules/eslintrc/node.js",
+	"rules": {
+		"no-console": "off"
+	}
+}

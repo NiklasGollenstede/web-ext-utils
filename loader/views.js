@@ -49,12 +49,15 @@ Object.freeze(methods);
 // location format: #name?query#hash #?query#hash #name#hash ##hash #name?query!query #?query!query #name!hash #!hash
 // view types: 'tab', 'popup', 'panel', 'sidebar'
 class Location {
-	get view  () { return Self.get(this).view; }     get type   () { return Self.get(this).type; }
-	get tabId () { return Self.get(this).tabId; }    get windowId () { return Self.get(this).windowId; } get activeTab() { return Self.get(this).activeTab; }
-	get href  () { return Self.get(this).get({ }); } set href  (v) { const self = Self.get(this); self.href  !== v && self.replace({ href:  v, }, true); }
-	get name  () { return Self.get(this).name; }     set name  (v) { const self = Self.get(this); self.name  !== v && self.replace({ name:  v, }, true); }
-	get query () { return Self.get(this).query; }    set query (v) { const self = Self.get(this); self.query !== v && self.replace({ query: v, }, true); }
-	get hash  () { return Self.get(this).hash; }     set hash  (v) { const self = Self.get(this); self.hash  !== v ?  self.replace({ hash:  v, }, true) : self.updateHash(); }
+	get view     () { return Self.get(this).view; }
+	get type     () { return Self.get(this).type; }
+	get tabId    () { return Self.get(this).tabId; }
+	get windowId () { return Self.get(this).windowId; }
+	get activeTab() { return Self.get(this).activeTab; }
+	get href     () { return Self.get(this).get({ }); } set href  (v) { const self = Self.get(this); self.href  !== v && self.replace({ href:  v, }, true); }
+	get name     () { return Self.get(this).name; }     set name  (v) { const self = Self.get(this); self.name  !== v && self.replace({ name:  v, }, true); }
+	get query    () { return Self.get(this).query; }    set query (v) { const self = Self.get(this); self.query !== v && self.replace({ query: v, }, true); }
+	get hash     () { return Self.get(this).hash; }     set hash  (v) { const self = Self.get(this); self.hash  !== v ?  self.replace({ hash:  v, }, true) : self.updateHash(); }
 	assign(v)  { Self.get(this).replace({ href:  v, }, true); }
 	replace(v) { Self.get(this).replace({ href:  v, }, false); }
 }

@@ -1,0 +1,4 @@
+# keep this directory, but not its content
+*
+!.gitignore
+!.npmignore
