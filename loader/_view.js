@@ -26,7 +26,7 @@ if (!main) {
 	const tab = (await browser.tabs.getCurrent());
 	if (tab) { // in a container or incognito tab
 		const windows = (await browser.windows.getAll());
-		const parent = windows.find(_=>!_.incognito); // get any window that is non-private
+		const parent = windows.find(_=>!_.incognito && _.type === 'normal'); // get any window that is non-private
 		options.set('skipChecks', 'true'); // very much avoid recursion
 		options.set('originalTab', tab.id); // needed to resolve promises
 		browser.tabs.create({

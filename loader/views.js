@@ -25,20 +25,56 @@ const methods = {
 		return viewPath + (name || '') + (query ? query.replace(/^\??/, '?') : '') + (hash ? hash.replace(/^\#?/, '#') : '');
 	},
 	getViews() { return Array.from(locations, _=>_.public); },
-	async openView(location = '#', type = 'tab', options = { }) {
+
+	/**
+	 * Opens or shows a specific extension view in a tab or popup window.
+	 * If the view matches a handler, the handler is run before the view is returned.
+	 * Does not run the 404 handler if no handler is matched.
+	 * @param  {String}                location                Name/Location of the view to show. Can be the name as a string,
+	 *                                                         the argument to or the return value of .getUrl() or the value of a Location#href .
+	 * @param  {string|null}           type                    The type of view to open/show. Can be 'tab', 'popup' or null, to give no preference.
+	 * @param  {boolean|function}      options.useExisting     Optional. If falsy, a new view will be opened. Otherwise, an existing view may be used and returned if
+	 *                                                         .useExisting is a function and returns true for its Location or if the name part of `location` and ` type` match. Defaults to true.
+	 * @param  {Boolean}               options.focused         Optional. Whether the window of the returned view should be focused. Defaults to true.
+	 * @param  {Boolean}               options.active          Optional. Whether the tab of the returned view should be active within its window. Defaults to true.
+	 * @param  {String}                options.state           Optional. The state of the new window, if one is created. Defaults to 'normal'.
+	 * @param  {[type]}                options.windowId        Optional. The window in which a new tab gets placed, if one is created.
+	 *                                                         Should not be a private window. If it is, the view will be move to a normal window.
+	 * @param  {Boolean}               options.pinned          Optional. Whether the tab, if one is created, will be pinned. Defaults to false.
+	 * @param  {integer}               options.openerTabId     Optional. The opener tab of the new tab, of one needs to be created.
+	 * @param  {natural}               options.index           Optional. The position of the new tab, of one needs to be created.
+	 * @param  {integer}               options.width/height    Optional. The dimensions of the popup, if one is created.
+	 * @param  {integer}               options.left/top        Optional. The position of the popup, if one is created.
+	 * @return {Location}                                      The Location object corresponding to the new or old matching view.
+	 */
+	async openView(location = '#', type = null, {
+		useExisting = true, focused = true, active = true, state = 'normal',
+		windowId = undefined, pinned = false, openerTabId = undefined, index = undefined,
+		width, height, left, top,
+	} = { }) {
 		if (typeof location === 'string') {
-			if (!location.startsWith(viewPath) || location === viewPath.slice(-1)) { location = viewPath + location.replace(/^#/, ''); }
+			if (!(location.startsWith(viewPath) || location === viewPath.slice(-1))) { location = viewPath + location.replace(/^#/, ''); }
 		} else {
 			location = methods.getUrl(location);
 		}
-		type !== 'popup' || !Windows && (type = 'tab');
-		const tab = type === 'popup' ? (await Windows.create({
-			type: 'popup', url: location, focused: options.focused !== false, state: options.state || undefined, // drawAttention: !!options.drawAttention,
-			width: options.width || undefined, height: options.height || undefined, left: options.left || undefined, top: options.top || undefined,
-		})).tabs[0] : (await Tabs.create({
-			url: location, active: options.active !== false, pinned: options.pinned || false, windowId: options.windowId || undefined,
-			openerTabId: 'openerTabId' in options ? options.openerTabId : undefined, index: options.index || undefined,
-		}));
+		!Windows && (type = 'tab');
+		if (useExisting) {
+			const open = methods.getViews().find(
+				typeof useExisting === 'function' ? useExisting
+				: (name => (_=>_.name === name && (!type || _.type === type)))(location.slice(viewPath.length).replace(/#.*/, ''))
+			);
+			if (open) {
+				(focused || active) && (await Promise.all([
+					focused && open.windowId !== WINDOW_ID_NONE && Windows && Windows.update(open.windowId, { focused: true, }),
+					active && open.tabId !== TAB_ID_NONE && Tabs.update(open.tabId, { active: true, }),
+				]));
+				return open;
+			}
+		}
+		const tab = type === 'popup'
+		? (await Windows.create({ type: 'popup', url: location, focused, state, width, height, left, top, })).tabs[0]
+		: (await Tabs.create({ url: location, active, pinned, windowId, openerTabId, index, }));
+		type !== 'popup' && focused && windowId && Windows && Windows.update(windowId, { focused: true, });
 		return new Promise((resolve, reject) => (pending[tab.id] = { resolve, reject, }));
 	},
 };
@@ -156,6 +192,7 @@ async function initView(view, options = new global.URLSearchParams('')) { try {
 			opera && view.document.body.clientWidth === 0 && (type = 'sidebar');
 		}
 	}
+	// TODO: in firefox panels don't have focus for (all?) keyboard input before the user clicks in them. It would be nice if the focus could be forced to the panel
 	const location = new LocationP(view, { type, tabId, windowId, activeTab, });
 
 	let handler = handlers[location.name];

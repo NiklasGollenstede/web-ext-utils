@@ -195,7 +195,7 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 			if (hiddenBaseUrl !== null && url.startsWith(hiddenBaseUrl)) { return url.replace(hiddenBaseUrl, rootUrl); }
 			return url;
 		},
-		async callback() {
+		callback() {
 			const url = config.callingScriptResolver(0);
 			if (!url.startsWith(rootUrl)) { hiddenBaseUrl = new global.URL('../../../', url).href; }
 
@@ -220,7 +220,7 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 
 	if (typeof global.require === 'function') {
 		global.require.config(config);
-	} {
+	} else {
 		global.require = config;
 	}
 

@@ -10,47 +10,49 @@ const Self = new Map/*<ContentScript, object>*/;
 
 /**
  * Dynamically executes functions as content scripts.
- * @param  {natural}       tabId    The id of the tab to run in.
- * @param  {natural}       frameId  Optional. The id of the frame within the tab to run in. Defaults to the top level frame.
- * @param  {function}      script   A function that will be decompiled and run as content script.
- *                                  If the "contentEval" manifest permission is set, this may also be a code string that will be wrapped in a function.
- * @param  {...any}        args     Arguments that will be cloned to call the function with.
- *                                  `this` in the function will be the global object (not necessarily `window`).
- * @return {any}                    The value returned or promised by `script`.
- * @throws {any}                    If `script` throws or otherwise fails to execute.
+ * @param  {natural|null}     tabId    The id of the tab to run in. Default to an active tab, preferably in the current window.
+ * @param  {natural|null}     frameId  The id of the frame within the tab to run in. Defaults to the top level frame.
+ * @param  {function|string}  script   A function that will be decompiled and run as content script.
+ *                                     If the "contentEval" manifest permission is set, this may also be a code string that will be wrapped in a function.
+ * @param  {...any}           args     Arguments that will be cloned to call the function with.
+ *                                     `this` in the function will be the global object (not necessarily `window`).
+ * @return {any}                       The value returned or promised by `script`.
+ * @throws {any}                       If `script` throws or otherwise fails to execute.
  */
 async function runInTab(tabId, frameId, script, ...args) {
-	if (typeof frameId !== 'number') { args.unshift(script); script = frameId; frameId = 0; }
-	return (await Frame.get(tabId, frameId)).call(getScource(script), args);
+	if (typeof tabId !== 'number') { tabId = (await getActiveTabId()); }
+	return (await Frame.get(tabId, frameId || 0)).call(getScource(script), args);
 }
 
 /**
  * Dynamically loads content scripts by `require()`ing them in the content context.
- * @param  {natural}          tabId    The id of the tab to run in.
- * @param  {natural}          frameId  Optional. The id of the frame within the tab to run in. Defaults to the top level frame.
+ * @param  {natural|null}     tabId    The id of the tab to run in. Default to an active tab, preferably in the current window.
+ * @param  {natural|null}     frameId  The id of the frame within the tab to run in. Defaults to the top level frame.
  * @param  {[string]|object}  modules  An Array if module ids to load, or an object where each key is a module id
  *                                     and the values will be made available as `module.config()`.
  * @return {natural}                   The number of modules loaded.
  * @throws {any}                       If any of the modules throws or otherwise fails to load.
  */
 async function requireInTab(tabId, frameId, modules) {
-	if (typeof frameId !== 'number') { modules = frameId; frameId = 0; }
-	return (await Frame.get(tabId, frameId)).request('require', modules);
+	if (typeof tabId !== 'number') { tabId = (await getActiveTabId()); }
+	return (await Frame.get(tabId, frameId || 0)).request('require', modules);
 }
 
 /**
  * Detaches all content scripts from the given context. Specifically, it performs the same steps for that context as when the extension is unloaded.
  * That is, it fires the onUnload event, deletes the global define and require functions and closes the loader connection.
- * @param  {natural}   tabId    The id of the tab to run in.
- * @param  {natural}   frameId  Optional. The id of the frame within the tab to run in. Defaults to the top level frame.
+ * @param  {natural|null}     tabId    The id of the tab to run in. Default to an active tab, preferably in the current window.
+ * @param  {natural|null}     frameId  The id of the frame within the tab to run in. Defaults to the top level frame.
  */
 async function detachFormTab(tabId, frameId) {
-	const frame = (await Frame.get(tabId, frameId, 'existing'));
+	if (typeof tabId !== 'number') { tabId = (await getActiveTabId()); }
+	const frame = (await Frame.get(tabId, frameId || 0, 'existing'));
 	frame && frame.destroy();
 }
 
 async function getFrame(tabId, frameId) {
-	return (await Frame.get(tabId, frameId)).eventArg;
+	if (typeof tabId !== 'number') { tabId = (await getActiveTabId()); }
+	return (await Frame.get(tabId, frameId || 0)).eventArg;
 }
 
 function register(prefix, files) {
@@ -136,22 +138,24 @@ class ContentScript {
 
 	/**
 	 * Applies the ContentScript to a specific frame now, regardless of whether it matches.
-	 * @param  {natural}   tabId    The id of the tab to run in.
-	 * @param  {natural}   frameId  Optional. The id of the frame within the tab to run in. Defaults to the top level frame.
-	 * @return {[Frame, null, Promise]}  The Frame applied to, null (unknown URL), and a Promise that resolves after all `.modules` resolved, with the return value of `.script`, if set.
+	 * @param  {natural|null}     tabId    The id of the tab to run in. Default to an active tab, preferably in the current window.
+	 * @param  {natural|null}     frameId  The id of the frame within the tab to run in. Defaults to the top level frame.
+	 * @return {[Frame, null, Promise]}    The Frame applied to, null (unknown URL), and a Promise that resolves after all `.modules` resolved, with the return value of `.script`, if set.
 	 */
-	async applyToFrame(tabId, frameId = 0) {
-		return applyIfMatches({ tabId, frameId, script: Self.get(this), });
+	async applyToFrame(tabId, frameId) {
+		if (typeof tabId !== 'number') { tabId = (await getActiveTabId()); }
+		return applyIfMatches({ tabId, frameId: frameId || 0, script: Self.get(this), });
 	}
 
 	/**
 	 * Checks whether this ContentScript has been applied to a frame.
-	 * @param  {natural}   tabId    The id of the tab to run in.
-	 * @param  {natural}   frameId  Optional. The id of the frame within the tab to run in. Defaults to the top level frame.
-	 * @return {boolean}            True iff this content script was applied to the given tab/frame.
+	 * @param  {natural|null}     tabId    The id of the tab to run in. Default to an active tab, preferably in the current window.
+	 * @param  {natural|null}     frameId  The id of the frame within the tab to run in. Defaults to the top level frame.
+	 * @return {boolean}                   True iff this content script was applied to the given tab/frame.
 	 */
-	async appliedToFrame(tabId, frameId = 0) {
-		const frame = tabs.has(tabId) && (await tabs.get(tabId).get(frameId));
+	async appliedToFrame(tabId, frameId) {
+		if (typeof tabId !== 'number') { tabId = (await getActiveTabId()); }
+		const frame = tabs.has(tabId) && (await tabs.get(tabId).get(frameId || 0));
 		return frame && frame.scripts.has(Self.get(this)) || false;
 	}
 
@@ -196,6 +200,7 @@ const getScource = ((f = x=>x, fromFunction = f.call.bind(f.toString)) =>
 )();
 const objectUrls = Object.create(null), virtualFiles = new Map; let useDataUrls = false;
 const silentErrors = new WeakSet; let debug = false;
+const getActiveTabId = async () => ((await Tabs.query({ currentWindow: true, active: true, }))[0] || (await Tabs.query({ active: true, }))[0]).id;
 const tabs = new Map/*<tabId, Map<frameId, Promise<Frame>{ setPort(), }>>*/;
 const options = { }; let optionsAsGlobal = '', optionsAsQuery = '';
 setOptions({ s: Math.random().toString(32).slice(2).padStart(11, '0'), }); console.log('options', options);
@@ -243,9 +248,11 @@ async function applyScript(script) {
 }
 
 async function onNavigation({ tabId, frameId, url, }) {
+	debug && console.info('onNavigation', { tabId, frameId, url, });
 	if (!isScripable(url)) { return; } // i.e. not '<all_urls>'
 	frameId === 0 && Frame.resetTab(tabId);
-	Self.forEach(script => applyIfMatches({ tabId, frameId, script, url, }));
+	Promise.all(Array.from(Self.values(), script => applyIfMatches({ tabId, frameId, script, url, })))
+	.catch(error => console.error('Failed to attach scripts during navigation',  error));
 }
 
 async function applyIfMatches({ tabId, frameId, script, url = null, incognito = false/*not yet known*/, allowOld = true, }) {
@@ -268,8 +275,7 @@ async function applyIfMatches({ tabId, frameId, script, url = null, incognito = 
 }
 
 class Frame {
-	constructor(tabId, frameId, port, promise, _id) {
-		this._id = _id;
+	constructor(tabId, frameId, port, promise) {
 		this.tabId = tabId;
 		this.frameId = frameId;
 		this.port = port; port.frame = this;
@@ -296,26 +302,25 @@ class Frame {
 		let frames = tabs.get(tabId); if (!frames) { frames = new Map; tabs.set(tabId, frames); }
 		const frame = frames.get(frameId); if (frame) { return frame; }
 		const promise = (async () => {
-			const _id = Math.random().toString(32).slice(2).padStart(11, '0');
 			const [ port, , [ loaded, ], ] = (await Promise.all([
 				new Promise(async got => { (await null); promise.setPort = got; }),
 				optionsAsGlobal && Tabs.executeScript(tabId, { frameId, matchAboutBlank: true, runAt: 'document_start', code: optionsAsGlobal, }),
-				Frame.run(tabId, frameId, contentPath + optionsAsQuery/* + (gecko ? '&_id='+ _id : '')*/),
+				Frame.run(tabId, frameId, contentPath + optionsAsQuery/* + (gecko ? '&t='+ tabId : '')*/),
 				Frame.run(tabId, frameId, requirePath),
 			]).catch(error => {
 				gecko && console.error(`Can't access frame in tab ${ tabId }`,  error);
 				gecko && (error = new Error(`Can't access frame in tab ${ tabId }`));
 				silentErrors.add(error); throw error;
 			}));
-			if (loaded === false) {
-				if (port !== null) { console.error('Assertion failed'); debugger; } // TODO: remove assertion
+			assert(typeof loaded === 'boolean'); // TODO: remove assertion
+			if (!loaded) {
+				assert(port === null); // TODO: remove assertion
 				if (effort === 'fresh-only') { return null; }
-				return Frame.get(tabId, frameId, 'existing') || (() => { throw new Error('Assertion failed'); })();  // TODO: remove assertion
+				return (await Frame.get(tabId, frameId, 'existing')) || assert(false);  // TODO: remove assertion
 			}
-			if (loaded !== true) { console.error('Assertion failed'); debugger; } // TODO: remove assertion
 
 			if (frames.get(frameId) !== promise) { throw new Error(`Failed to attach to tab: Tab was navigated`); }
-			return new Frame(tabId, frameId, port, promise, _id);
+			return new Frame(tabId, frameId, port, promise);
 		})();
 		frames.set(frameId, promise);
 		return promise;
@@ -546,6 +551,12 @@ function checkEnum(choices, value) {
 	if (value == null) { return choices[0]; }
 	if (choices.includes(value)) { return value; }
 	throw new Error(`This value must be one of: '`+ choices.join(`', `) +`'`);
+}
+
+function assert(_true, message) {
+	if (_true) { return; }
+	debugger; // eslint-disable-line
+	throw new Error(`Assertion failed: ${ message || '' }`);
 }
 
 {
