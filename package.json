@@ -1,6 +1,6 @@
 {
 	"name": "web-ext-utils",
-	"version": "0.0.6",
+	"version": "0.0.8",
 	"description": "a collection of utilities to use with web extensions",
 	"author": "Niklas Gollenstede",
 	"license": "MPL-2.0",
@@ -20,6 +20,7 @@
 		"eslintrc": "NiklasGollenstede/eslintrc#c36e3e8"
 	},
 	"scripts": {
+		"postinstall": "node test/scripts/postinstall.js",
 		"test": "mocha -r test/unit/setup.js --recursive test/unit",
 		"lint": "eslint ."
 	},
