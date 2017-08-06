@@ -203,7 +203,7 @@ const silentErrors = new WeakSet; let debug = false;
 const getActiveTabId = async () => ((await Tabs.query({ currentWindow: true, active: true, }))[0] || (await Tabs.query({ active: true, }))[0]).id;
 const tabs = new Map/*<tabId, Map<frameId, Promise<Frame>{ setPort(), }>>*/;
 const options = { }; let optionsAsGlobal = '', optionsAsQuery = '';
-setOptions({ s: Math.random().toString(32).slice(2).padStart(11, '0'), }); console.log('options', options);
+setOptions({ s: Math.random().toString(32).slice(2).padStart(11, '0'), }); // console.log('options', options);
 gecko && (setOptions({ b: current, v: version, }));
 function setOptions(props) {
 	Object.assign(options, props);

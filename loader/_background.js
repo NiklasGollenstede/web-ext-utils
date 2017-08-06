@@ -2,7 +2,7 @@
 
 if (global.innerWidth || global.innerHeight) { // stop loading at once if the background page was opened in a tab or window
 	console.warn(`Background page opened in view`);
-	global.history.replaceState({ from: global.location.href.slice(global.location.origin.length), }, null, '/view.html#403');
+	global.history.replaceState({ message: `The background page can not be displayed`, }, null, '/view.html#403');
 	global.stop(); global.location.reload();
 	return;
 }

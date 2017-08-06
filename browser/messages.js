@@ -4,11 +4,15 @@
 }) => {
 
 /**
- * A multiport/Port that wrapps the runtime/tabs.on/sendMessage API for more convenient message sending and receiving.
- * @see https://github.com/NiklasGollenstede/multiport/blob/master/index.js
+ * A multiport/Port that wraps the runtime/tabs.on/sendMessage API for more convenient message sending and receiving.
+ * Listens for messages on api.runtime.onMessage and can send messages via api.runtime.sendMessage and api.tabs.sendMessage, if available.
+ * The `options` parameter of port.request()/.post() can be an object of { tabId, frameId?, } to send to tabs.
+ * The `this` in the handler will be set to the messages `sender` unless it is explicitly bound or passed to `.addHandler()`.
+ * This Port is never closed automatically.
+ *
+ * @see https://github.com/NiklasGollenstede/multiport for the full Port API
 **/
-
-class web_ext_Runtime {
+const port = new Port({ runtime: Runtime, tabs: Tabs, }, class web_ext_Runtime {
 
 	constructor(api, onData) {
 		this.api = api; this.onData = onData;
@@ -34,9 +38,8 @@ class web_ext_Runtime {
 		this.api.runtime.onMessage.removeListener(this.onMessage);
 		this.api = this.onData = null;
 	}
-}
+});
 
-const port = new Port({ runtime: Runtime, tabs: Tabs, }, web_ext_Runtime);
 Object.getOwnPropertyNames(Port.prototype).forEach(key => typeof port[key] === 'function' && (port[key] = port[key].bind(port)));
 return port;
 

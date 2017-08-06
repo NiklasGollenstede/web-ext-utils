@@ -114,7 +114,7 @@ class ValueList {
 	set(index, value) {
 		const values = Self.get(this.parent).values.slice();
 		values[index] = value;
-		this.parent.restrict.validate(value, values, this.parent);
+		this.parent.restrict && this.parent.restrict.validate(value, values, this.parent);
 		return Self.get(this.parent).root.storage.set({ [this.key]: values, });
 	}
 	replace(values) {

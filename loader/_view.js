@@ -58,10 +58,16 @@ if (!main) { throw new Error(`
 	This extension page can't be displayed in private windows, container tabs or other non-normal contexts.
 	<br><br>Please try to open <a href="${ global.location.href }">${ global.location }</a> in a normal tab.
 `); }
-if (!main.initView) { throw new Error(`This extension did not start correctly. Disabling and enabling it may help.`); }
 
 history.replaceState(history.state, '', getUrl(null));
-main.initView(global, options); // work with the background page
+
+for (let retry = 100; retry >= 0 && typeof main.define !== 'function'; --retry) {
+	(await new Promise(done => global.setTimeout(done, 500)));
+}
+if (!main.define) { throw new Error(`This extension did not start correctly. If reloading this page doesn't help, ple Disabling and enabling it may help.`); }
+
+const { id, } = main.define(null); delete main.require.cache[id]; // get id of this file
+(await main.require.async(id.replace(/_view$/, 'views'))).__initView__(global, options); // work with the background page
 
 function getUrl(query = options) { return location.href.replace(/(?:\?.*?)?(?=#.*|$)/, query ? '?'+ query : ''); } // update query
 

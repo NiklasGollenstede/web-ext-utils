@@ -1,9 +1,10 @@
-(function(global) { 'use strict'; prepare(); define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../browser/': { extension, manifest, rootUrl, Windows, Tabs, },
 	'../browser/version': { fennec, opera, },
 	'../utils/': { reportError, },
 	'../utils/files': FS,
 	'../utils/event': { setEvent, setEventGetter, },
+	module,
 	require,
 }) => {
 const Self = new WeakMap;
@@ -77,6 +78,7 @@ const methods = {
 		type !== 'popup' && focused && windowId && Windows && Windows.update(windowId, { focused: true, });
 		return new Promise((resolve, reject) => (pending[tab.id] = { resolve, reject, }));
 	},
+	__initView__: initView, // for internal use only
 };
 const fireOpen  = setEvent(methods, 'onOpen', { lazy: false, });
 const fireClose = setEvent(methods, 'onClose', { lazy: false, });
@@ -154,17 +156,23 @@ class LocationP {
 }
 
 function defaultError(view, location) {
-	const code = (/^[45]\d\d/).test(location.name) && location.name;
-	view.document.body.innerHTML = `<h1>${ code || 404 }</h1>`;
+	const code = (/^[45]\d\d/).test(location.name) ? +location.name : 0;
+	view.document.body.innerHTML = `
+		<style> :root { background: #424F5A; filter: invert(1) hue-rotate(180deg); font-family: Segoe UI, Tahoma, sans-serif; } </style>
+		<h1 id = "code">${ code || 404 }</h1>
+		<span id="message"></span>
+	`;
+	view.document.querySelector('#message').textContent = code ? view.history.state && view.history.state.message || '' : `Unknown view "${ location.name }"`;
 	!code && console.error(`Got unknown view "${ view.location.hash.slice(1) }"`);
 	location.onChange(() => view.location.reload());
 }
 
-const handlers = { }, pending = { }, locations = new Set;
+const handlers = { }, pending = { }, locations = new Set, knownViews = new WeakSet;
 const viewPath = rootUrl +'view.html#';
 const { TAB_ID_NONE = -1, } = Tabs, { WINDOW_ID_NONE = -1, } = Windows || { };
 
 async function initView(view, options = new global.URLSearchParams('')) { try {
+	if (knownViews.has(view)) { return; } knownViews.add(view); view.addEventListener('unload', () => knownViews.delete(view)); // at least in chrome, the window object stays the same after reloads
 	view.document.querySelector('link[rel="icon"]').href = (manifest.icons[1] || manifest.icons[64]).replace(/^\/?/, '/');
 	options = parseSearch(options);
 
@@ -261,11 +269,8 @@ function loadFrame(path, view) {
 }
 
 (async () => {
-	for (let i = 0; i < 10; i++) { (await null); } // give view modules that depend on this module some ticks time to work with it
-	global.initView = initView;
-	extension.getViews().forEach(view => view !== global && !prepare.queue.find(_=>_[0] === view) && view.location.reload()); // reload old views
-	prepare.queue.forEach(args => initView(...args));
-	prepare.queue.splice(0, Infinity);
+	(await module.ready); (await null);
+	extension.getViews().forEach(view => view !== global && !knownViews.has(view) && view.location.reload()); // reload old views
 })();
 
 return methods;
@@ -279,9 +284,4 @@ function parseSearch(search) {
 	return config;
 }
 
-}); function prepare() {
-
-// enqueue all views that load before this module is ready
-const queue = prepare.queue = [ ]; global.initView = (...args) => queue.push(args);
-
-} })(this);
+}); })(this);
