@@ -64,7 +64,7 @@ history.replaceState(history.state, '', getUrl(null));
 for (let retry = 100; retry >= 0 && typeof main.define !== 'function'; --retry) {
 	(await new Promise(done => global.setTimeout(done, 500)));
 }
-if (!main.define) { throw new Error(`This extension did not start correctly. If reloading this page doesn't help, ple Disabling and enabling it may help.`); }
+if (!main.define) { throw new Error(`This extension did not start correctly. Reloading this page or disabling and enabling the extension may help.`); }
 
 const { id, } = main.define(null); delete main.require.cache[id]; // get id of this file
 (await main.require.async(id.replace(/_view$/, 'views'))).__initView__(global, options); // work with the background page

@@ -237,8 +237,14 @@ function listenToNavigation() {
 async function applyScript(script) {
 	const applied = new Set, tabs = (await Tabs.query({ }));
 	(await Promise.all(tabs.map(async ({ id: tabId, url, incognito, title, }) => Promise.all(
-		(script.frames === 'top' ? [ { frameId: 0, url, }, ] : (await WebNavigation.getAllFrames({ tabId, })))
-		.map(async ({ frameId, url, }) => { try {
+		(script.frames === 'top'
+			? [ url // top frame is enough
+				? { frameId: 0, url, } // with "tabs" permission
+				: ((await WebNavigation.getFrame({ tabId, frameId: 0, })))
+				|| { }, // tab not accessible
+			]
+			: (await WebNavigation.getAllFrames({ tabId, }))
+		).map(async ({ frameId = 0, url = null, }) => { try {
 			if (!isScripable(url)) { return; } // i.e. not '<all_urls>'
 			const [ frame, , done, ] = (await applyIfMatches({ tabId, frameId, script, url, incognito, }));
 			(await done); applied.add(frame);
@@ -532,7 +538,7 @@ class web_ext_PortMulti {
 }
 
 function isScripable(url) {
-	return (/^(?:https?|file|ftp|app):\/\//).test(url) || gecko && url.startsWith('https://addons.mozilla.org');
+	return url && (/^(?:https?|file|ftp|app):\/\//).test(url) && (!gecko || !url.startsWith('https://addons.mozilla.org'));
 }
 
 function blobToDataUrl(blob) { return new Promise((resolve, reject) => {
