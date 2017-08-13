@@ -29,7 +29,7 @@ async function getUrl(url) {
 //////// start of private implementation ////////
 /* global window, document, CustomEvent, */
 
-let debug = false, lRequire = null, gRequire = null, loaded; const loading = new Promise(_=>(loaded = _));
+let debug = false, require = null, gRequire = null, loaded; const loading = new Promise(_=>(loaded = _));
 const chrome = (global.browser || global.chrome);
 const rootUrl = chrome.extension.getURL('');
 const gecko = rootUrl.startsWith('moz-');
@@ -106,29 +106,9 @@ const methods = {
 };
 
 async function connect(name, { wait = true, } = { }) {
-	const Port = (await lRequire.async('../lib/multiport/'));
+	const [ Port, web_ext_PortMulti, ] = (await Promise.all([ require.async('../lib/multiport/'), require.async('./multiplex'), ]));
 	if (!(await request('connect', name, { wait, }))) { return null; }
 	return new Port({ port, channel: name, }, web_ext_PortMulti);
-}
-
-class web_ext_PortMulti {
-	constructor({ port, channel, }, onData, onEnd) {
-		this.port = port;
-		this.onMessage = data => data[0].startsWith(channel) && onData(data[0].slice(channel.length), data[1], JSON.parse(data[2]));
-		this.onDisconnect = () => onEnd();
-		this.port.onMessage.addListener(this.onMessage);
-		this.port.onDisconnect.addListener(this.onDisconnect);
-		this.channel = (channel += '$');
-	}
-	send(name, id, args) {
-		args = JSON.stringify(args); // explicitly stringify args to throw any related errors here.
-		try { this.port.postMessage([ this.channel + name, id, args, ]); }
-		catch (error) { this.onDisconnect(); }
-	}
-	destroy() {
-		this.port.onMessage.removeListener(this.onMessage);
-		this.port.onDisconnect.removeListener(this.onDisconnect);
-	}
 }
 
 function doUnload() {
@@ -199,17 +179,15 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 			const url = config.callingScriptResolver(0);
 			if (!url.startsWith(rootUrl)) { hiddenBaseUrl = new global.URL('../../../', url).href; }
 
-			define((require, exports, module) => {
+			define((_require, exports, module) => {
 				const config = module.config();
 				config && setOptions(config);
 				debug && console.info('loader', module.id, options);
-				require.config({
+				require = _require; require.config({
 					map: { '*': { './': module.id, './views': module.id, }, },
 					config: config && config.v && { 'node_modules/web-ext-utils/browser/index': { name: config.b, version: config.v, }, },
 				});
-				lRequire = require;
-				gRequire = global.require;
-				loaded();
+				gRequire = global.require; loaded();
 				return ({
 					onUnload, getUrl, setScript, connect,
 					get debug() { return debug; },

@@ -1,6 +1,6 @@
 {
 	"name": "web-ext-utils",
-	"version": "0.0.8",
+	"version": "0.0.9",
 	"description": "a collection of utilities to use with web extensions",
 	"author": "Niklas Gollenstede",
 	"license": "MPL-2.0",
@@ -10,7 +10,7 @@
 	},
 	"dependencies": {
 		"multiport": "0.2.0",
-		"pbq": "0.3.1"
+		"pbq": "NiklasGollenstede/pbq#0c96236"
 	},
 	"devDependencies": {
 		"chai": "3.5.0",

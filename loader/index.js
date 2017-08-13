@@ -390,7 +390,6 @@ class Frame {
 	}
 
 	get eventArg() { const self = this; if (!this.arg) { this.arg = Object.freeze({
-		_id: self._id,
 		tabId: self.tabId,
 		frameId: self.frameId,
 		incognito: self.incognito,
@@ -408,9 +407,9 @@ class Frame {
 			self.fireRemove = setEvent(self, 'onRemove', { lazy: false, once: true, }); return self.onRemove;
 		},
 		async connect(name, { wait = true, } = { }) {
-			const Port = (await require.async('../lib/multiport/'));
+			const [ Port, web_ext_PortMulti, ] = (await Promise.all([ require.async('../lib/multiport/'), require.async('./multiplex'), ]));
 			if (!(await self.connect({ name, wait, content: false, }))) { return null; }
-			return new Port({ port: self.port, frame: self.arg, channel: name, }, web_ext_PortMulti);
+			return new Port({ port: self.port, thisArg: self.arg, channel: name, }, web_ext_PortMulti);
 		},
 	}); } return this.arg; }
 
@@ -516,26 +515,6 @@ const methods = {
 		return this.frame.connect({ name, wait, content: true, });
 	},
 };
-
-class web_ext_PortMulti {
-	constructor({ port, frame, channel, }, onData, onEnd) {
-		this.port = port;
-		this.onMessage = data => data[0].startsWith(channel) && onData(data[0].slice(channel.length), data[1], JSON.parse(data[2]), frame);
-		this.onDisconnect = () => onEnd();
-		this.port.onMessage.addListener(this.onMessage);
-		this.port.onDisconnect.addListener(this.onDisconnect);
-		this.channel = (channel += '$');
-	}
-	send(name, id, args) {
-		args = JSON.stringify(args); // explicitly stringify args to throw any related errors here.
-		try { this.port.postMessage([ this.channel + name, id, args, ]); }
-		catch (error) { this.onDisconnect(); }
-	}
-	destroy() {
-		this.port.onMessage.removeListener(this.onMessage);
-		this.port.onDisconnect.removeListener(this.onDisconnect);
-	}
-}
 
 function isScripable(url) {
 	return url && (/^(?:https?|file|ftp|app):\/\//).test(url) && (!gecko || !url.startsWith('https://addons.mozilla.org'));

@@ -1,6 +1,6 @@
 (function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../browser/': { extension, manifest, rootUrl, Windows, Tabs, },
-	'../browser/version': { fennec, opera, },
+	'../browser/version': { fennec, opera, chrome, },
 	'../utils/': { reportError, },
 	'../utils/files': FS,
 	'../utils/event': { setEvent, setEventGetter, },
@@ -85,7 +85,7 @@ const fireClose = setEvent(methods, 'onClose', { lazy: false, });
 Object.freeze(methods);
 
 // location format: #name?query#hash #?query#hash #name#hash ##hash #name?query!query #?query!query #name!hash #!hash
-// view types: 'tab', 'popup', 'panel', 'sidebar'
+// view types: 'tab', 'popup', 'panel', 'sidebar', 'frame'
 class Location {
 	get view     () { return Self.get(this).view; }
 	get type     () { return Self.get(this).type; }
@@ -159,8 +159,7 @@ function defaultError(view, location) {
 	const code = (/^[45]\d\d/).test(location.name) ? +location.name : 0;
 	view.document.body.innerHTML = `
 		<style> :root { background: #424F5A; filter: invert(1) hue-rotate(180deg); font-family: Segoe UI, Tahoma, sans-serif; } </style>
-		<h1 id = "code">${ code || 404 }</h1>
-		<span id="message"></span>
+		<h1 id="code">${ +code || 404 }</h1><span id="message"></span>
 	`;
 	view.document.querySelector('#message').textContent = code ? view.history.state && view.history.state.message || '' : `Unknown view "${ location.name }"`;
 	!code && console.error(`Got unknown view "${ view.location.hash.slice(1) }"`);
@@ -190,14 +189,19 @@ async function initView(view, options = new global.URLSearchParams('')) { try {
 		};
 		(await Windows.update(windowId, { top: options.top, left: options.left, })); // firefox currently ignores top and left in .create(), so move it here
 	} else if (fennec) {
-		type = 'tab'; tabId = (await get('tab')).id;
+		const tab = (await get('tab')); tabId = tab.id; type = 'tab';
+		view.innerWidth < tab.width && (type = 'frame');
 	} else {
 		const [ tab, window, ] = (await Promise.all([ get('tab'), get('window'), ]));
 		if (tab) {
 			tabId = tab.id; windowId = window.id; type = [ 'popup', 'panel', ].includes(window.type) ? 'popup' : 'tab';
+			view.innerWidth < tab.width && (type = 'frame');
 		} else {
-			windowId = window.id; type = view.document.body.clientWidth < 15 ? 'panel' : 'sidebar';
-			opera && view.document.body.clientWidth === 0 && (type = 'sidebar');
+			windowId = window.id;
+			const body = view.document.body; type =
+			  opera && body.clientWidth === 0 ? 'sidebar'
+			: chrome && body.clientWidth > 100 && body.clientHeight === 0 ? 'frame'
+			: body.clientWidth < 15 ? 'panel' : 'sidebar';
 		}
 	}
 	// TODO: in firefox panels don't have focus for (all?) keyboard input before the user clicks in them. It would be nice if the focus could be forced to the panel

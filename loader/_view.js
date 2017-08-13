@@ -1,5 +1,9 @@
 (async function(global) { 'use strict'; try { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+/**
+ * This script is loaded with every extension view and has a single task: pass its global on to the background page for further processing.
+ */
 const { document, location, history, } = global;
+if (!(/^\w+-extension:\/\//).test(location.href)) { return void console.error(`This script can only be loaded in extension pages`); }
 document.currentScript.remove(); // ==> body is now empty
 
 const chrome = global.browser || global.chrome;
@@ -49,15 +53,15 @@ if (!main) {
 		(await browser.windows.create({
 			type: 'popup', url: getUrl(), top, left, width, height,
 		}));
-		return; // abort
+		return; // abort (opening the popup closes this panel)
 	}
 }
 
 // failed to move to non-private window. This only happens in very weird situations (e.g. in the All-in-One Sidebar)
-if (!main) { throw new Error(`
+if (!main) { return void showError({ html: `
 	This extension page can't be displayed in private windows, container tabs or other non-normal contexts.
-	<br><br>Please try to open <a href="${ global.location.href }">${ global.location }</a> in a normal tab.
-`); }
+	<br><br>Please try to open <a href="${ global.location.href.replace(/"/g, '&quot;') }">${ global.location.href.replace(/</g, '&lt;') }</a> in a normal tab.
+`, }); }
 
 history.replaceState(history.state, '', getUrl(null));
 
@@ -71,9 +75,12 @@ const { id, } = main.define(null); delete main.require.cache[id]; // get id of t
 
 function getUrl(query = options) { return location.href.replace(/(?:\?.*?)?(?=#.*|$)/, query ? '?'+ query : ''); } // update query
 
-// inline scripts are not allowed (CSP, firefox), so this is not a security problem
-} catch (error) { (global.document.body.innerHTML = `
-	<style> :root { background: #424F5A; filter: invert(1) hue-rotate(180deg); font-family: Segoe UI, Tahoma, sans-serif; } </style>
-	<h1>500</h1>
-	`+ (error ? (error.name ? error.name +': ' : '') + (error.message || '') : '') +`
-`); console.error(error); } })(this);
+} catch (error) {
+	showError({ text: (error ? (error.name ? error.name +': ' : '') + (error.message || '') : ''), });
+	console.error(error);
+} function showError({ text, html, }) {
+	global.document.body.innerHTML
+	= `<style> :root { background: #424F5A; filter: invert(1) hue-rotate(180deg); font-family: Segoe UI, Tahoma, sans-serif; } </style>
+	<h1>500 <small>Fatal Error</small></h1><span id="message"></span>`;
+	global.document.querySelector('#message')[html ? 'innerHTML' : 'textContent'] = html || text || '';
+} })(this);
