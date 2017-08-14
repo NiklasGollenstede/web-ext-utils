@@ -146,8 +146,8 @@ function setIcon(icon, value) {
 	icon.classList.remove('missing');
 	if (typeof value === 'string') {
 		icon.style.backgroundImage = `url(${ value })`;
-	} else if (typeof value.querySelector === 'function') {
-		icon.appendChild(value);
+	} else if (typeof value.cloneNode === 'function') {
+		try { icon.appendChild(value.cloneNode(true)); } catch (_) { icon.classList.add('missing'); }
 	} else {
 		icon.classList.add('missing');
 	}

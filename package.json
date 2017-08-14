@@ -10,7 +10,7 @@
 	},
 	"dependencies": {
 		"multiport": "0.2.0",
-		"pbq": "NiklasGollenstede/pbq#0c96236"
+		"pbq": "0.3.2"
 	},
 	"devDependencies": {
 		"chai": "3.5.0",

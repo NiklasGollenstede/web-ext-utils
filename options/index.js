@@ -44,9 +44,9 @@ class Option {
 	get value() { return this.values.get(0); }
 	set value(value) { return this.values.set(0, value); }
 	reset() { return this.values.reset(); }
-	resetAll() {
+	async resetAll() {
 		const root = Self.get(this).root, path = root.prefix + this.path;
-		return root.storage.remove(root.keys.filter(_=>_.startsWith(path)));
+		return void (await root.storage.remove(root.keys.filter(_=>_.startsWith(path))));
 	}
 
 	whenTrue(listener, arg) {
@@ -111,30 +111,30 @@ class ValueList {
 	get(index) {
 		return Self.get(this.parent).values[index];
 	}
-	set(index, value) {
+	async set(index, value) {
 		const values = Self.get(this.parent).values.slice();
 		values[index] = value;
 		this.parent.restrict && this.parent.restrict.validate(value, values, this.parent);
-		return Self.get(this.parent).root.storage.set({ [this.key]: values, });
+		return void (await Self.get(this.parent).root.storage.set({ [this.key]: values, }));
 	}
-	replace(values) {
+	async replace(values) {
 		if (values.length < this.min || values.length > this.max) {
 			throw new Error('the number of values for the option "'+ this.key +'" must be between '+ this.min +' and '+ this.max);
 		}
 		this.parent.restrict && this.parent.restrict.validateAll(values, this.parent);
-		return Self.get(this.parent).root.storage.set({ [this.key]: values, });
+		return void (await Self.get(this.parent).root.storage.set({ [this.key]: values, }));
 	}
-	splice(index, remove, ...insert) {
+	async splice(index, remove, ...insert) {
 		const values = Self.get(this.parent).values.slice();
 		values.splice.apply(values, arguments);
 		if (values.length < this.min || values.length > this.max) {
 			throw new Error('the number of values for the option "'+ this.key +'" must be between '+ this.min +' and '+ this.max);
 		}
 		this.parent.restrict && this.parent.restrict.validateAll(insert, this.parent, index);
-		return Self.get(this.parent).root.storage.set({ [this.key]: values, });
+		return void (await Self.get(this.parent).root.storage.set({ [this.key]: values, }));
 	}
-	reset() {
-		return Self.get(this.parent).root.storage.remove(this.key);
+	async reset() {
+		return void (await Self.get(this.parent).root.storage.remove(this.key));
 	}
 } Object.freeze(ValueList.prototype);
 
@@ -296,8 +296,8 @@ return class OptionsRoot {
 		});
 	}); }
 
-	resetAll() {
-		return this.storage.remove(this.keys);
+	async resetAll() {
+		return void (await this.storage.remove(this.keys));
 	}
 
 	onAnyChange() {

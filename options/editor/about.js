@@ -55,8 +55,8 @@ host.classList.add('about-host');
 			'Browser: ', browser.name, ' ', browser.version,
 		]),
 	]),
-	manifest.contributions && element('h3', [ 'Contributions', ]),
-	manifest.contributions && element('ul', manifest.contributions.map(({ what, who, license, }) => element('li', [
+	manifest.contributions && manifest.contributions.length && element('h3', [ 'Contributions', ]),
+	manifest.contributions && manifest.contributions.length && element('ul', manifest.contributions.map(({ what, who, license, }) => element('li', [
 		makeLink(what),
 		who ? [ ' by ', Array.isArray(who) ? addCommas(who.map(makePerson)) : makePerson(who), ] : [ ],
 		license ? [ ' (', makeLink(license), ')', ] : [ ],
