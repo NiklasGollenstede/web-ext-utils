@@ -5,9 +5,9 @@
 	about,
 	'common/options': options,
 	require,
-}) => ({ document, onCommand, }, { type = 'tab', }) => {
+}) => ({ document, onCommand, }, location) => {
 
-if (fennec && type !== 'tab') { // the inline options page in fennec is small and buggy
+if (fennec && location && location.type !== 'tab') { // the inline options page in fennec is small and buggy
 	document.body.innerHTML = `<button>Show Options</button>`;
 	document.querySelector('button').onclick = _=>!_.button && require('../../loader/views').openView(document.URL, 'tab');
 	return;

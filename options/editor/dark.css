@@ -61,7 +61,7 @@ textarea[disabled], input[disabled], select[disabled] {
 }
 select:not(:hover), _:-moz-tree-row(hover) { /* firefox only */
 	-moz-appearance: none;
-	padding-right: 25px;
+	padding-right: 24px;
 }
 input[type="number"]:not(:hover) { /* firefox only */
 	-moz-appearance: textfield;
@@ -92,9 +92,9 @@ code {
 	color: #ebf5ff;
 	box-shadow: 0 0 1px 0px white inset;
 }
-a[href] {
+a:link {
 	color: #c5ffc7;
 }
-a[href]:visited {
+a:link:visited {
 	color: #ebf5ff;
 }

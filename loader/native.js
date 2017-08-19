@@ -17,6 +17,7 @@ return async function connect({ script, sourceURL, }) {
 	if (!channel) {
 		channel = runtime.connectNative('de.niklasg.native_ext');
 		setup = new Port({ port: channel, channel: '-', }, Multiplex);
+		setup.ended.then(() => { setup = channel = null; });
 		// global.setup = setup; // TODO: remove
 	}
 

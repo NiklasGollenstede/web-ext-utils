@@ -1,13 +1,13 @@
 /* general */
 * {
-	font-family: Segoe UI, Tahoma, sans-serif;
 	box-sizing: border-box;
+}
+body {
+	font-family: Segoe UI, Tahoma, sans-serif;
+	font-size: 12.5px;
 }
 code {
 	font-family: monospace;
-}
-body {
-	font-size: 12.5px;
 }
 ::-webkit-scrollbar {
 	width: 8px;

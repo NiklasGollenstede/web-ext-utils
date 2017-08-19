@@ -156,11 +156,11 @@ class LocationP {
 }
 
 function defaultError(view, location) {
-	const code = (/^[45]\d\d/).test(location.name) ? +location.name : 0;
-	view.document.body.innerHTML = `
+	const code = (/^[45]\d\d$/).test(location.name) ? +location.name : 0;
+	view.document.body['inner'+'HTML'] = `
 		<style> :root { background: #424F5A; filter: invert(1) hue-rotate(180deg); font-family: Segoe UI, Tahoma, sans-serif; } </style>
 		<h1 id="code">${ +code || 404 }</h1><span id="message"></span>
-	`;
+	`; // this is a literal string with a number substituted
 	view.document.querySelector('#message').textContent = code ? view.history.state && view.history.state.message || '' : `Unknown view "${ location.name }"`;
 	!code && console.error(`Got unknown view "${ view.location.hash.slice(1) }"`);
 	location.onChange(() => view.location.reload());

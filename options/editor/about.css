@@ -1,9 +1,14 @@
 
+.about-host {
+	font-family: Segoe UI, Tahoma, sans-serif;
+}
+
 .about-host h2,
 .about-host h3 {
 	font-weight: normal;
 	margin: 15px 0 5px;
 }
+
 .about-host ul {
 	padding-left: 10px;
 	margin: 5px 0;
