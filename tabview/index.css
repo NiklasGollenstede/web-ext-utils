@@ -1,7 +1,7 @@
 
 .tabview * {
 	box-sizing: border-box;
-	font-family: "Segoe UI";
+	font-family: Segoe UI, Tahoma, sans-serif;
 }
 .tabview>.content {
 	position: absolute;

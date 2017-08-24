@@ -297,9 +297,9 @@ function copyProperties(target, source) {
 }
 
 function sanatize(html) {
-	const allowed = /^(a|b|big|br|code|div|i|p|pre|kbd|li|ol|ul|spam|span|sup|sub|tt|var)$/;
+	const allowed = /^(a|abbr|b|big|br|code|div|i|p|pre|kbd|li|ol|ul|spam|span|sup|sub|tt|var)$/;
 	return html.replace(
-		(/<(\/?)(\w+)[^>]*?( href="(?!(javascript|data):)[^"]*?")?( title="[^"]*?")?[^>]*?>/g),
+		(/<(\/?)(\w+)[^>]*?( href="(?!(?:javascript|data):)[^"]*?")?( title="[^"]*?")?[^>]*?>/g),
 		(match, slash, tag, href, title) => allowed.test(tag) ? ('<'+ slash + tag + (title || '') + (href ? href +'target="_blank"' : '') +'>') : ''
 	);
 }

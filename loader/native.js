@@ -13,22 +13,23 @@ let channel = null, setup = null;
  * @param  {string}  options.sourceURL  The original source of the `.script` for better error reporting.
  * @return {Port}                       The multiport/Port whose other end was passed to the `.script`.
  */
-return async function connect({ script, sourceURL, }) {
+return async function connect({ script, sourceURL, targetName, }) {
 	if (!channel) {
-		channel = runtime.connectNative('de.niklasg.native_ext');
+		channel = runtime.connectNative(targetName || 'de.niklasg.native_ext');
 		setup = new Port({ port: channel, channel: '-', }, Multiplex);
 		setup.ended.then(() => { setup = channel = null; });
 		// global.setup = setup; // TODO: remove
 	}
 
-	const id = (await setup.request('init', { script, sourceURL, }));
+	let id; try { id = (await setup.request('init', { script, sourceURL, })); }
+	catch (error) { console.error(error); throw new Error(`Could not connect to NativeExt`); }
 
 	const port = new Port({ port: channel, channel: id, }, Multiplex);
 	// global.port = port; // TODO: remove
 	ports.add(port); port.ended.then(() => {
 		ports.delete(port);
 		if (ports.size) { return; }
-		channel.disconnect();
+		channel && channel.disconnect();
 		setup = channel = null;
 	});
 

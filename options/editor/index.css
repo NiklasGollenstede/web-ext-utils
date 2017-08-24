@@ -30,6 +30,7 @@ textarea, input, select, .checkbox-wrapper>label {
 	border-radius: 3px;
 	padding: 2px 7px;
 	height: 25px;
+	font-size: 110%;
 }
 textarea:focus, input:focus, select:focus,
 textarea:focus, input:active:focus, select:active:focus {
@@ -143,7 +144,7 @@ pre {
 	transition-property: color, fill, background-color, border-color, box-shadow, opacity;
 	transition-duration: 0.21s;
 }
-.preload * {
+.preload, .preload * {
 	transition: none !important;
 }
 

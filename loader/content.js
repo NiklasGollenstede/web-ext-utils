@@ -99,7 +99,7 @@ const methods = {
 		return new Promise((done, failed) => gRequire(modules, (...args) => done(args.length), failed));
 	},
 	callScript(id, args) {
-		const script = scripts[id]; delete script[id];
+		const script = scripts[id]; delete scripts[id];
 		return script(...args);
 	},
 	setOptions,
