@@ -19,7 +19,7 @@ const Self = new Map/*<ContentScript, object>*/;
  * @return {any}                       The value returned or promised by `script`.
  * @throws {any}                       If `script` throws or otherwise fails to execute.
  */
-async function runInTab(tabId, frameId, script, ...args) {
+async function runInFrame(tabId, frameId, script, ...args) {
 	if (typeof tabId !== 'number') { tabId = (await getActiveTabId()); }
 	return (await Frame.get(tabId, frameId || 0)).call(getScource(script), args);
 }
@@ -33,21 +33,23 @@ async function runInTab(tabId, frameId, script, ...args) {
  * @return {natural}                   The number of modules loaded.
  * @throws {any}                       If any of the modules throws or otherwise fails to load.
  */
-async function requireInTab(tabId, frameId, modules) {
+async function requireInFrame(tabId, frameId, modules) {
 	if (typeof tabId !== 'number') { tabId = (await getActiveTabId()); }
 	return (await Frame.get(tabId, frameId || 0)).request('require', modules);
 }
 
 /**
  * Detaches all content scripts from the given context. Specifically, it performs the same steps for that context as when the extension is unloaded.
- * That is, it fires the onUnload event, deletes the global define and require functions and closes the loader connection.
+ * That is, it fires the onUnload event (both on the frame reference and in the content script),
+ * deletes the global define and require functions and closes the loader connection.
  * @param  {natural|null}     tabId    The id of the tab to run in. Default to an active tab, preferably in the current window.
  * @param  {natural|null}     frameId  The id of the frame within the tab to run in. Defaults to the top level frame.
  */
-async function detachFormTab(tabId, frameId) {
+async function unloadFrame(tabId, frameId) {
 	if (typeof tabId !== 'number') { tabId = (await getActiveTabId()); }
-	const frame = (await Frame.get(tabId, frameId || 0, 'existing'));
-	frame && frame.destroy();
+	const frames = tabs.get(tabId);
+	const frame = frames && frames.get(frameId || 0);
+	frame && (await frame).destroy();
 }
 
 async function getFrame(tabId, frameId) {
@@ -109,14 +111,14 @@ class ContentScript {
 	get frames()     { return Self.get(this).frames; }
 
 	/**
-	 * The ids of the modules to load. Same as the `modules` parameter to `requireInTab()`.
+	 * The ids of the modules to load. Same as the `modules` parameter to `requireInFrame()`.
 	 */
 	set modules(v)   { if (typeof v !== 'object') { throw new Error(`'modules' must be an Array, object or null`); } Self.get(this).modules = v; }
 	get modules()    { return Self.get(this).modules; }
 
 	/**
 	 * Function that is executed after all `.modules` specified in this ContentScript are loaded. Should return (a Promise to) a JSONable value.
-	 * @param  {function|null}  script  Same as the script parameter to runInTab().
+	 * @param  {function|null}  script  Same as the script parameter to runInFrame().
 	 * @return {string|null}            The decompiled source of the function, if set.
 	 */
 	set script(v)    { Self.get(this).script = v == null ? null : getScource(v); }
@@ -166,8 +168,7 @@ class ContentScript {
 		const self = Self.get(this);
 		if (!self) { return; } Self.delete(this);
 		self.fireMatch && self.fireMatch(null, { last: true, });
-		self.fireShow && self.fireShow(null, { last: true, });
-		self.fireHide && self.fireHide(null, { last: true, });
+		self.fireUnload && self.fireUnload(null, { last: true, });
 		self.include.length && listenToNavigation();
 	}
 } {
@@ -180,20 +181,16 @@ class ContentScript {
 	 */
 	setEventGetter(ContentScript, 'Match', Self);
 	/**
-	 * Event that gets fired after the content frame receives an `.isTrusted` "pagehide" event.
+	 * Event that gets fired after the content script in a frame was unloaded, either because it's tab/window was closed or navigated or because .
 	 */
-	setEventGetter(ContentScript, 'Hide', Self);
-	/**
-	 * Event that gets fired after the content frame receives an `.isTrusted` "pageshow" event. Not fired on the initial page load.
-	 */
-	setEventGetter(ContentScript, 'Show', Self);
+	setEventGetter(ContentScript, 'Unload', Self);
 }
 
 //////// start of private implementation ////////
 /* eslint-disable no-throw-literal */ /* eslint-disable prefer-promise-reject-errors */
 
 const contentPath = new global.URL(require.toUrl('./content.js')).pathname;
-const requirePath = new global.URL(require.toUrl('../lib/pbq/require.js')).pathname + (!gecko ? '' : '?ifExisting=replace');
+const requirePath = new global.URL(require.toUrl('../lib/pbq/require.js')).pathname; // + (!gecko ? '' : '?ifExisting=throw');
 const allowContentEval = (gecko ? (await Browser.rawManifest) : manifest).permissions.includes('contentEval');
 const getScource = ((f = x=>x, fromFunction = f.call.bind(f.toString)) =>
 	code => allowContentEval && typeof code === 'string' ? `function() { ${ code } }` : fromFunction(code)
@@ -203,7 +200,6 @@ const silentErrors = new WeakSet; let debug = false;
 const getActiveTabId = async () => ((await Tabs.query({ currentWindow: true, active: true, }))[0] || (await Tabs.query({ active: true, }))[0]).id;
 const tabs = new Map/*<tabId, Map<frameId, Promise<Frame>{ setPort(), }>>*/;
 const options = { }; let optionsAsGlobal = '', optionsAsQuery = '';
-setOptions({ s: Math.random().toString(32).slice(2).padStart(11, '0'), }); // console.log('options', options);
 gecko && (setOptions({ b: current, v: version, }));
 function setOptions(props) {
 	Object.assign(options, props);
@@ -220,8 +216,7 @@ function initScript(_this) {
 		include: [ ], exclude: [ ], incognito: false, frames: 'top',
 		modules: null, script: null, args: [ ],
 		onMatch: null, fireMatch: null,
-		onShow: null, fireShow: null,
-		onHide: null, fireHide: null,
+		onUnload: null, fireUnload: null,
 	}; Self.set(_this, self);
 }
 
@@ -232,6 +227,14 @@ function listenToNavigation() {
 	WebNavigation.onCommitted.removeListener(onNavigation); // always remove to avoid duplicate
 	if (!filters.length) { return; }
 	WebNavigation.onCommitted.addListener(onNavigation, { url: filters, });
+}
+
+async function onNavigation({ tabId, frameId, url, }) {
+	debug && console.info('onNavigation', { tabId, frameId, url, });
+	if (!isScripable(url)) { return; } // i.e. not '<all_urls>'
+	frameId === 0 && Frame.resetTab(tabId);
+	Promise.all(Array.from(Self.values(), script => applyIfMatches({ tabId, frameId, script, url, })))
+	.catch(error => console.error('Failed to attach scripts during navigation',  error));
 }
 
 async function applyScript(script) {
@@ -253,23 +256,14 @@ async function applyScript(script) {
 	applied.delete(null); return applied;
 }
 
-async function onNavigation({ tabId, frameId, url, }) {
-	debug && console.info('onNavigation', { tabId, frameId, url, });
-	if (!isScripable(url)) { return; } // i.e. not '<all_urls>'
-	frameId === 0 && Frame.resetTab(tabId);
-	Promise.all(Array.from(Self.values(), script => applyIfMatches({ tabId, frameId, script, url, })))
-	.catch(error => console.error('Failed to attach scripts during navigation',  error));
-}
-
-async function applyIfMatches({ tabId, frameId, script, url = null, incognito = false/*not yet known*/, allowOld = true, }) {
+async function applyIfMatches({ tabId, frameId, script, url = null, incognito = false/*not yet known*/, }) {
 	if (url && (
 		(script.frames === 'top' && frameId >= 1)
 		|| incognito && !script.incognito
 		|| !script.include.some(_=>_.test(url))
 		|| script.exclude.some(_=>_.test(url))
 	)) { return [ ]; }
-	const frame = (await Frame.get(tabId, frameId, allowOld ? 'fresh-only' : null));
-	if (frame === null) { return [ ]; }
+	const frame = (await Frame.get(tabId, frameId));
 	if (url && frame.incognito && !script.incognito) { return [ ]; }
 	const done = Object.freeze((async () => {
 		script.modules && (await frame.request('require', script.modules));
@@ -285,14 +279,12 @@ class Frame {
 		this.tabId = tabId;
 		this.frameId = frameId;
 		this.port = port; port.frame = this;
-		this.ready = promise;
+		this.promise = promise;
 		this.incognito = port.sender.tab.incognito;
 		this.hidden = false;
 		this.connections = Object.create(null);
 		// this._parent = null;
-		this.onHide = null; this.fireHide = null;
-		this.onShow = null; this.fireShow = null;
-		this.onRemove = null; this.fireRemove = null;
+		this.onUnload = null; this.fireUnload = null;
 		this.arg = null;
 		this.scripts = new Set;
 		this.destroy = this.destroy.bind(this);
@@ -300,15 +292,11 @@ class Frame {
 		global.addEventListener('unload', this.destroy);
 	}
 
-	static async get(tabId, frameId, effort) {
-		if (effort === 'existing') {
-			const frames = tabs.get(tabId);
-			return frames && frames.get(frameId) || null;
-		}
+	static async get(tabId, frameId) {
 		let frames = tabs.get(tabId); if (!frames) { frames = new Map; tabs.set(tabId, frames); }
-		const frame = frames.get(frameId); if (frame) { return frame; }
-		const promise = (async () => {
-			const [ port, , [ loaded, ], ] = (await Promise.all([
+		let promise = frames.get(frameId); if (promise) { return promise; }
+		promise = (async () => {
+			const [ port, ] = (await Promise.all([
 				new Promise(async got => { (await null); promise.setPort = got; }),
 				optionsAsGlobal && Tabs.executeScript(tabId, { frameId, matchAboutBlank: true, runAt: 'document_start', code: optionsAsGlobal, }),
 				Frame.run(tabId, frameId, contentPath + optionsAsQuery/* + (gecko ? '&t='+ tabId : '')*/),
@@ -318,12 +306,6 @@ class Frame {
 				gecko && (error = new Error(`Can't access frame in tab ${ tabId }`));
 				silentErrors.add(error); throw error;
 			}));
-			assert(typeof loaded === 'boolean'); // TODO: remove assertion
-			if (!loaded) {
-				assert(port === null); // TODO: remove assertion
-				if (effort === 'fresh-only') { return null; }
-				return (await Frame.get(tabId, frameId, 'existing')) || assert(false);  // TODO: remove assertion
-			}
 
 			if (frames.get(frameId) !== promise) { throw new Error(`Failed to attach to tab: Tab was navigated`); }
 			return new Frame(tabId, frameId, port, promise);
@@ -331,13 +313,14 @@ class Frame {
 		frames.set(frameId, promise);
 		return promise;
 	}
-	static async run(tabId, frameId, file) {
-		return Tabs.executeScript(tabId, { file, frameId, matchAboutBlank: true, runAt: 'document_start', });
+	static resetTab(tabId) {
+		const tab = tabs.get(tabId);
+		tab && tab.forEach(_=>_.then(_=>_.destroy()));
+		tab && tab.clear();
 	}
 
-	static resetTab(tabId) {
-		const frames = tabs.get(tabId);
-		frames && frames.delete(0);
+	static async run(tabId, frameId, file) {
+		return Tabs.executeScript(tabId, { file, frameId, matchAboutBlank: true, runAt: 'document_start', });
 	}
 
 	async request(method, ...args) {
@@ -358,23 +341,6 @@ class Frame {
 		return this.request('callScript', id, args);
 	}
 
-	hide() {
-		if (this.hidden) { return; } this.hidden = true;
-		this.fireHide && this.fireHide([ this.eventArg, ]);
-		this.scripts.forEach(script => script.fireHide && script.fireHide([ this.eventArg, ]));
-		if (this.frameId !== 0) { return; }
-		const frames = tabs.get(this.tabId);
-		frames.get(this.frameId) === this.ready && frames.delete(this.frameId);
-	}
-	show() {
-		if (!this.hidden) { return; } this.hidden = false;
-		const frames = tabs.get(this.tabId), pending = frames.get(this.frameId);
-		pending && pending !== this.ready && pending.setPort(null);
-		this.frameId === 0 && frames.set(this.frameId, this);
-		this.fireShow && this.fireShow([ this.eventArg, ]);
-		this.scripts.forEach(script => script.fireShow && script.fireShow([ this.eventArg, ]));
-	}
-
 	async connect({ name, wait, content, }) {
 		const pending = this.connections[name];
 		if (pending) {
@@ -383,7 +349,7 @@ class Frame {
 		} else if (wait) {
 			(await new Promise((resolve, reject) => {
 				const pending = this.connections[name] = { content, resolve, };
-				this.eventArg.onRemove(() => pending.resolve && reject({ message: 'Frame navigated', }));
+				this.eventArg.onUnload(() => pending.resolve && reject({ message: 'Frame navigated', }));
 			}));
 		} else { return false; }
 		return true;
@@ -394,17 +360,9 @@ class Frame {
 		frameId: self.frameId,
 		incognito: self.incognito,
 		get hidden() { return self.hidden; },
-		get onShow() {
-			if (self.onShow) { return self.onShow; }
-			self.fireShow = setEvent(self, 'onShow', { lazy: false, }); return self.onShow;
-		},
-		get onHide() {
-			if (self.onHide) { return self.onHide; }
-			self.fireHide = setEvent(self, 'onHide', { lazy: false, }); return self.onHide;
-		},
-		get onRemove() {
-			if (self.onRemove) { return self.onRemove; }
-			self.fireRemove = setEvent(self, 'onRemove', { lazy: false, once: true, }); return self.onRemove;
+		get onUnload() {
+			if (self.onUnload) { return self.onUnload; }
+			self.fireUnload = setEvent(self, 'onUnload', { lazy: false, once: true, }); return self.onUnload;
 		},
 		async connect(name, { wait = true, } = { }) {
 			const [ Port, web_ext_PortMulti, ] = (await Promise.all([ require.async('../lib/multiport/'), require.async('./multiplex'), ]));
@@ -415,16 +373,13 @@ class Frame {
 
 	destroy(unload) {
 		global.removeEventListener('unload', this.destroy);
-		this.hide();
 		const frames = tabs.get(this.tabId);
-		frames && frames.get(this.frameId) === this && frames.delete(this.frameId);
-		this.fireShow && this.fireShow(null, { last: true, });
-		this.fireHide && this.fireHide(null, { last: true, });
-		this.fireRemove && this.fireRemove(unload ? null : [ this.eventArg, ]);
+		frames && frames.get(this.frameId) === this.promise && frames.delete(this.frameId); frames && frames.size === 0 && tabs.delete(this.tabId);
+		this.scripts.forEach(script => script.fireUnload && script.fireUnload([ this.eventArg, ])); this.scripts.clear();
+		this.fireUnload && this.fireUnload(unload ? null : [ this.eventArg, ], { last: true, });
 		this.port && this.port.onDisconnect.removeListener(this.destroy);
 		this.port && this.port.disconnect();
 		this.port && delete this.port.frame && delete this.port;
-		this.scripts.clear();
 	}
 }
 
@@ -489,12 +444,6 @@ const methods = {
 	ping() {
 		return true;
 	},
-	pagehide() {
-		this.frame.hide();
-	},
-	pageshow() {
-		this.frame.show();
-	},
 	useDataUrls() {
 		if (useDataUrls) { return; }
 		console.warn(`Failed to load "blob:moz-extension:..." URL in content, using data:-URLs instead`);
@@ -544,15 +493,23 @@ function assert(_true, message) {
 	throw new Error(`Assertion failed: ${ message || '' }`);
 }
 
+function deprecate(name, alt) { return function deprecated() {
+	console.warn(new Error(`"${ name }" is deprecated, use "${ alt.name }" instead`));
+	alt.apply(this, arguments); // eslint-disable-line no-invalid-this
+}; }
+
 {
 	runtime.onConnect.addListener(onConnect);
 }
 
 return Object.freeze({
 	ContentScript,
-	runInTab,
-	requireInTab,
-	detachFormTab,
+	runInTab: deprecate('runInTab', runInFrame),
+	requireInTab: deprecate('requireInTab', requireInFrame),
+	detachFormTab: deprecate('detachFormTab', unloadFrame),
+	runInFrame,
+	requireInFrame,
+	unloadFrame,
 	getFrame,
 	register,
 	set debug(v) { v = !!v; if (debug === v) { return; } debug = v; setOptions({ d: v ? 1 : 0, }); }, get debug() { return debug; },

@@ -37,15 +37,18 @@ const options = { }; function setOptions(props) {
 	Object.assign(options, props);
 	if ('d' in props) { debug = options.d; }
 }
-if ('__options__' in global) { setOptions(global.__options__); delete global.__options__; }
-
-const session = options.s || ((/\bs=%22([0-9a-v]{11})%22/).exec((new Error).stack) || [ '', '<no_session>', ])[1];
+if ('__options__' in global) {
+	setOptions(global.__options__); delete global.__options__;
+} else {
+	const stack = (new Error).stack;
+	(/\bd=(?:true|1)\b/).test(stack) && (debug = true);
+}
 
 if (global.__content_loadedd__) {
-	if (global.__content_loadedd__.session === session) { debug && console.info('skip due to same session', session); return false; }
-	debug && console.info('unloading from old session', global.__content_loadedd__.session); global.__content_loadedd__.doUnload();
+	console.error('unloading orphaned content script', global.__content_loadedd__.session); // should never happen
+	global.__content_loadedd__.doUnload();
 }
-Object.defineProperty(global, '__content_loadedd__', { value: { session, doUnload, }, configurable: true, });
+Object.defineProperty(global, '__content_loadedd__', { value: { doUnload, }, configurable: true, });
 
 const _fetch = global.__original_fetch__ = global.__original_fetch__ || global.fetch;
 const objectUrls = Object.create(null), scripts = Object.create(null);
@@ -113,18 +116,17 @@ async function connect(name, { wait = true, } = { }) {
 
 function doUnload() {
 	if (unloaded) { return; } unloaded = true;
-	debug && console.info('unloading content', session);
+	debug && console.info('unloading content');
 	delete global.require; delete global.define; delete global.__content_loadedd__;
 	global.fetch = _fetch;
 	Object.keys(methods).forEach(key => delete methods[key]);
 
-	unloadListeners.forEach(listener => { try { listener(); } catch (error) { console.error(error); } });
+	unloadListeners.forEach(async listener => { try { const p = listener(); (await p); } catch (error) { console.error(error); } });
 	unloadListeners.clear();
 
 	port.onDisconnect.removeListener(doUnload);
 	port.onMessage.removeListener(onMessage);
 	window.removeEventListener('pagehide', onPageHide, true);
-	window.removeEventListener('pageshow', onPageShow, true);
 	gecko && window.removeEventListener(rootUrl +'unload', onAfterReload, true);
 	gecko && window.removeEventListener('visibilitychange', onVisibilityChange, true);
 	port.disconnect();
@@ -133,15 +135,7 @@ function doUnload() {
 function onPageHide({ isTrusted, }) {
 	if (!isTrusted) { return; }
 	debug && console.info('content hide');
-	window.addEventListener('pageshow', onPageShow, true);
-	request('pagehide').then(() => debug && console.info('got reply for pagehide'));
-}
-function onPageShow({ isTrusted, }) {
-	if (!isTrusted) { return; }
-	debug && console.info('content show');
-	global.reRegisteringLoaderAfterPageShow = true; // TODO: remove this
-	request('pageshow').then(() => debug && console.info('got reply for pageshow'))
-	.catch(error => console.error(error)).then(() => delete global.reRegisteringLoaderAfterPageShow);
+	doUnload(); // might want to fire onUnload only after the next pageshow, skipping unnecessary unloads to improve performance
 }
 
 function onAfterReload() { onUnload.probe(); debug && console.info('onAfterReload'); }
@@ -151,9 +145,12 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 	port.onDisconnect.addListener(doUnload);
 	port.onMessage.addListener(onMessage);
 
-	window.addEventListener('pagehide', onPageHide, true);
+	if (gecko) { // should be ok to skip this in browsers without BF-cache
+		window.addEventListener('pagehide', onPageHide, true);
+	}
 
 	if (gecko) {
+		// NOTE: this block doesn't work anymore (probably because the sndboxes are now nuked at the extension unload, removing all event listeners and timeouts). There is NO way not remove DOM elements
 		// firefox doesn't fire onDisconnect if a port becomes unusable because the other side is gone, which happens when the extension is reloaded via 'about:debugging' and probably when updating
 		window.dispatchEvent(new CustomEvent(rootUrl +'unload')); // so tell a potential previous content to check if its port is still working, and disconnect if it is not
 		window.addEventListener(rootUrl +'unload', onAfterReload, true); // if the page content knows this, it can only ping
@@ -215,4 +212,4 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 	});
 }
 
-return true; })(this); // must be last statement
+})(this);

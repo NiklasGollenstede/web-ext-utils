@@ -1,6 +1,6 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../../browser/': { manifest, },
-	'../../browser/version': { current: currentBrowser, version: browserVersion, fennec, },
+	'../../browser/version': { current: currentBrowser, version: browserVersion, fennec, firefox, },
 	'./': Editor,
 	about,
 	'common/options': options,
@@ -12,6 +12,8 @@ if (fennec && location && location.type !== 'tab') { // the inline options page 
 	document.querySelector('button').onclick = _=>!_.button && require('../../loader/views').openView(document.URL, 'tab');
 	return;
 }
+
+firefox && (document.documentElement.style.background = 'rgb(249, 249, 250)'); // transparent would be way to easy ...
 
 document.title = 'Options - '+ manifest.name;
 
