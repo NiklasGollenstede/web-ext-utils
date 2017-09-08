@@ -252,12 +252,12 @@ function inContext(root, callback) {
 }
 
 return class OptionsRoot {
-	/*async*/ constructor({
+	constructor({
 		model,
 		storage = Storage.sync,
 		prefix = storage === Storage.sync || storage === Storage.local ? 'options' : '',
 		onChanged = storage === Storage.sync || storage === Storage.local ? Storage.onChanged : null,
-	}) { return (async () => {
+	}) {
 		if (inContent) { try {
 			require('../loader/content')
 			.onUnload.addListener(() => this.destroy());
@@ -270,16 +270,20 @@ return class OptionsRoot {
 		this.children = this._shadow.children;
 		this.keys = Array.from(this.options.keys()).map(path => prefix + path);
 
-		let data = (await storage.get(this.keys));
-		if (Array.isArray(data) && data.length === 1) { data = data[0]; } // some weird Firefox bug
-		inContext(this, () => this.options.forEach(option => {
-			const isSet = data.hasOwnProperty(prefix + option.path);
-			option.values = new ValueList(option, isSet ? data[prefix + option.path] : option.defaults);
-			Self.get(option).isSet = isSet;
-			Object.freeze(option);
-		}));
-		return this;
-	})(); }
+		const finish = data => {
+			if (Array.isArray(data) && data.length === 1) { data = data[0]; } // some weird Firefox bug
+			inContext(this, () => this.options.forEach(option => {
+				const isSet = data.hasOwnProperty(prefix + option.path);
+				option.values = new ValueList(option, isSet ? data[prefix + option.path] : option.defaults);
+				Self.get(option).isSet = isSet;
+				Object.freeze(option);
+			}));
+			return this;
+		};
+
+		const data = storage.get(this.keys);
+		return typeof data.then === 'function' ? data.then(finish) : finish(data);
+	}
 
 	onChanged(changes) { Object.keys(changes).forEach(key => {
 		if (!key.startsWith(this.prefix) || this.destroyed) { return; }

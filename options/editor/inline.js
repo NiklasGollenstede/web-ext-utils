@@ -5,7 +5,7 @@
 	about,
 	'common/options': options,
 	require,
-}) => ({ document, onCommand, }, location) => {
+}) => { return ({ document, onCommand, }, location) => {
 
 if (fennec && location && location.type !== 'tab') { // the inline options page in fennec is small and buggy
 	document.body.innerHTML = `<button>Show Options</button>`;
@@ -36,4 +36,4 @@ about({
 	browser: { name: currentBrowser.replace(/^./, c => c.toUpperCase()), version: browserVersion, },
 });
 
-}); })(this);
+}; }); })(this);

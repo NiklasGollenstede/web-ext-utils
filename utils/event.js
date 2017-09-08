@@ -2,7 +2,7 @@
 	exports,
 }) => {
 
-function setEvent(target, name, { init, lazy = true, async = false, writeable = false, once = false, } = { }) {
+function setEvent(target, name, { init, lazy = true, async: _async = false, writeable = false, once = false, } = { }) {
 	let done = false, all = init ? new Set(typeof init === 'function' ? [ init, ] : init) : null;
 	function get() {
 		const event = (function(it, o) {
@@ -25,7 +25,7 @@ function setEvent(target, name, { init, lazy = true, async = false, writeable = 
 	});
 
 	return async function fire(args, { last = once, } = { }) {
-		if (done) { return; } if (async) { (await null); }
+		if (done) { return; } if (_async) { (await null); }
 		const ready = all && args && Promise.all(Array.from(all, async listener => {
 			try { await listener(...args); } catch (error) { console.error(`${name } listener threw`, error); }
 		}));
@@ -34,11 +34,11 @@ function setEvent(target, name, { init, lazy = true, async = false, writeable = 
 	};
 }
 
-function setEventGetter(Class, name, Self, { async = false, once = false, } = { }) {
+function setEventGetter(Class, name, Self, { async: _async = false, once = false, } = { }) {
 	name = name[0].toUpperCase() + name.slice(1); const on = 'on'+ name, fire = 'fire'+ name;
 	return Object.defineProperty(Class.prototype, on, { get() {
 		const self = Self.get(this); if (self[on]) { return self[on]; }
-		self[fire] = setEvent(self, on, { lazy: false, async: async, once, });
+		self[fire] = setEvent(self, on, { lazy: false, async: _async, once, });
 		return self[on];
 	}, configurable: true, });
 }

@@ -13,7 +13,7 @@ const queryChild = (() => {
 	return (element, ...selectors) => element.querySelector(':scope>'+ selectors.join('>'));
 })();
 
-const propsMap = new Map/*<id, props>*/;
+const propsMap = new Map/*<id, props>*/; let window = null;
 
 return function loadEditor({ host, options, onCommand, prefix = '', }) {
 
@@ -80,7 +80,10 @@ return function loadEditor({ host, options, onCommand, prefix = '', }) {
 		options = options.constructor.name === 'OptionsRoot' ? options.children : [ options, ];
 	}
 
-	displayPreferences(options, host, prefix);
+	try {
+		window = host.ownerDocument.defaultView;
+		displayPreferences(options, host, prefix);
+	} finally { window = null; }
 	return host;
 };
 
@@ -272,7 +275,7 @@ function getParent(element, selector) {
 }
 
 function createElement(tagName, properties, childList) {
-	const element = global.document.createElement(tagName);
+	const element = window.document.createElement(tagName);
 	if (Array.isArray(properties)) { childList = properties; properties = null; }
 	properties && copyProperties(element, properties);
 	for (let i = 0; childList && i < childList.length; ++i) {
@@ -311,7 +314,9 @@ function displayPreferences(prefs, host, prefix) { prefs.forEach(pref => {
 	const input = createInputRow(pref);
 	const labelId = model.expanded != null && 'l'+ Math.random().toString(32).slice(2);
 
-	let valuesContainer, childrenContainer;
+	let valuesContainer, childrenContainer = pref.children.filter(({ type, }) => type !== 'hidden').length
+			&& createElement('fieldset', { className: 'pref-children', });
+
 	const element = host.appendChild(createElement('div', {
 		className: 'pref-container pref-name-'+ pref.name,
 		id: prefix + pref.path,
@@ -352,8 +357,7 @@ function displayPreferences(prefs, host, prefix) { prefs.forEach(pref => {
 					minLength: model.minLength || 0,
 				},
 			}),
-			childrenContainer = pref.children.filter(({ type, }) => type !== 'hidden').length
-			&& createElement('fieldset', { className: 'pref-children', }),
+			childrenContainer,
 		]),
 	]));
 	Object.assign(element, { pref, input, });
@@ -363,7 +367,7 @@ function displayPreferences(prefs, host, prefix) { prefs.forEach(pref => {
 		while (valuesContainer.children.length > values.length) { valuesContainer.lastChild.remove(); }
 		values.forEach((value, index) => setInputRowValues(valuesContainer.children[index], value));
 		setButtonDisabled(element);
-	}, { owner: host.ownerDocument.defaultView, });
+	}, { owner: window, });
 
 	childrenContainer && displayPreferences(pref.children, childrenContainer, prefix);
 	childrenContainer && pref.when({

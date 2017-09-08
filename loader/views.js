@@ -166,13 +166,12 @@ function defaultError(view, location) {
 	location.onChange(() => view.location.reload());
 }
 
-const handlers = { }, pending = { }, locations = new Set, knownViews = new WeakSet;
+const handlers = { }, pending = { }, locations = new Set;
 const viewPath = rootUrl +'view.html#';
 const { TAB_ID_NONE = -1, } = Tabs, { WINDOW_ID_NONE = -1, } = Windows || { };
 
-async function initView(view, options = new global.URLSearchParams('')) { try {
-	if (knownViews.has(view)) { return; } knownViews.add(view); view.addEventListener('unload', () => knownViews.delete(view)); // at least in chrome, the window object stays the same after reloads
-	view.document.querySelector('link[rel="icon"]').href = (manifest.icons[1] || manifest.icons[64]).replace(/^\/?/, '/');
+async function initView(view, options = { }) { try {
+	view.document.querySelector('link[rel="icon"]').href = (manifest.icons[1] || manifest.icons[64]).replace(/^\/?/, '/'); makeEdgeSuckLess(view);
 	options = parseSearch(options);
 
 	const get = what => new Promise(got => (view.browser || view.chrome)[what +'s'].getCurrent(got));
@@ -183,7 +182,7 @@ async function initView(view, options = new global.URLSearchParams('')) { try {
 		'originalActiveTab' in options && (activeTab = options.originalActiveTab);
 		type = 'panel';
 
-		view.addEventListener('blur', event => view.close());
+		view.addEventListener('blur', () => view.close());
 		view.resize = (width = view.document.scrollingElement.scrollWidth, height = view.document.scrollingElement.scrollHeight) => {
 			Windows.update(windowId, { width, height, }); // provide a function for the view to resize itself. TODO: should probably add some px as well
 		};
@@ -194,7 +193,7 @@ async function initView(view, options = new global.URLSearchParams('')) { try {
 	} else {
 		const [ tab, window, ] = (await Promise.all([ get('tab'), get('window'), ]));
 		if (tab) {
-			tabId = tab.id; windowId = window.id; type = [ 'popup', 'panel', ].includes(window.type) ? 'popup' : 'tab';
+			tabId = tab.id; windowId = tab.windowId; type = window && [ 'popup', 'panel', ].includes(window.type) ? 'popup' : 'tab'; // window is (sometimes?) undefined in edge
 			view.innerWidth < tab.width && (type = 'frame');
 		} else {
 			windowId = window.id;
@@ -274,6 +273,7 @@ function loadFrame(path, view) {
 
 (async () => {
 	(await module.ready); (await null);
+	const knownViews = new Set(Array.from(locations, _=>_.view));
 	extension.getViews().forEach(view => view !== global && !knownViews.has(view) && view.location.reload()); // reload old views
 })();
 
@@ -281,11 +281,15 @@ return methods;
 
 function parseSearch(search) {
 	const config = { };
-	for (let [ key, value, ] of search) {
+	for (let [ key, value, ] of Object.entries(search)) {
 		try { value = decodeURIComponent(value); } catch(_) { }
 		try { config[key] = JSON.parse(value); } catch(_) { config[key] = value; }
 	}
 	return config;
+}
+
+function makeEdgeSuckLess(window) {
+	window.NodeList.prototype.forEach = window.Array.prototype.forEach;
 }
 
 }); })(this);

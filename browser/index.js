@@ -40,7 +40,7 @@ const schemas = {
 		fill: !inContent && { },
 		async: key => (/^get[A-Z]|^setIcon$/).test(key),
 		children: new Proxy({
-			map: ((value, api, key) => blink && typeof value === 'function' && (/^set[A-Z]/).test(key)
+			map: ((value, api, key) => (blink || edgeHTML) && typeof value === 'function' && (/^set[A-Z]/).test(key)
 			? (...args) => (value.apply(api, args), Promise.resolve())
 			: value || ((/^[gs]et[A-Z]/).test(key) ? () => Promise.resolve() : (/^on[A-Z]/).test(key) ? { addListener() { }, hasListener() { }, removeListener() { }, } : value)),
 		}, { get(self, key) {
@@ -80,6 +80,7 @@ const Browser = new Proxy({
 	browser: gecko ? global.browser : null,
 	rootUrl, rootURL: rootUrl, inContent, isGecko: gecko, isEdge: edgeHTML,
 	sidebarAction: getProxy((global.opr || api).sidebarAction, schemas.sidebarAction),
+	[Symbol.toStringTag]: 'Browser',
 }, { get(cache, key) {
 	if (key in cache) { return cache[key]; }
 	const Key = key.replace(/^[a-z]/, s => s.toUpperCase()); key = key.replace(/^[A-Z]/, s => s.toLowerCase());

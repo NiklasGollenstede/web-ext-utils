@@ -1,6 +1,6 @@
 {
 	"name": "web-ext-utils",
-	"version": "0.0.12",
+	"version": "0.0.13",
 	"description": "a collection of utilities to use with web extensions",
 	"author": "Niklas Gollenstede",
 	"license": "MPL-2.0",

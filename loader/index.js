@@ -1,6 +1,6 @@
 (function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../browser/': { manifest, rootUrl, runtime, WebNavigation, Tabs, }, '../browser/': Browser,
-	'../browser/version': { gecko, current, version, },
+	'../browser/version': { gecko, edge, current, version, },
 	'../utils/': { parseMatchPatterns, },
 	'../utils/event': { setEvent, setEventGetter, },
 	'../utils/files': FS,
@@ -107,7 +107,7 @@ class ContentScript {
 	 *     'top'       Only execute in matching top level frames. Default value.
 	 *     'matching'  Execute in all matching frames, regardless of the top level url.
 	 */
-	set frames(v)    { Self.get(this).frames = checkEnum([ 'top', 'matching', /*'children', 'all',*/ ], v); }
+	set frames(v)    { if (edge) { return; } Self.get(this).frames = checkEnum([ 'top', 'matching', /*'children', 'all',*/ ], v); }
 	get frames()     { return Self.get(this).frames; }
 
 	/**
@@ -190,7 +190,7 @@ class ContentScript {
 /* eslint-disable no-throw-literal */ /* eslint-disable prefer-promise-reject-errors */
 
 const contentPath = new global.URL(require.toUrl('./content.js')).pathname;
-const requirePath = new global.URL(require.toUrl('../lib/pbq/require.js')).pathname; // + (!gecko ? '' : '?ifExisting=throw');
+const requirePath = new global.URL(require.toUrl('../lib/pbq/require.js')).pathname;
 const allowContentEval = (gecko ? (await Browser.rawManifest) : manifest).permissions.includes('contentEval');
 const getScource = ((f = x=>x, fromFunction = f.call.bind(f.toString)) =>
 	code => allowContentEval && typeof code === 'string' ? `function() { ${ code } }` : fromFunction(code)
@@ -203,7 +203,7 @@ const options = { }; let optionsAsGlobal = '', optionsAsQuery = '';
 gecko && (setOptions({ b: current, v: version, }));
 function setOptions(props) {
 	Object.assign(options, props);
-	if (gecko) { // query params don't work in chrome
+	if (gecko || edge) { // query params don't work in chrome
 		optionsAsQuery = '?'+ Object.keys(options).map(key => encodeURIComponent(key) +'='+ encodeURIComponent(JSON.stringify(options[key]))).join('&');
 	} else {
 		optionsAsGlobal = `this.__options__ = ${ JSON.stringify(options) }`;
@@ -231,7 +231,7 @@ function listenToNavigation() {
 
 async function onNavigation({ tabId, frameId, url, }) {
 	debug && console.info('onNavigation', { tabId, frameId, url, });
-	if (!isScripable(url)) { return; } // i.e. not '<all_urls>'
+	if (edge && frameId || !isScripable(url)) { return; } // i.e. not '<all_urls>'
 	frameId === 0 && Frame.resetTab(tabId);
 	Promise.all(Array.from(Self.values(), script => applyIfMatches({ tabId, frameId, script, url, })))
 	.catch(error => console.error('Failed to attach scripts during navigation',  error));
@@ -239,7 +239,7 @@ async function onNavigation({ tabId, frameId, url, }) {
 
 async function applyScript(script) {
 	const applied = new Set, tabs = (await Tabs.query({ }));
-	(await Promise.all(tabs.map(async ({ id: tabId, url, incognito, title, }) => Promise.all(
+	(await Promise.all(tabs.map(async ({ id: tabId, url, incognito, title, }) => { return Promise.all(
 		(script.frames === 'top'
 			? [ url // top frame is enough
 				? { frameId: 0, url, } // with "tabs" permission
@@ -252,7 +252,7 @@ async function applyScript(script) {
 			const [ frame, , done, ] = (await applyIfMatches({ tabId, frameId, script, url, incognito, }));
 			(await done); applied.add(frame);
 		} catch (error) { !silentErrors.has(error) && console.error(`Error injecting into tab ${ tabId } (${ title }) frame ${ frameId }`, error); } })
-	))));
+	); })));
 	applied.delete(null); return applied;
 }
 
@@ -304,7 +304,7 @@ class Frame {
 			]).catch(error => {
 				gecko && console.error(`Can't access frame in tab ${ tabId }`,  error);
 				gecko && (error = new Error(`Can't access frame in tab ${ tabId }`));
-				silentErrors.add(error); throw error;
+				typeof error === 'object' && error && silentErrors.add(error); throw error;
 			}));
 
 			if (frames.get(frameId) !== promise) { throw new Error(`Failed to attach to tab: Tab was navigated`); }
@@ -320,6 +320,7 @@ class Frame {
 	}
 
 	static async run(tabId, frameId, file) {
+		if (edge) { if (frameId) { throw new Error(`Can't run scripts in subframes`); } else { return Tabs.executeScript(tabId, { file, }); } }
 		return Tabs.executeScript(tabId, { file, frameId, matchAboutBlank: true, runAt: 'document_start', });
 	}
 
@@ -387,7 +388,7 @@ async function onConnect(port) {
 	if (port.name !== 'require.scriptLoader') { return; }
 	if (!port.sender.tab) { port.sender.tab = { id: Math.random(), }; } // happens sometimes in fennec 55. This will also break incognito handling
 	const { id: tabId, } = port.sender.tab;
-	const { frameId, } = port.sender;
+	const { frameId = 0, } = port.sender;
 	port.requests = new Map/*<random, [ resolve, reject, ]>*/;
 	port.onMessage.addListener(onMessage.bind(null, port));
 
