@@ -113,7 +113,7 @@ class ContentScript {
 	/**
 	 * The ids of the modules to load. Same as the `modules` parameter to `requireInFrame()`.
 	 */
-	set modules(v)   { if (typeof v !== 'object') { throw new Error(`'modules' must be an Array, object or null`); } Self.get(this).modules = v; }
+	set modules(v)   { if (typeof v !== 'object') { throw new TypeError(`'modules' must be an Array, object or null`); } Self.get(this).modules = v; }
 	get modules()    { return Self.get(this).modules; }
 
 	/**
@@ -127,12 +127,13 @@ class ContentScript {
 	/**
 	 * Arguments to `.script`. Mutable array. Default is empty.
 	 */
-	set args(v)      { if (!Array.isArray(v)) { throw new Error(`'args' must be an Array`); } Self.get(this).args = v; }
+	set args(v)      { if (!Array.isArray(v)) { throw new TypeError(`'args' must be an Array`); } Self.get(this).args = v; }
 	get args()       { return Self.get(this).args; }
 
 	/**
 	 * Applies the ContentScript to all already open tabs and frames it matches.
-	 * @return {Set<Frame>}  An of all the Frames this ContentScript was applied to.
+	 * Does NOT throw if the content script can't be applied to individual tabs or throws.
+	 * @return {Set<Frame>}  An of all the Frames this ContentScript was successfully applied to.
 	 */
 	async applyNow() {
 		return applyScript(Self.get(this));
@@ -234,7 +235,7 @@ async function onNavigation({ tabId, frameId, url, }) {
 	if (edge && frameId || !isScripable(url)) { return; } // i.e. not '<all_urls>'
 	frameId === 0 && Frame.resetTab(tabId);
 	Promise.all(Array.from(Self.values(), script => applyIfMatches({ tabId, frameId, script, url, })))
-	.catch(error => console.error('Failed to attach scripts during navigation',  error));
+	.catch(error => console.error('Failed to attach scripts during navigation', error));
 }
 
 async function applyScript(script) {
@@ -250,10 +251,10 @@ async function applyScript(script) {
 		).map(async ({ frameId = 0, url = null, }) => { try {
 			if (!isScripable(url)) { return; } // i.e. not '<all_urls>'
 			const [ frame, , done, ] = (await applyIfMatches({ tabId, frameId, script, url, incognito, }));
-			(await done); applied.add(frame);
+			(await done); frame && applied.add(frame);
 		} catch (error) { !silentErrors.has(error) && console.error(`Error injecting into tab ${ tabId } (${ title }) frame ${ frameId }`, error); } })
 	); })));
-	applied.delete(null); return applied;
+	return applied;
 }
 
 async function applyIfMatches({ tabId, frameId, script, url = null, incognito = false/*not yet known*/, }) {
@@ -302,7 +303,7 @@ class Frame {
 				Frame.run(tabId, frameId, contentPath + optionsAsQuery/* + (gecko ? '&t='+ tabId : '')*/),
 				Frame.run(tabId, frameId, requirePath),
 			]).catch(error => {
-				gecko && console.error(`Can't access frame in tab ${ tabId }`,  error);
+				gecko && console.error(`Can't access frame in tab ${ tabId }`, error);
 				gecko && (error = new Error(`Can't access frame in tab ${ tabId }`));
 				typeof error === 'object' && error && silentErrors.add(error); throw error;
 			}));
@@ -486,12 +487,6 @@ function checkEnum(choices, value) {
 	if (value == null) { return choices[0]; }
 	if (choices.includes(value)) { return value; }
 	throw new Error(`This value must be one of: '`+ choices.join(`', `) +`'`);
-}
-
-function assert(_true, message) {
-	if (_true) { return; }
-	debugger; // eslint-disable-line
-	throw new Error(`Assertion failed: ${ message || '' }`);
 }
 
 function deprecate(name, alt) { return function deprecated() {

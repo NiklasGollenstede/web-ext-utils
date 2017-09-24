@@ -176,15 +176,15 @@ async function initView(view, options = { }) { try {
 
 	const get = what => new Promise(got => (view.browser || view.chrome)[what +'s'].getCurrent(got));
 
-	let type = 'other', tabId = TAB_ID_NONE, windowId = WINDOW_ID_NONE, activeTab = TAB_ID_NONE;
+	let type = 'other', tabId = TAB_ID_NONE, windowId = WINDOW_ID_NONE, activeTab = TAB_ID_NONE, resize;
 	if (options.emulatePanel) {
 		({ windowId, } = (await get('tab')));
 		'originalActiveTab' in options && (activeTab = options.originalActiveTab);
 		type = 'panel';
 
-		view.addEventListener('blur', () => view.close());
-		view.resize = (width = view.document.scrollingElement.scrollWidth, height = view.document.scrollingElement.scrollHeight) => {
-			Windows.update(windowId, { width, height, }); // provide a function for the view to resize itself. TODO: should probably add some px as well
+		view.addEventListener('blur', () => Windows.remove(windowId));
+		resize = view.resize = (width, height) => { const rect = view.document.scrollingElement.getBoundingClientRect();
+			Windows.update(windowId, { width: (width || rect.width) + 14 |0, height: (height || rect.height) + 42 |0, }); // provide a function for the view to resize itself.
 		};
 		(await Windows.update(windowId, { top: options.top, left: options.left, })); // firefox currently ignores top and left in .create(), so move it here
 	} else if (fennec) {
@@ -218,7 +218,7 @@ async function initView(view, options = { }) { try {
 		(await handler(view, location.public));
 	}
 
-	location.updateHash();
+	location.updateHash(); resize && resize();
 
 	fireOpen([ location.public, ]);
 

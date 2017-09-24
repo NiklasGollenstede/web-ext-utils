@@ -6,10 +6,10 @@
 	"license": "MPL-2.0",
 	"repository": {
 		"type": "git",
-		"url": "git@github.com:NiklasGollenstede/web-ext-utils.git"
+		"url": "git@github.com:NiklasGollenstede/re-style.git"
 	},
 	"dependencies": {
-		"multiport": "0.2.0",
+		"multiport": "0.2.1",
 		"pbq": "0.3.2"
 	},
 	"devDependencies": {
