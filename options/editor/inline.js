@@ -13,7 +13,7 @@ if (fennec && location && location.type !== 'tab') { // the inline options page 
 	return;
 }
 
-firefox && (document.documentElement.style.background = 'rgb(249, 249, 250)'); // transparent would be way to easy ...
+firefox && location.type === 'frame' && (document.documentElement.style.overflowY = 'hidden'); // prevent scrollbar from flashing on resize
 
 document.title = 'Options - '+ manifest.name;
 

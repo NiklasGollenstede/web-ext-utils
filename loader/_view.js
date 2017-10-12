@@ -37,7 +37,7 @@ if (!main) {
 		options.skipChecks = 'true'; // very much avoid recursion
 		options.originalTab = tab.id; // needed to resolve promises
 		browser.tabs.create({
-			url: getUrl(), windowId: parent.id, active: !document.hidden, // the new tab should be active if the current one is
+			url: getUrl(), windowId: parent.id, index: tab.index, active: !document.hidden, // the new tab should be active if the current one is
 		});
 		// the window of the new tab should be focused if the current one is
 		!document.hidden && windows.find(_=>_.id === tab.windowId).focused && browser.windows.update(parent.id, { focused: true, });

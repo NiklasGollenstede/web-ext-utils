@@ -25,12 +25,12 @@ function setEvent(target, name, { init, lazy = true, async: _async = false, writ
 	});
 
 	return async function fire(args, { last = once, } = { }) {
-		if (done) { return; } if (_async) { (await null); }
+		if (done) { return 0; } if (_async) { (await null); }
 		const ready = all && args && Promise.all(Array.from(all, async listener => {
-			try { await listener(...args); } catch (error) { console.error(`${name } listener threw`, error); }
+			try { (await listener(...args)); return true; } catch (error) { console.error(`${name } listener threw`, error); return false; }
 		}));
 		if (last) { all.clear(); all = null; done = true; }
-		(await ready);
+		return !ready ? 0 : (await ready).reduce((c, b) => b && ++c, 0);
 	};
 }
 
