@@ -12,6 +12,7 @@
 return ({
 	host = global.document.querySelector('#about'),
 	manifest = (global.browser || global.chrome).runtime.getManifest(),
+	package: packageJson = null,
 	browser = null,
 } = { }) => {
 
@@ -35,6 +36,10 @@ const addCommas = array => array.reduce((result, value) => ((result.push(value, 
 
 host.classList.add('about-host');
 
+const license = manifest.license || packageJson && packageJson.license;
+const repository = manifest.repository || packageJson && packageJson.repository;
+const contributions = manifest.contributions || packageJson && packageJson.contributions;
+
 [
 	element('h2', [ 'About ', _(manifest.name), ]),
 	element('ul', [
@@ -45,18 +50,18 @@ host.classList.add('about-host');
 			'Author: ', makePerson(manifest.author),
 		]),
 		// TODO: contributors
-		manifest.license && element('li', { className: 'license', }, [
-			'License: ', manifest.license, ' ', element('a', { href: '/LICENSE', target: '_blank', }, [ 'full text', ]),
+		license && element('li', { className: 'license', }, [
+			'License: ', license, ' ', element('a', { href: '/LICENSE', target: '_blank', }, [ 'full text', ]),
 		]),
-		manifest.repository && element('li', { className: 'license', }, [
-			'Repository: ', element('a', { href: manifest.repository.url || manifest.repository, target: '_blank', }, [ _(manifest.repository.text || manifest.repository.type || manifest.repository.url), ]),
+		repository && element('li', { className: 'license', }, [
+			'Repository: ', element('a', { href: repository.url || repository, target: '_blank', }, [ _(repository.text || repository.type || repository.url), ]),
 		]),
 		browser && element('li', { className: 'browser', }, [
 			'Browser: ', browser.name, ' ', browser.version,
 		]),
 	]),
-	manifest.contributions && manifest.contributions.length && element('h3', [ 'Contributions', ]),
-	manifest.contributions && manifest.contributions.length && element('ul', manifest.contributions.map(({ what, who, license, }) => element('li', [
+	contributions && contributions.length && element('h3', [ 'Contributions', ]),
+	contributions && contributions.length && element('ul', contributions.map(({ what, who, license, }) => element('li', [
 		makeLink(what),
 		who ? [ ' by ', Array.isArray(who) ? addCommas(who.map(makePerson)) : makePerson(who), ] : [ ],
 		license ? [ ' (', makeLink(license), ')', ] : [ ],

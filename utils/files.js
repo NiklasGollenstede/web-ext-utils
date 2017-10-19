@@ -18,8 +18,8 @@ function split(path) {
 	return parts;
 }
 
-function find(path) {
-	let node = files; const parts = split(path);
+function find(parts) {
+	let node = files;
 	for (const part of parts) { node = node[part]; }
 	return node;
 }
@@ -29,11 +29,11 @@ function resolve(...fragments) {
 }
 
 function exists(path) {
-	try { return !!find(path); } catch (_) { return false; }
+	try { return !!find(split(path)); } catch (_) { return false; }
 }
 
 function readDir(path) { try {
-	const dir = find(path);
+	const dir = find(split(path));
 	if (!dir || dir === true) { throw null; } // eslint-disable-line no-throw-literal
 	return Object.keys(dir);
 } catch (_) {
@@ -41,11 +41,17 @@ function readDir(path) { try {
 } }
 
 async function stat(path) {
-	const node = find(path);
+	const node = find(split(path));
 	return {
 		isFile() { return node === true; },
 		isDirectory() { return typeof node === 'object'; },
 	};
+}
+
+async function realpath(path) {
+	const parts = split(path);
+	const node = find(parts);
+	return typeof node === 'string' ? node : parts.join('/');
 }
 
 /**
@@ -55,7 +61,7 @@ async function stat(path) {
  * @return {any}               [description]
  */
 async function readFile(path, encoding) {
-	const url = browser.extension.getURL(path);
+	const url = browser.extension.getURL(realpath(path));
 
 	return new Promise((resolve, reject) => {
 		const xhr = new global.XMLHttpRequest;
@@ -70,6 +76,7 @@ async function readFile(path, encoding) {
 return {
 	exists,
 	readdir: readDir, readDir,
+	realpath,
 	readFile,
 	resolve,
 	stat,

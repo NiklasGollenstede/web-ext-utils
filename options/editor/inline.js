@@ -4,6 +4,7 @@
 	'./': Editor,
 	about,
 	'common/options': options,
+	'fetch!package.json:json': packageJson,
 	require,
 }) => { return ({ document, onCommand, }, location) => {
 
@@ -13,7 +14,7 @@ if (fennec && location && location.type !== 'tab') { // the inline options page 
 	return;
 }
 
-firefox && location.type === 'frame' && (document.documentElement.style.overflowY = 'hidden'); // prevent scrollbar from flashing on resize
+firefox && location && location.type === 'frame' && (document.documentElement.style.overflowY = 'hidden'); // prevent scrollbar from flashing on resize
 
 document.title = 'Options - '+ manifest.name;
 
@@ -31,7 +32,7 @@ new Editor({
 });
 
 about({
-	manifest,
+	manifest, package: packageJson,
 	host: Object.assign(document.body.appendChild(document.createElement('div')), { id: 'about', }),
 	browser: { name: currentBrowser.replace(/^./, c => c.toUpperCase()), version: browserVersion, },
 });

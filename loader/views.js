@@ -167,7 +167,7 @@ function defaultError(view, location) {
 }
 
 const handlers = { }, pending = { }, locations = new Set;
-const viewPath = rootUrl +'view.html#';
+const viewPath = rootUrl + (await FS.realpath('view.html')) +'#';
 const { TAB_ID_NONE = -1, } = Tabs, { WINDOW_ID_NONE = -1, } = Windows || { };
 
 async function initView(view, options = { }) { try {
