@@ -135,8 +135,8 @@ return class TabView {
 	}
 
 	get(id) {
-		const self = Self.get(this);
-		return self.tabs[id] && self.tabs[id].arg;
+		const self = Self.get(this), tab = self.tabs[id];
+		return tab && tab.arg;
 	}
 };
 

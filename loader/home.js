@@ -38,6 +38,7 @@ async function Home(window, location) {
 			try { view.history.replaceState(window.history.state, null); } catch (_) { }
 
 			(await (handlers[id] || handlers['404'])(view, location));
+			updateHash(document, location.hash);
 			global.setTimeout(() => document.documentElement.classList.remove('preload'), 500);
 		} catch (error) { reportError(`Failed to display tab "${ id }"`, error); } },
 
@@ -48,6 +49,14 @@ async function Home(window, location) {
 	});
 
 	location.onNameChange(name => (tabView.active = name || index));
+	location.onHashChange(id => { const tab = tabView.get(tabView.active); tab && updateHash(tab.content.contentWindow.document, id); });
+
+	function updateHash(document, id) {
+		const target = id ? document.getElementById(id) : null;
+		target && target.scrollIntoView();
+		document.querySelectorAll('.-pseudo-target').forEach(node => node !== target && node.classList.remove('-pseudo-target'));
+		target && target.classList.add('-pseudo-target');
+	}
 
 	window.tabs = tabView;
 }
