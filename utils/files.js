@@ -61,7 +61,7 @@ async function realpath(path) {
  * @return {any}               [description]
  */
 async function readFile(path, encoding) {
-	const url = browser.extension.getURL(realpath(path));
+	const url = browser.extension.getURL((await realpath(path)));
 
 	return new Promise((resolve, reject) => {
 		const xhr = new global.XMLHttpRequest;

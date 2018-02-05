@@ -314,8 +314,8 @@ function displayPreferences(prefs, host, prefix) { prefs.forEach(pref => {
 	const input = createInputRow(pref);
 	const labelId = model.expanded != null && 'l'+ Math.random().toString(32).slice(2);
 
-	let valuesContainer, childrenContainer = pref.children.filter(({ type, }) => type !== 'hidden').length
-			&& createElement('fieldset', { className: 'pref-children', });
+	let valuesContainer; const childrenContainer = pref.children.filter(({ type, }) => type !== 'hidden').length
+	&& createElement('fieldset', { className: 'pref-children', });
 
 	const element = host.appendChild(createElement('div', {
 		className: 'pref-container pref-name-'+ pref.name,
@@ -370,10 +370,12 @@ function displayPreferences(prefs, host, prefix) { prefs.forEach(pref => {
 	}, { owner: window, });
 
 	childrenContainer && displayPreferences(pref.children, childrenContainer, prefix);
-	childrenContainer && pref.when({
+	childrenContainer && (model.enableIf ? pref.whenChange(([ value, ]) => {
+		fieldsEnabled(childrenContainer, pref.path, model.enableIf.includes(value));
+	}) : pref.when({
 		true: () => fieldsEnabled(childrenContainer, pref.path, true),
 		false: () => fieldsEnabled(childrenContainer, pref.path, false),
-	});
+	}));
 
 	setButtonDisabled(element);
 }); return host; }

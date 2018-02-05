@@ -101,7 +101,7 @@ async function reportError(...messages) { try {
 	if (!Notifications) { return; }
 	const error = messages.pop();
 	const title = (messages.shift() || `That didn't work ...`) +'';
-	let message = messages.join(' ') + (messages.length ? ' ' : '');
+	let message = messages.join('\n') + (messages.length ? ' ' : '');
 	if (typeof error === 'string') {
 		message += error;
 	} else if (error) {
@@ -112,7 +112,7 @@ async function reportError(...messages) { try {
 
 	Notifications.create('web-ext-utils:error', {
 		type: 'basic', title, message,
-		iconUrl: errorIcon || (errorIcon = (await getIcon('error'))),
+		iconUrl: (await getIcon('error')),
 	});
 	clearErrorSoon();
 } catch (_) { try { console.error(...messages); console.error(`failed to show notification`, _); } catch (_) { } } }
@@ -127,18 +127,28 @@ const clearErrorSoon = debounce(() => Notifications.clear('web-ext-utils:error')
 async function reportSuccess(...messages) {
 	if (!Notifications) { return void console.info(...messages); }
 	const title = messages.shift() || `Operation completed successfully!`;
-	const message = messages.join(' ');
+	const message = messages.join('\n');
 
 	Notifications.create('web-ext-utils:success', {
 		type: 'basic', title, message,
-		iconUrl: successIcon || (successIcon = (await getIcon('success'))),
+		iconUrl: (await getIcon('success')),
 	});
 	clearSuccessSoon();
 }
 const clearSuccessSoon = debounce(() => Notifications.clear('web-ext-utils:success'), 5000);
 
-let errorIcon, successIcon; async function getIcon(name) {
-	return require.toUrl([ `${ name }.svg`, `${ name }.png`, `icon.svg`, `icon.png`, ].find((await require.async('./files')).exists));
+const icons = { }; let FS; async function getIcon(name) {
+	if (icons[name]) { return icons[name]; }
+	FS || (FS = (await require.async('./files')));
+	const included = [ `${ name }.svg`, `${ name }.png`, `icons/${ name }.svg`, `icons/${ name }.png`, ].find(FS.exists);
+	if (included) { return (icons[name] = require.toUrl(included)); }
+
+	const ext = FS.exists('icon.svg') ? 'svg' : 'png', mime = 'image/'+ ext.replace('svg', 'svg+xml');
+	const iconUrl = `data:${mime};base64,`+ global.btoa(String.fromCharCode.apply(null, new Uint8Array(
+		global.buffer = (await FS.readFile('icon.'+ ext))
+	)));
+	const svg = (await require.async(`fetch!./icons/${name}.svg`)).replace('{{iconUrl}}', iconUrl);
+	return (icons[name] = global.URL.createObjectURL(new global.Blob([ svg, ], { type: 'image/svg+xml', })));
 }
 
 function debounce(callback, time) {

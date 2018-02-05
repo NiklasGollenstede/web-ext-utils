@@ -182,7 +182,8 @@ class ContentScript {
 	 */
 	setEventGetter(ContentScript, 'Match', Self);
 	/**
-	 * Event that gets fired after the content script in a frame was unloaded, either because it's tab/window was closed or navigated or because .
+	 * Event that gets fired after the content script in a frame was unloaded,
+	 * either because it's tab/window was closed, navigated or explicitly `unloadFrame`ed.
 	 */
 	setEventGetter(ContentScript, 'Unload', Self);
 }
@@ -303,8 +304,8 @@ class Frame {
 				Frame.run(tabId, frameId, contentPath + optionsAsQuery/* + (gecko ? '&t='+ tabId : '')*/),
 				Frame.run(tabId, frameId, requirePath),
 			]).catch(error => {
-				gecko && console.error(`Can't access frame in tab ${ tabId }`, error);
-				gecko && (error = new Error(`Can't access frame in tab ${ tabId }`));
+				gecko && console.error(`Can't access frame ${frameId} in tab ${tabId}`, error);
+				gecko && (error = new Error(`Can't access frame ${frameId} in tab ${tabId}`));
 				typeof error === 'object' && error && silentErrors.add(error); throw error;
 			}));
 

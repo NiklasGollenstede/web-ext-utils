@@ -2,6 +2,7 @@
 	'../tabview/': TabView,
 	'../browser/': { manifest, },
 	'../utils/': { reportError, },
+	'fetch!../tabview/index.css:css': css,
 	require,
 }) => function Home({
 	tabs = [ ],
@@ -14,7 +15,7 @@ const handlers = { };
 
 require([ 'node_modules/web-ext-utils/loader/views', ], ({ getHandler, setHandler, }) => {
 	setHandler('', Home);
-	tabs.forEach(tab => (handlers[tab.id] = getHandler(tab.id)) === setHandler(tab.id, Home));
+	tabs.forEach(tab => { handlers[tab.id] = getHandler(tab.id); setHandler(tab.id, Home); });
 });
 
 async function Home(window, location) {
@@ -22,12 +23,11 @@ async function Home(window, location) {
 
 	if (style.includes('dark')) { document.body.style.background = '#222'; }
 	document.body.style.overflow = 'hidden'; // firefox -.-
-	const link = document.head.appendChild(document.createElement('link'));
-	link.href = require.toUrl(`../tabview/index.css`); link.rel = 'stylesheet';
+	document.head.appendChild(document.createElement('style')).textContent = css;
 
 	const tabView = new TabView({
 		host: document.body, template: document.createElement('iframe'),
-		active: location.name || index, tabs, style,
+		active: location.name || index, tabs, style, linkStyle: false,
 
 		async onLoad({ id, content: frame, }) { try {
 			const view = frame.contentWindow, { document, } = view;

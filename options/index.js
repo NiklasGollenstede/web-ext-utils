@@ -1,8 +1,9 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { Storage, inContent, },
-	'../utils/event': { setEventGetter, },
+	'../utils/event': { setEvent, setEventGetter, },
 	require,
 }) => {
+let Content = null; if ((global.browser || global.chrome).extension.getBackgroundPage !== 'function')
+{ try { Content = require('../loader/content'); } catch (_) { } }
 
 let currentRoot = null; // a OptionsRoot during its construction
 
@@ -10,16 +11,7 @@ const Self = new WeakMap/*<Option, { root, values, isSet, on*, ... }>*/;
 
 class Option {
 	constructor(model, parent, name = model.name || '') {
-		const self = {
-			root: currentRoot, // OptionsRoot
-			values: null, // frozen Array, this.values
-			isSet: false,
-			onChange: null, fireChange: null,
-			onAnyChange: null, fireAnyChange: null,
-		}; Self.set(this, self);
-		this.model = model;
-		this.parent = parent;
-		this.name = name;
+		this.model = model; this.parent = parent; this.name = name;
 		this.path = (parent ? parent.path +'.' : '') + this.name;
 
 		if (!model.hasOwnProperty('default')) {
@@ -28,26 +20,33 @@ class Option {
 			this.defaults = model.default;
 		} else {
 			this.defaults = Object.freeze([ model.default, ]);
+		} this.default = this.defaults[0];
+
+		this.values = new ValueList(this);
+		const explicit = currentRoot.storage.get(this.values.key);
+
+		const self = {
+			root: currentRoot, values: explicit || this.defaults, isSet: !!explicit,
+			onChange: null, fireChange: null,
+			onAnyChange: null, fireAnyChange: null,
+		}; Self.set(this, self);
+
+		if (typeof model.child === 'object') {
+			this.restrict = new Restriction(this, { type: 'string', match: (/^[0-9a-f]{12}$/), unique: '.', });
+			this.children = new ChildOptions(model.child, this, self);
+		} else {
+			this.restrict = model.restrict === 'inherit' ? parent.restrict : model.restrict ? new Restriction(this, model.restrict) : null;
+			this.children = model.children === 'dynamic' ? [ ] : new OptionList(model.children || [ ], this);
 		}
-		this.default = this.defaults[0];
-
-		this.restrict = model.restrict === 'inherit' ? parent.restrict : model.restrict ? new Restriction(this, model.restrict) : null;
-
-		this.children = model.children === 'dynamic' ? [ ] : new OptionList(model.children || [ ], this);
 
 		currentRoot.options.set(this.path, this);
-		this.values = null; // ValueList, set by root
-
-		// will be frozen by the root
+		return Object.freeze(this);
 	}
 
 	get value() { return this.values.get(0); }
 	set value(value) { return this.values.set(0, value); }
 	reset() { return this.values.reset(); }
-	async resetAll() {
-		const root = Self.get(this).root, path = root.prefix + this.path;
-		return void (await root.storage.remove(root.keys.filter(_=>_.startsWith(path))));
-	}
+	resetAll() { this.reset(); this.children.forEach(_=>_.resetAll()); }
 
 	whenTrue(listener, arg) {
 		return whenToggleTo(this, true, listener, arg);
@@ -94,12 +93,39 @@ class OptionList extends Array {
 	static get [Symbol.species]() { return Array; }
 } Object.freeze(OptionList.prototype);
 
-class ValueList {
-	constructor(parent, values) {
-		this.parent = parent;
+function ChildOptions(model, parent, self) {
+	const cache = { };
+	parent.onChange(ids => Object.keys(cache).forEach(id => { if (!ids.includes(id)) {
+		toLeafs(cache[id], option => {
+			const self = Self.get(option);
+			self.onChange && self.onChange(null, { last: true, });
+			self.onAnyChange && self.onAnyChange(null, { last: true, });
+		});
+		delete cache[id];
+	} }));
 
+	return new Proxy(target || (target = new Uint8Array(1024)), {
+		get(_, key) {
+			if (key === 'length') { return self.values.length; }
+			if ((/^\d+$/).test(key)) { key = self.values[key]; }
+			if (!self.values.includes(key)) { return Array.prototype[key]; }
+			return cache[key] || (cache[key] = inContext(self.root, () => new Option(model, parent, key)));
+		},
+		ownKeys() { return Reflect.ownKeys(self.values).concat(
+			self.values.length, self.vslues.map((_, i) => i)
+		); },
+		getOwnPropertyDescriptor(_, key) {
+			const value = this.get(_, key);
+			return value === undefined ? value : { enumerable: true, value, };
+		},
+		getPrototypeOf() { return Array.prorotype; },
+	});
+} let target;
+
+class ValueList {
+	constructor(parent) {
+		this.parent = parent;
 		this.key = currentRoot.prefix + this.parent.path;
-		Self.get(parent).values = Object.freeze(values);
 		const { model, } = parent;
 		this.max = model.hasOwnProperty('maxLength') ? +model.maxLength : 1;
 		this.min = model.hasOwnProperty('minLength') ? +model.minLength : +!model.hasOwnProperty('maxLength');
@@ -111,30 +137,30 @@ class ValueList {
 	get(index) {
 		return Self.get(this.parent).values[index];
 	}
-	async set(index, value) {
+	set(index, value) {
 		const values = Self.get(this.parent).values.slice();
 		values[index] = value;
 		this.parent.restrict && this.parent.restrict.validate(value, values, this.parent);
-		return void (await Self.get(this.parent).root.storage.set({ [this.key]: values, }));
+		return voidPromise(Self.get(this.parent).root.storage.set(this.key, values));
 	}
-	async replace(values) {
+	replace(values) {
 		if (values.length < this.min || values.length > this.max) {
 			throw new Error('the number of values for the option "'+ this.key +'" must be between '+ this.min +' and '+ this.max);
 		}
 		this.parent.restrict && this.parent.restrict.validateAll(values, this.parent);
-		return void (await Self.get(this.parent).root.storage.set({ [this.key]: values, }));
+		return voidPromise(Self.get(this.parent).root.storage.set(this.key, values));
 	}
-	async splice(index, remove, ...insert) {
+	splice(index, remove, ...insert) {
 		const values = Self.get(this.parent).values.slice();
 		values.splice.apply(values, arguments);
 		if (values.length < this.min || values.length > this.max) {
 			throw new Error('the number of values for the option "'+ this.key +'" must be between '+ this.min +' and '+ this.max);
 		}
 		this.parent.restrict && this.parent.restrict.validateAll(insert, this.parent, index);
-		return void (await Self.get(this.parent).root.storage.set({ [this.key]: values, }));
+		return voidPromise(Self.get(this.parent).root.storage.set(this.key, values));
 	}
-	async reset() {
-		return void (await Self.get(this.parent).root.storage.remove(this.key));
+	reset() {
+		return voidPromise(Self.get(this.parent).root.storage.delete(this.key));
 	}
 } Object.freeze(ValueList.prototype);
 
@@ -171,10 +197,10 @@ class Restriction extends RestrictionBase {
 		const checks = [ ];
 
 		readOnly && checks.push(() => 'This value is read only');
+		type && checks.push(value => typeof value !== type && ('This value must be of type "'+ type +'" but is "'+ (typeof value) +'"'));
 		restrict.hasOwnProperty('from') && checks.push(value => value < from && ('This value must be at least '+ from));
 		restrict.hasOwnProperty('to') && checks.push(value => value > to && ('This value can be at most '+ to));
 		match && checks.push(value => !match.exp.test(value) && match.message);
-		type && checks.push(value => typeof value !== type && ('This value must be of type "'+ type +'" but is "'+ (typeof value) +'"'));
 		isRegExp && checks.push(value => void RegExp(value));
 		parent.type !== 'interval' && restrict.hasOwnProperty('unique') && (_unique => {
 			checks.push((value, values, option) => (_unique || (_unique = getUniqueSet(unique, parent))).map(other => {
@@ -232,81 +258,54 @@ function getUniqueSet(unique, parent) {
 	}
 }
 
-function toLeafs(option, callback) {
-	callback(option);
-	option.children.forEach(option => toLeafs(option, callback));
+function toLeafs(option, action) {
+	action(option);
+	option.children.forEach(option => toLeafs(option, action));
 }
 
-function toRoot(option, callback) {
-	callback(option);
-	option.parent && toRoot(option.parent, callback);
+function toRoot(option, action) {
+	action(option);
+	option.parent && toRoot(option.parent, action);
 }
 
-function inContext(root, callback) {
+function inContext(root, action) {
 	try {
 		currentRoot = root;
-		return callback();
+		return action();
 	} finally {
 		currentRoot = null;
 	}
 }
 
 return class OptionsRoot {
-	constructor({
-		model,
-		storage = Storage.sync,
-		prefix = storage === Storage.sync || storage === Storage.local ? 'options' : '',
-		onChanged = storage === Storage.sync || storage === Storage.local ? Storage.onChanged : null,
-	}) {
-		if (inContent) { try {
-			require('../loader/content')
-			.onUnload.addListener(() => this.destroy());
-		} catch (_) { } }
-		this.model = deepFreeze(model); this.storage = storage; this.prefix = prefix; this._onChanged = onChanged;
+	constructor({ model, storage, prefix, }) {
+		this.model = deepFreeze(model); this.storage = storage; this.prefix = prefix;
 		this.options = new Map;
-		this.onChanged = this.onChanged.bind(this);
-		onChanged && onChanged.addListener(this.onChanged);
 		this._shadow = inContext(this, () => new Option({ children: model, }, null));
 		this.children = this._shadow.children;
-		this.keys = Array.from(this.options.keys()).map(path => prefix + path);
 
-		const finish = data => {
-			if (Array.isArray(data) && data.length === 1) { data = data[0]; } // some weird Firefox bug
-			inContext(this, () => this.options.forEach(option => {
-				const isSet = data.hasOwnProperty(prefix + option.path);
-				option.values = new ValueList(option, isSet ? data[prefix + option.path] : option.defaults);
-				Self.get(option).isSet = isSet;
-				Object.freeze(option);
-			}));
-			return this;
-		};
-
-		const data = storage.get(this.keys);
-		return typeof data.then === 'function' ? data.then(finish) : finish(data);
+		this.destroy = this.destroy.bind(this);
+		this.onChanged = this.onChanged.bind(this);
+		storage.onChanged && storage.onChanged.addListener(this.onChanged);
+		Content && Content.onUnload.addListener(this.destroy);
 	}
 
-	onChanged(changes) { Object.keys(changes).forEach(key => {
+	onChanged(key, values) {
 		if (!key.startsWith(this.prefix) || this.destroyed) { return; }
 		const option = this.options.get(key.slice(this.prefix.length));
 		const self = Self.get(option); if (!self) { return; }
-		const old = self.values;
-		const now = Object.freeze(changes[key].newValue || option.defaults);
-		self.values = now; self.isSet = !!changes[key].newValue;
+		const old = self.values, now = values || option.defaults;
+		self.values = now; self.isSet = !!values;
 		const args = [ now, old, option, ];
 		self.fireChange && self.fireChange(args);
 		toRoot(option, other => {
 			const that = Self.get(other);
 			that.fireAnyChange && that.fireAnyChange(args);
 		});
-	}); }
-
-	async resetAll() {
-		return void (await this.storage.remove(this.keys));
 	}
 
-	onAnyChange() {
-		return this._shadow.onAnyChange(...arguments);
-	}
+	resetAll() { return this._shadow.resetAll(); }
+	onAnyChange() { return this._shadow.onAnyChange(...arguments); }
 
 	destroy() {
 		this.destroyed = true;
@@ -315,19 +314,29 @@ return class OptionsRoot {
 			self.onChange && self.onChange(null, { last: true, });
 			self.onAnyChange && self.onAnyChange(null, { last: true, });
 		});
-		this._onChanged && this._onChanged.removeListener(this.onChanged);
+		this.storage.onChanged && this.storage.onChanged.removeListener(this.onChanged);
+		Content && Content.onUnload.removeListener(this.destroy);
+	}
+
+	static ObjectMap(data = { }) {
+		const storage = {
+			data, get(key) { return data[key]; }, delete(key) { return delete data[key]; },
+			set(key, value) { onChanged([ key, value, data[key], ]); data[key] = value; },
+		}; const onChanged = setEvent(storage, 'onChenged', { async: true, }); return storage;
 	}
 };
 
 function deepFreeze(object) {
-	const done = new WeakSet;
-	(function doIt(object) {
+	const done = new WeakSet; (function doIt(object) {
 		if (typeof object !== 'object' || object === null || done.has(object)) { return; }
-		done.add(object);
-		Object.freeze(object);
+		Object.freeze(object); done.add(object);
 		Object.keys(object).forEach(key => doIt(object[key]));
-	})(object);
-	return object;
+	})(object); return object;
+}
+
+function voidPromise(promise) {
+	if (typeof promise.then !== 'function') { return undefined; }
+	return promise.then(() => undefined); // eslint-disable-line
 }
 
 }); })(this);

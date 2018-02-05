@@ -3,18 +3,23 @@
 }) => {
 
 function setEvent(target, name, { init, lazy = true, async: _async = false, writeable = false, once = false, } = { }) {
-	let done = false, all = init ? new Set(typeof init === 'function' ? [ init, ] : init) : null;
+	let all = init ? new Map(typeof init === 'function' ? [ [ init, null, ], ] : Array.from(init, f => [ f, null, ])) : new Map;
 	function get() {
 		const event = (function(it, o) {
-			const added = event.addListener(it);
-			added && o && o.owner && o.owner.addEventListener('unload', () => event.removeListener(it));
-			return added;
+			if (!all || typeof it !== 'function' || all.has(it)) { return false; }
+			const owner = o && o.owner || null; if (!owner) { return !!all.set(it); }
+			const remove = () => event.removeListener(it); owner.addEventListener('unload', remove);
+			return !!all.set(it, { owner, remove, });
 		}).bind();
 		Object.defineProperty(event, 'name', { value: name, });
 		Object.assign(event, {
-			addListener(it) { return !done && (all || (all = new Set)) && typeof it === 'function' && !!all.add(it); },
+			addListener(it) { return all && typeof it === 'function' && !!all.set(it, null); },
 			hasListener(it) { return all && all.has(it); },
-			removeListener(it) { return all && all.delete(it); },
+			removeListener(it) {
+				if (!all || !all.has(it)) { return false; }
+				const o = all.get(it); o && o.owner && o.owner.removeEventListener('unload', o.remove);
+				return all.delete(it);
+			},
 		});
 		Object.defineProperty(target, name, { value: event, writeable, enumerable: true, configurable: true, });
 		return event;
@@ -25,11 +30,13 @@ function setEvent(target, name, { init, lazy = true, async: _async = false, writ
 	});
 
 	return async function fire(args, { last = once, } = { }) {
-		if (done) { return 0; } if (_async) { (await null); }
-		const ready = all && args && Promise.all(Array.from(all, async listener => {
+		if (!all) { return 0; } if (_async) { (await null); }
+		const ready = all && args && Promise.all(Array.from(
+			all // must create a slice if the map before calling the handlers, otherwise any additional handlers added will catch this event
+		).map(async ([ listener, ]) => {
 			try { (await listener(...args)); return true; } catch (error) { console.error(`${name } listener threw`, error); return false; }
 		}));
-		if (last) { all.clear(); all = null; done = true; }
+		if (last) { all.clear(); all = null; }
 		return !ready ? 0 : (await ready).reduce((c, b) => b && ++c, 0);
 	};
 }

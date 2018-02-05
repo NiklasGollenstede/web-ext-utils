@@ -31,22 +31,22 @@ const methods = {
 	 * Opens or shows a specific extension view in a tab or popup window.
 	 * If the view matches a handler, the handler is run before the view is returned.
 	 * Does not run the 404 handler if no handler is matched.
-	 * @param  {String}                location                Name/Location of the view to show. Can be the name as a string,
-	 *                                                         the argument to or the return value of .getUrl() or the value of a Location#href .
-	 * @param  {string|null}           type                    The type of view to open/show. Can be 'tab', 'popup' or null, to give no preference.
-	 * @param  {boolean|function}      options.useExisting     Optional. If falsy, a new view will be opened. Otherwise, an existing view may be used and returned if
-	 *                                                         .useExisting is a function and returns true for its Location or if the name part of `location` and ` type` match. Defaults to true.
-	 * @param  {Boolean}               options.focused         Optional. Whether the window of the returned view should be focused. Defaults to true.
-	 * @param  {Boolean}               options.active          Optional. Whether the tab of the returned view should be active within its window. Defaults to true.
-	 * @param  {String}                options.state           Optional. The state of the new window, if one is created. Defaults to 'normal'.
-	 * @param  {[type]}                options.windowId        Optional. The window in which a new tab gets placed, if one is created.
-	 *                                                         Should not be a private window. If it is, the view will be move to a normal window.
-	 * @param  {Boolean}               options.pinned          Optional. Whether the tab, if one is created, will be pinned. Defaults to false.
-	 * @param  {integer}               options.openerTabId     Optional. The opener tab of the new tab, of one needs to be created.
-	 * @param  {natural}               options.index           Optional. The position of the new tab, of one needs to be created.
-	 * @param  {integer}               options.width/height    Optional. The dimensions of the popup, if one is created.
-	 * @param  {integer}               options.left/top        Optional. The position of the popup, if one is created.
-	 * @return {Location}                                      The Location object corresponding to the new or old matching view.
+	 * @param  {String}             location              Name/Location of the view to show. Can be the name as a string,
+	 *                                                    the argument to or the return value of .getUrl() or the value of a Location#href .
+	 * @param  {string|null}        type                  The type of view to open/show. Can be 'tab', 'popup' or null, to give no preference.
+	 * @param  {boolean|function?}  options.useExisting   Optional. If falsy, a new view will be opened. Otherwise, an existing view may be used and returned if
+	 *                                                    .useExisting is a function and returns true for its Location or if the name part of `location` and ` type` match. Defaults to true.
+	 * @param  {Boolean?}           options.focused       Optional. Whether the window of the returned view should be focused. Defaults to true.
+	 * @param  {Boolean?}           options.active        Optional. Whether the tab of the returned view should be active within its window. Defaults to true.
+	 * @param  {String?}            options.state         Optional. The state of the new window, if one is created. Defaults to 'normal'.
+	 * @param  {natural?}           options.windowId      Optional. The window in which a new tab gets placed, if one is created.
+	 *                                                    Should not be a private window. If it is, the view will be move to a normal window.
+	 * @param  {Boolean?}           options.pinned        Optional. Whether the tab, if one is created, will be pinned. Defaults to false.
+	 * @param  {integer?}           options.openerTabId   Optional. The opener tab of the new tab, of one needs to be created.
+	 * @param  {natural?}           options.index         Optional. The position of the new tab, of one needs to be created.
+	 * @param  {integer?}           options.width/height  Optional. The dimensions of the popup, if one is created.
+	 * @param  {integer?}           options.left/top      Optional. The position of the popup, if one is created.
+	 * @return {Location}                                 The Location object corresponding to the new or old matching view.
 	 */
 	async openView(location = '#', type = null, {
 		useExisting = true, focused = true, active = true, state = 'normal',
@@ -250,8 +250,8 @@ if ((await FS.exists('views'))) { for (const name of (await FS.readdir('views'))
 	}
 } }
 
-if (
-	!handlers.options && manifest.options_ui && (/^(?:(?:chrome|moz|ms)-extension:\/\/.*?)?\/?view.html#options(?:\?|$)/).test(manifest.options_ui.page)
+if ( // automatically create inline options view if options view is required but not explicitly defined
+	!handlers.options && manifest.options_ui && (/^(?:(?:chrome|moz|ms)-extension:\/\/.*?)?\/?[\w-]+#options(?:\?|$)/).test(manifest.options_ui.page)
 	&& (await FS.exists('node_modules/web-ext-utils/options/editor/inline.js'))
 ) {
 	const options = (await require.async('node_modules/web-ext-utils/options/editor/inline'));
@@ -270,12 +270,6 @@ function loadFrame(path, view) {
 	view.document.body.appendChild(frame);
 	frame.addEventListener('load', () => (view.document.title = frame.contentDocument.title), { once: true, });
 }
-
-(async () => {
-	(await module.ready); (await null);
-	const knownViews = new Set(Array.from(locations, _=>_.view));
-	extension.getViews().forEach(view => view !== global && !knownViews.has(view) && view.location.reload()); // reload old views
-})();
 
 return methods;
 
