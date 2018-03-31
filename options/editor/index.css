@@ -74,6 +74,9 @@ textarea[data-type="code"] {
 .add-value-entry[disabled*='count;'] {
 	display: none;
 }
+input[type="number"][disabled]:hover {
+    -moz-appearance: textfield;
+}
 
 /* spacing */
 .pref-description pre {

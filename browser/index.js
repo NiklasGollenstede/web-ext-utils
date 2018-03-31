@@ -6,6 +6,7 @@
  *     - some platform inconsistencies and bugs are fixed:
  *         - if storage.sync is missing or doesn't work, it is set to storage.local
  *         - `runtime.openOptionsPage` is polyfilled
+ *         - `runtime.Port#error` is polyfilled
  *         - in firefox, prevent tabs.create from defaulting the windowId to popups and private windows
  *         - ...
  *
@@ -61,6 +62,8 @@ const schemas = {
 	runtime: {
 		async: key => (/^get(?:BackgroundPage|BrowserInfo|PlatformInfo)$|^(?:openOptionsPage|send(?:Native)?Message|setUninstallURL|requestUpdateCheck)$/).test(key),
 		children: {
+			connect: !gecko && addPortError,
+			connectNative: !gecko && addPortError,
 			openOptionsPage: !inContent && ((current, api) => !current || !api.windows /* fennec */ ? openOptionsPage : good ? current : promisify(current, api)),
 		},
 	},
@@ -69,6 +72,7 @@ const schemas = {
 	system: { children: { cpu: api => getProxy(api), memory: api => getProxy(api), storage: api => getProxy(api), }, },
 	tabs: { async: key => key !== 'connect', children: {
 		create: gecko && (() => createTabInNormalWindow),
+		connect: !gecko && addPortError,
 	}, },
 	tts: { async: key => (/^(?:speak|isSpeaking|getVoices)$/).test(key), },
 	windows: gecko && { children: { create: create => arg => { delete arg.focused; return create(arg); }, }, },
@@ -163,5 +167,12 @@ async function createTabInNormalWindow(props) {
 	delete props.openerTabId;
 	return api.tabs.create(props);
 }
+
+function addPortError(connect, self) { return function () {
+	const port = connect.apply(self, arguments); let error = null;
+	Object.defineProperty(port, 'error', { get() { return error; }, enumerable: true, configurable: true, });
+	port.onDisconnect.addListener(port => error = api.runtime.lastError || null);
+	return port;
+} }
 
 }; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { /* eslint-disable */ module.exports = result; /* eslint-enable */ } else { global[factory.name] = result; } } })(this);

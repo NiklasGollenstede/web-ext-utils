@@ -9,6 +9,8 @@ const storage = { }, internal = { };
  * `.get()` is synchronous and reads values from a write-through in-memory cache.
  * `.get()` can be called with (key, value), `.delete()` as alias for `.remove()` (Map interface).
  * Modifications are applied to the cache immediately and return Promises for their backend completion.
+ * Any values to be set must be JSON values and will be deeply frozen and written to the cache,
+ * so getting the same key afterwards may return the exact same object (`===`).
  * Each individual StorageArea has an `.onChanged` `utils/event.js` Event,
  * that fires for each property with (key, value, old) only if the JSON representation of value changed.
  * `.proxy` provides a writable object view of the storage data.
@@ -17,16 +19,16 @@ const storage = { }, internal = { };
 (await Promise.all([ 'local', 'sync', ].map(async type => {
 	const async = Async[type];
 	let data = (await async.get());	if (Array.isArray(data) && data.length === 1) { data = data[0]; } // some weird Firefox bug (2016-12)
-	Object.values(data).forEach(Object.freeze);
+	Object.values(data).forEach(deepFreeze);
 
 	function get(key) { return data[key]; }
 	async function set(key, value, ref) { let update; if (typeof key !== 'object' || key === null) {
 		if (value !== undefined && !deepEquals(data[key], value))
-		{ onChanged([ key, value, data[key], ref, ]); data[key] = value; }
+		{ onChanged([ key, value, data[key], ref, ]); data[key] = deepFreeze(value); }
 		update = { [key]: value, };
 	} else { ref = value; update = key; Object.entries(update).forEach(([ key, value, ]) => {
 		if (value !== undefined && !deepEquals(data[key], value))
-		{ onChanged([ key, value, data[key], ref, ]); data[key] = value; }
+		{ onChanged([ key, value, data[key], ref, ]); data[key] = deepFreeze(value); }
 	}); } return void (await async.set(update)); }
 	function remove(key, ref) { if (typeof key === 'string') {
 		delete data[key] && onChanged([ key, undefined, data[key], ref, ]);
@@ -51,12 +53,13 @@ const storage = { }, internal = { };
 Async.onChanged.addListener((changes, type) => Object.entries(changes).forEach(([ key, { newValue: value, }, ]) => {
 	const current = internal[type].data[key];
 	if (deepEquals(current, value)) { return; }
-	internal[type].data[key] = Object.freeze(value);
+	internal[type].data[key] = deepFreeze(value);
 	internal[type].onChanged([ key, value, current, ]);
 }));
 
 function deepEquals(a, b) {
-	if (typeof a !== 'object' || a === null) { return a === b; }
+	if (a === b) { return true; }
+	if (typeof a !== 'object' || a === null) { return false; }
 	if (Array.isArray(a)) {
 		if (!Array.isArray(b) || a.length !== b.length) { return false; }
 		for (let i = 0, l = a.length; i < l; ++i) {
@@ -70,6 +73,14 @@ function deepEquals(a, b) {
 			if (!deepEquals(a[k], b[k])) { return false; }
 		} return true;
 	}
+}
+
+function deepFreeze(object) {
+	const done = new WeakSet; (function doIt(object) {
+		if (typeof object !== 'object' || object === null || done.has(object)) { return; }
+		Object.freeze(object); done.add(object);
+		Object.values(object).forEach(doIt);
+	})(object); return object;
 }
 
 return storage;

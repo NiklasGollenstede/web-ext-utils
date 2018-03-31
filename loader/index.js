@@ -132,7 +132,7 @@ class ContentScript {
 
 	/**
 	 * Applies the ContentScript to all already open tabs and frames it matches.
-	 * Does NOT throw if the content script can't be applied to individual tabs or throws.
+	 * Does NOT throw if the content script can't be applied to or throws for individual tabs.
 	 * @return {Set<Frame>}  An of all the Frames this ContentScript was successfully applied to.
 	 */
 	async applyNow() {
@@ -240,8 +240,12 @@ async function onNavigation({ tabId, frameId, url, }) {
 }
 
 async function applyScript(script) {
-	const applied = new Set, tabs = (await Tabs.query({ }));
-	(await Promise.all(tabs.map(async ({ id: tabId, url, incognito, title, }) => { return Promise.all(
+	const applied = new Set, tabs = (await Tabs.query({
+		discarded: false, url: '<all_urls>',
+	}));
+	(await Promise.all(tabs.map(async ({
+		id: tabId, url, incognito, title,
+	}) => { return Promise.all(
 		(script.frames === 'top'
 			? [ url // top frame is enough
 				? { frameId: 0, url, } // with "tabs" permission
@@ -251,9 +255,13 @@ async function applyScript(script) {
 			: (await WebNavigation.getAllFrames({ tabId, }))
 		).map(async ({ frameId = 0, url = null, }) => { try {
 			if (!isScripable(url)) { return; } // i.e. not '<all_urls>'
-			const [ frame, , done, ] = (await applyIfMatches({ tabId, frameId, script, url, incognito, }));
+			const [ frame, , done, ] = (await applyIfMatches({
+				tabId, frameId, script, url, incognito,
+			}));
 			(await done); frame && applied.add(frame);
-		} catch (error) { !silentErrors.has(error) && console.error(`Error injecting into tab ${ tabId } (${ title }) frame ${ frameId }`, error); } })
+		} catch (error) {
+			!silentErrors.has(error) && console.error(`Error injecting into tab ${ tabId } (${ title }) frame ${ frameId }`, error);
+		} })
 	); })));
 	return applied;
 }
@@ -492,7 +500,7 @@ function checkEnum(choices, value) {
 
 function deprecate(name, alt) { return function deprecated() {
 	console.warn(new Error(`"${ name }" is deprecated, use "${ alt.name }" instead`));
-	alt.apply(this, arguments); // eslint-disable-line no-invalid-this
+	return alt.apply(this, arguments); // eslint-disable-line no-invalid-this
 }; }
 
 {

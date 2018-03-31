@@ -1,6 +1,6 @@
 {
 	"name": "web-ext-utils",
-	"version": "0.0.17",
+	"version": "0.0.18",
 	"description": "a collection of utilities to use with web extensions",
 	"author": "Niklas Gollenstede",
 	"license": "MPL-2.0",
@@ -9,7 +9,7 @@
 		"url": "git@github.com:NiklasGollenstede/re-style.git"
 	},
 	"dependencies": {
-		"multiport": "0.2.2",
+		"multiport": "0.2.3",
 		"pbq": "0.3.3"
 	},
 	"devDependencies": {

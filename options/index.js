@@ -330,7 +330,7 @@ function deepFreeze(object) {
 	const done = new WeakSet; (function doIt(object) {
 		if (typeof object !== 'object' || object === null || done.has(object)) { return; }
 		Object.freeze(object); done.add(object);
-		Object.keys(object).forEach(key => doIt(object[key]));
+		Object.values(object).forEach(doIt);
 	})(object); return object;
 }
 
