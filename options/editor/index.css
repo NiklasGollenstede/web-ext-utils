@@ -122,7 +122,7 @@ input[type="number"][disabled]:hover {
 .value-prefix, .value-suffix {
 	font-size: 117%;
 }
-textarea, input[type="text"]:not([data-type="keybordKey"]) {
+textarea, input[type="text"]:not([data-type="keybordKey"]):not([data-type="command"]) {
 	/* min-width: 500px; */
 	width: 500px;
 	max-width: 65vw;

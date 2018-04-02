@@ -57,10 +57,26 @@ return function loadEditor({ host, options, onCommand, prefix = '', }) {
 
 	host.addEventListener('keypress', (event) => {
 		const { target, } = event;
-		if (!target.matches || !target.matches('.input-field') || target.dataset.type !== 'keybordKey') { return; }
+		if (!target.matches || !target.matches('.input-field')) { return; }
+		switch (target.dataset.type) {
+			case 'keybordKey': {
+				target.value = (event.ctrlKey ? 'Ctrl+' : '') + (event.altKey ? 'Alt+' : '') + (event.shiftKey ? 'Shift+' : '') + event.code;
+			} break;
+			case 'command': {
+				if (event.key === 'Unidentified' || event.key === 'Dead') { return; }
+				const media = (/^Media(?:PlayPause|Stop|Track(Previous|Next))$/).exec(event.code);
+				if (media) { target.value = media[1] ? `Media${ media[1].slice(0, 4) }Track` : media[0]; break; }
+				const funcKey = (/F[1-9]|F1[0-2]/).test(event.code);
+				if (!event.ctrlKey && !event.altKey && !event.metaKey && !funcKey) { return; }
+				if (event.ctrlKey + event.altKey + event.metaKey > 1) { return; }
+				const mod = (event.ctrlKey ? 'Ctrl + ' : '') + (event.altKey ? 'Alt + ' : '') + (event.shiftKey ? 'Shift + ' : '');
+				const key = event.code.replace(/^Key|^Digit|^Numpad|^Arrow/, '');
+				if (!funcKey && !(/^(?:[A-Z0-9]|Comma|Period|Home|End|PageUp|PageDown|Space|Insert|Delete|Up|Down|Left|Right)$/).test(key)) { return; }
+				target.value = mod + key;
+			} break;
+			default: return;
+		}
 		event.stopPropagation(); event.preventDefault();
-		const key = (event.ctrlKey ? 'Ctrl+' : '') + (event.altKey ? 'Alt+' : '') + (event.shiftKey ? 'Shift+' : '') + event.code;
-		target.value = key;
 		saveInput(target);
 	});
 	host.addEventListener('change', ({ target, }) => {
@@ -141,7 +157,9 @@ function createInputRow(pref) {
 		}),
 		model.input && createElement('div', {
 			className: 'inputs-wrapper',
-		}, (Array.isArray(model.input) ? model.input : [ model.input, ]).map(props => createElement('span', {
+		}, (
+			Array.isArray(model.input) ? model.input : [ model.input, ]
+		).map(props => createElement('span', {
 			className: 'input-wrapper', style: props.style || { },
 		}, [
 			props.prefix && createElement('span', {
@@ -195,6 +213,7 @@ function createInput(props, pref) {
 				integer: 'number',
 				string: 'text',
 				keybordKey: 'text',
+				command: 'text',
 				color: 'color',
 				label: 'hidden',
 			})[props.type] || props.type;

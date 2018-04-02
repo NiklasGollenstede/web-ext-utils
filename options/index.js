@@ -202,7 +202,7 @@ class Restriction extends RestrictionBase {
 		restrict.hasOwnProperty('to') && checks.push(value => value > to && ('This value can be at most '+ to));
 		match && checks.push(value => !match.exp.test(value) && match.message);
 		isRegExp && checks.push(value => void RegExp(value));
-		parent.type !== 'interval' && restrict.hasOwnProperty('unique') && (_unique => {
+		restrict.hasOwnProperty('unique') && (() => { let _unique;
 			checks.push((value, values, option) => (_unique || (_unique = getUniqueSet(unique, parent))).map(other => {
 				if (other === option) {
 					return values.filter(v => v === value).length > 1 && 'This value must be unique within this option';
