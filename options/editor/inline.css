@@ -10,8 +10,8 @@ body {
 	font-size: 120%;
 	font-weight: 400;
 }
-.options-host .pref-description {
-	font-size: 105%;
+.options-host .pref-description, .value-prefix, .value-suffix {
+	font-size: 110%;
 	font-weight: 400;
 }
 

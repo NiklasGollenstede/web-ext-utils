@@ -171,8 +171,8 @@ async function createTabInNormalWindow(props) {
 function addPortError(connect, self) { return function () {
 	const port = connect.apply(self, arguments); let error = null;
 	Object.defineProperty(port, 'error', { get() { return error; }, enumerable: true, configurable: true, });
-	port.onDisconnect.addListener(port => error = api.runtime.lastError || null);
+	port.onDisconnect.addListener(() => (error = api.runtime.lastError || null));
 	return port;
-} }
+}; }
 
 }; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { /* eslint-disable */ module.exports = result; /* eslint-enable */ } else { global[factory.name] = result; } } })(this);

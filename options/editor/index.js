@@ -129,14 +129,15 @@ function saveInput(target) {
 	const element = getParent(target, '.pref-container');
 	const { pref, } = element;
 	const values = Array.from(element.querySelector('.values-container').children, getInputRowValues);
-	try {
-		pref.values.replace(values);
-		Array.from(element.querySelectorAll('.invalid')).concat(element).forEach(invalid => {
-			invalid.classList.remove('invalid');
-			invalid.title = '';
-		});
-	} catch (error) {
-		'index' in error && (target = element.querySelectorAll('.input-field')[error.index]);
+	let error; try { pref.values.replace(values); } catch (e) { error = e; }
+	Array.from(element.querySelectorAll('.invalid')).concat(element).forEach(invalid => {
+		invalid.classList.remove('invalid'); invalid.removeAttribute('title');
+	});
+	if (error) {
+		if ('index' in error) {
+			const wrapper = element.querySelector('.values-container').children[error.index];
+			!wrapper.contains(target) && (target = wrapper);
+		}
 		target.title = error && error.message || error;
 		target.classList.add('invalid');
 		throw error;
@@ -319,7 +320,7 @@ function copyProperties(target, source) {
 }
 
 function sanatize(html) {
-	const allowed = /^(a|abbr|b|big|br|code|div|i|p|pre|kbd|li|ol|ul|spam|span|sup|sub|tt|var)$/;
+	const allowed = /^(a|abbr|b|br|code|div|i|p|pre|kbd|li|ol|ul|small|spam|span|sup|sub|tt|var)$/;
 	return html.replace(
 		(/<(\/?)(\w+)[^>]*?( href="(?!(?:javascript|data):)[^"]*?")?( title="[^"]*?")?[^>]*?>/g),
 		(match, slash, tag, href, title) => allowed.test(tag) ? ('<'+ slash + tag + (title || '') + (href ? href +'target="_blank"' : '') +'>') : ''

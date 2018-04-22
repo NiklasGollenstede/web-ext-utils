@@ -210,6 +210,7 @@ class Restriction extends RestrictionBase {
 				return other && other.values.current.indexOf(value) !== -1 && 'This value must be unique, but it is already used in "'+ other.title +'"';
 			}).find(x => x));
 		})();
+		typeof restrict.custom === 'function' && checks.push(restrict.custom);
 		this.checks = Object.freeze(checks);
 		return Object.freeze(this);
 	}

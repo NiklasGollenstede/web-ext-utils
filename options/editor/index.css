@@ -15,6 +15,7 @@ code {
 }
 
 /* invalid inputs */
+.checkbox-wrapper.invalid, .invalid .checkbox-wrapper,
 textarea.invalid, .invalid textarea,
 input.invalid, .invalid input,
 select.invalid, .invalid select {

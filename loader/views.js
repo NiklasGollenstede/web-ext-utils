@@ -1,10 +1,9 @@
 (function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { extension, manifest, rootUrl, Windows, Tabs, },
+	'../browser/': { manifest, rootUrl, Windows, Tabs, },
 	'../browser/version': { fennec, opera, chrome, },
 	'../utils/': { reportError, },
 	'../utils/files': FS,
 	'../utils/event': { setEvent, setEventGetter, },
-	module,
 	require,
 }) => {
 const Self = new WeakMap;
