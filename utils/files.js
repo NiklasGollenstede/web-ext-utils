@@ -49,8 +49,7 @@ async function stat(path) {
 }
 
 async function realpath(path) {
-	const parts = split(path);
-	const node = find(parts);
+	const parts = split(path), node = find(parts);
 	return typeof node === 'string' ? node : parts.join('/');
 }
 

@@ -8,7 +8,7 @@
 }) => {
 const Self = new WeakMap;
 
-const methods = {
+const exports = {
 	setHandler(name, handler) {
 		if (!handler) { handler = name; name = handler.name; }
 		if (typeof handler !== 'function' || (name === '' && arguments.length < 2) || typeof name !== 'string')
@@ -22,7 +22,10 @@ const methods = {
 		return handlers[name];
 	},
 	getUrl({ name, query, hash, }) {
-		return viewPath + (name || '') + (query ? query.replace(/^\??/, '?') : '') + (hash ? hash.replace(/^\#?/, '#') : '');
+		return viewPath
+		+ (name  ? (name +'')  .replace(/^#/, '') : '')
+		+ (query ? (query +'') .replace(/^\??/, '?') : '')
+		+ (hash  ? (hash +'')  .replace(/^\#?/, '#') : '');
 	},
 	getViews() { return Array.from(locations, _=>_.public); },
 
@@ -30,7 +33,7 @@ const methods = {
 	 * Opens or shows a specific extension view in a tab or popup window.
 	 * If the view matches a handler, the handler is run before the view is returned.
 	 * Does not run the 404 handler if no handler is matched.
-	 * @param  {String}             location              Name/Location of the view to show. Can be the name as a string,
+	 * @param  {string|null}        location              Name/Location of the view to show. Can be the name as a string,
 	 *                                                    the argument to or the return value of .getUrl() or the value of a Location#href .
 	 * @param  {string|null}        type                  The type of view to open/show. Can be 'tab', 'popup' or null, to give no preference.
 	 * @param  {boolean|function?}  options.useExisting   Optional. If falsy, a new view will be opened. Otherwise, an existing view may be used and returned if
@@ -47,29 +50,22 @@ const methods = {
 	 * @param  {integer?}           options.left/top      Optional. The position of the popup, if one is created.
 	 * @return {Location}                                 The Location object corresponding to the new or old matching view.
 	 */
-	async openView(location = '#', type = null, {
+	async openView(location = null, type = null, {
 		useExisting = true, focused = true, active = true, state = 'normal',
 		windowId = undefined, pinned = false, openerTabId = undefined, index = undefined,
 		width, height, left, top,
 	} = { }) {
-		if (typeof location === 'string') {
-			if (!(location.startsWith(viewPath) || location === viewPath.slice(-1))) { location = viewPath + location.replace(/^#/, ''); }
-		} else {
-			location = methods.getUrl(location);
-		}
+		location = typeof location === 'string' ? LocationP.normalize(location)
+		: typeof location === 'object' ? exports.getUrl(location || { }) : viewPath;
 		!Windows && (type = 'tab');
 		if (useExisting) {
-			const open = methods.getViews().find(
+			const open = exports.getViews().find(
 				typeof useExisting === 'function' ? useExisting
 				: (name => (_=>_.name === name && (!type || _.type === type)))(location.slice(viewPath.length).replace(/#.*/, ''))
-			);
-			if (open) {
-				(focused || active) && (await Promise.all([
-					focused && open.windowId !== WINDOW_ID_NONE && Windows && Windows.update(open.windowId, { focused: true, }),
-					active && open.tabId !== TAB_ID_NONE && Tabs.update(open.tabId, { active: true, }),
-				]));
-				return open;
-			}
+			); if (open) { (focused || active) && (await Promise.all([
+				focused && open.windowId !== WINDOW_ID_NONE && Windows && Windows.update(open.windowId, { focused: true, }),
+				active && open.tabId !== TAB_ID_NONE && Tabs.update(open.tabId, { active: true, }),
+			])); return open; }
 		}
 		const tab = type === 'popup'
 		? (await Windows.create({ type: 'popup', url: location, focused, state, width, height, left, top, })).tabs[0]
@@ -79,9 +75,9 @@ const methods = {
 	},
 	__initView__: initView, // for internal use only
 };
-const fireOpen  = setEvent(methods, 'onOpen', { lazy: false, });
-const fireClose = setEvent(methods, 'onClose', { lazy: false, });
-Object.freeze(methods);
+const fireOpen  = setEvent(exports, 'onOpen', { lazy: false, });
+const fireClose = setEvent(exports, 'onClose', { lazy: false, });
+Object.freeze(exports);
 
 // location format: #name?query#hash #?query#hash #name#hash ##hash #name?query!query #?query!query #name!hash #!hash
 // view types: 'tab', 'popup', 'panel', 'sidebar', 'frame'
@@ -91,17 +87,33 @@ class Location {
 	get tabId    () { return Self.get(this).tabId; }
 	get windowId () { return Self.get(this).windowId; }
 	get activeTab() { return Self.get(this).activeTab; }
-	get href     () { return Self.get(this).get({ }); } set href  (v) { const self = Self.get(this); self.href  !== v && self.replace({ href:  v, }, true); }
-	get name     () { return Self.get(this).name; }     set name  (v) { const self = Self.get(this); self.name  !== v && self.replace({ name:  v, }, true); }
-	get query    () { return Self.get(this).query; }    set query (v) { const self = Self.get(this); self.query !== v && self.replace({ query: v, }, true); }
-	get hash     () { return Self.get(this).hash; }     set hash  (v) { const self = Self.get(this); self.hash  !== v ?  self.replace({ hash:  v, }, true) : self.updateHash(); }
-	assign(v)  { Self.get(this).replace({ href:  v, }, true); }
-	replace(v) { Self.get(this).replace({ href:  v, }, false); }
+	get href     () { return exports.getUrl(Self.get(this)); } toString() { return this.href; }
+	get name     () { return Self.get(this).name; }
+	get query    () { return Self.get(this).query; }
+	get hash     () { return Self.get(this).hash; }
+	assign      (v) { v = LocationP.normalize(v); Self.get(this).navigate({ href:  v, }, self.href  !== v); }
+	replace     (v) { v = LocationP.normalize(v); Self.get(this).navigate({ href:  v, }, false); }
+	set href    (v) { v = LocationP.normalize(v); Self.get(this).navigate({ href:  v, }, self.href  !== v); }
+	set name    (v) { v += '';                    Self.get(this).navigate({ name:  v, }, self.name  !== v); }
+	set query   (v) { v += '';                    Self.get(this).navigate({ query: v, }, self.query !== v); }
+	set hash    (v) { v += ''; const self = Self.get(this); self.hash  !== v ?  self.navigate({ hash:  v, }, true) : self.updateHash(); }
 }
 setEventGetter(Location, 'change', Self);
 setEventGetter(Location, 'nameChange', Self);
 setEventGetter(Location, 'queryChange', Self);
 setEventGetter(Location, 'hashChange', Self);
+
+// default error handler
+function defaultError(view, location) {
+	const code = (/^[45]\d\d$/).test(location.name) ? +location.name : 0;
+	view.document.body['inner'+'HTML'] = `<h1 id="code"></h1><span id="message"></span>`
+	+`<style> :root { background: #424F5A; filter: invert(1) hue-rotate(180deg); font-family: Segoe UI, Tahoma, sans-serif; } </style>`;
+	view.document.querySelector('#message').textContent = code ? view.history.state && view.history.state.message || '' : `Unknown view "${ location.name }"`;
+	view.document.querySelector('#code').textContent = code || 404;
+	view.document.title = !code || code === 404 ? 'Not Found' : view.history.state && view.history.state.title || 'Error';
+	!code && console.error(`Got unknown view "${ view.location.hash.slice(1) }"`);
+	location.onChange(() => view.location.reload());
+}
 
 //////// start of private implementation ////////
 
@@ -113,14 +125,17 @@ class LocationP {
 		this.name = name; this.query = query; this.hash = hash;
 		view.addEventListener('hashchange', this);
 		view.addEventListener('unload', () => this.destroy());
+		type === 'tab' && Tabs.onAttached.addListener(this.updateWindow = this.updateWindow.bind(this));
 		locations.add(this);
 	}
-	get({ name = this.name, query = this.query, hash = this.hash, }) {
-		return viewPath + (name || '') + (query ? query.replace(/^\??/, '?') : '') + (hash ? hash.replace(/^\#?/, '#') : '');
+	getUrl(props) { // called with { href, name, query, hash, } as optional strings
+		if (('href' in props)) { return LocationP.normalize(props.href); }
+		if (('hash' in props) && !('query' in props)) { props.query = this.query; }
+		if (('query' in props) && !('name' in props)) { props.name = this.name; }
+		return exports.getUrl(props);
 	}
-	replace({ name = this.name, query = this.query, hash = this.hash, href = this.get({ name, query, hash, }), }, push = false) {
-		// Object.assign(this, LocationP.parse(href || '#'));
-		this.view.location[push ? 'assign' : 'replace'](href);
+	navigate(target, push = false) {
+		this.view.location[push ? 'assign' : 'replace'](this.getUrl(target));
 	}
 	updateHash() {
 		const target = this.hash ? this.view.document.getElementById(this.hash) : null;
@@ -137,6 +152,7 @@ class LocationP {
 		if (hash  !== this.hash)  { this.fireHashChange  && this.fireHashChange  ([ this.hash,  hash,  this.view, ]); }
 		this.updateHash();
 	}
+	updateWindow(id, { newWindowId, }) { this.windowId = newWindowId; }
 	destroy() {
 		this.fireChange      && this.fireChange      (null, { last: true, });
 		this.fireNameChange  && this.fireNameChange  (null, { last: true, });
@@ -144,6 +160,7 @@ class LocationP {
 		this.fireHashChange  && this.fireHashChange  (null, { last: true, });
 		fireClose([ this.public, ]);
 		Self.delete(this.public); locations.delete(this);
+		this.type === 'tab' && Tabs.onAttached.removeListener(this.updateWindow);
 		this.public = this.view = null;
 	}
 
@@ -152,26 +169,25 @@ class LocationP {
 		const [ , name, query, hash, ] = string.match(/^[#]?(.*?)(?:(?:[#!]|[?]([^#\s]*)#?)(.*))?$/);
 		return { name, query: query || '', hash: hash || '', };
 	}
+	static normalize(href) { href += '';
+		if (href.startsWith(viewPath) || href === viewPath.slice(-1)) { return href; }
+		return viewPath + href.replace(/^#/, '');
+	}
 }
 
-function defaultError(view, location) {
-	const code = (/^[45]\d\d$/).test(location.name) ? +location.name : 0;
-	view.document.body['inner'+'HTML'] = `
-		<style> :root { background: #424F5A; filter: invert(1) hue-rotate(180deg); font-family: Segoe UI, Tahoma, sans-serif; } </style>
-		<h1 id="code">${ +code || 404 }</h1><span id="message"></span>
-	`; // this is a literal string with a number substituted
-	view.document.querySelector('#message').textContent = code ? view.history.state && view.history.state.message || '' : `Unknown view "${ location.name }"`;
-	!code && console.error(`Got unknown view "${ view.location.hash.slice(1) }"`);
-	location.onChange(() => view.location.reload());
-}
+
 
 const handlers = { }, pending = { }, locations = new Set;
-const viewPath = rootUrl + (await FS.realpath('view.html')) +'#';
+const viewName = (await FS.realpath('view.html')), viewPath = rootUrl + viewName +'#';
 const { TAB_ID_NONE = -1, } = Tabs, { WINDOW_ID_NONE = -1, } = Windows || { };
 
-async function initView(view, options = { }) { try {
-	view.document.querySelector('link[rel="icon"]').href = (manifest.icons[1] || manifest.icons[64]).replace(/^\/?/, '/'); makeEdgeSuckLess(view);
-	options = parseSearch(options);
+async function initView(view, options = { }) { try { options = parseSearch(options);
+	view.location.pathname !== viewName && view.history.replaceState(
+		view.history.state, view.document.title,
+		Object.assign(new view.URL(view.location), { pathname: viewName, })
+	);
+	view.document.querySelector('link[rel="icon"]').href = (manifest.icons[1] || manifest.icons[64]).replace(/^\/?/, '/');
+	makeEdgeSuckLess(view);
 
 	const get = what => new Promise(got => (view.browser || view.chrome)[what +'s'].getCurrent(got));
 
@@ -244,8 +260,8 @@ if ((await FS.exists('views'))) { for (const name of (await FS.readdir('views'))
 		: null
 	);
 	if (handler) {
-		methods.setHandler(isFile ? name.replace(/\.(?:html|js)$/, '') : name, handler);
-		(isFile ? (/^index\.(?:html|js)$/) : (/^index$/)).test(name) && methods.setHandler('', handler);
+		exports.setHandler(isFile ? name.replace(/\.(?:html|js)$/, '') : name, handler);
+		(isFile ? (/^index\.(?:html|js)$/) : (/^index$/)).test(name) && exports.setHandler('', handler);
 	}
 } }
 
@@ -254,8 +270,8 @@ if ( // automatically create inline options view if options view is required but
 	&& (await FS.exists('node_modules/web-ext-utils/options/editor/inline.js'))
 ) {
 	const options = (await require.async('node_modules/web-ext-utils/options/editor/inline'));
-	methods.setHandler('options', options);
-	!handlers[''] && methods.setHandler('', options);
+	exports.setHandler('options', options);
+	!handlers[''] && exports.setHandler('', options);
 }
 
 function loadFrame(path, view) {
@@ -270,7 +286,7 @@ function loadFrame(path, view) {
 	frame.addEventListener('load', () => (view.document.title = frame.contentDocument.title), { once: true, });
 }
 
-return methods;
+return exports;
 
 function parseSearch(search) {
 	const config = { };
@@ -282,7 +298,7 @@ function parseSearch(search) {
 }
 
 function makeEdgeSuckLess(window) {
-	window.NodeList.prototype.forEach = window.Array.prototype.forEach;
+	!window.NodeList.prototype.forEach && (window.NodeList.prototype.forEach = window.Array.prototype.forEach);
 }
 
 }); })(this);

@@ -39,6 +39,10 @@ textarea::selection, input::selection {
 	background-color: #39f;
 	color: white;
 }
+textarea::-moz-selection, input::-moz-selection {
+	background-color: #39f;
+	color: white;
+}
 .checkbox-wrapper>label::after {
 	text-shadow: 0 0 5px green, 0 0 5px green, 0 0 5px green;
 }
@@ -78,7 +82,8 @@ input[type="number"]:not(:hover) { /* firefox only */
 
 /* invalid inputs */
 input.invalid, .invalid input,
-select.invalid, .invalid select {
+select.invalid, .invalid select,
+textarea.invalid, .invalid textarea {
 	color: white;
 	border-color: red;
 	background-color: #210006;

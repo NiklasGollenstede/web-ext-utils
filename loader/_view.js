@@ -64,7 +64,7 @@ if (!main) {
 if (!main) { return void showError({ html: `
 	This extension page can't be displayed in private windows, container tabs or other non-normal contexts.
 	<br><br>Please try to open <a href="${ global.location.href.replace(/"/g, '&quot;') }">${ global.location.href.replace(/</g, '&lt;') }</a> in a normal tab.
-`, }); }
+`, title: 'Invalid context', }); }
 
 history.replaceState(history.state, '', getUrl(null));
 
@@ -79,10 +79,10 @@ let id = 'node_modules/web-ext-utils/loader/_view'; try { ({ id, } = main.define
 function getUrl(query = options) { return location.href.replace(/(?:\?.*?)?(?=#.*|$)/, query ? '?'+ Object.entries(query).map(_=>_.join('=')).join('&') : ''); } // update query
 
 } catch (error) {
-	showError({ text: (error ? (error.name ? error.name +': ' : '') + (error.message || '') : ''), });
+	showError({ title: 'Unexpected Error', text: (error ? (error.name ? error.name +': ' : '') + (error.message || '') : ''), });
 	console.error(error);
-} function showError({ text, html, }) {
-	global.document.body.innerHTML
+} function showError({ title, text, html, }) {
+	global.document.title = title; global.document.body.innerHTML
 	= `<style> :root { background: #424F5A; filter: invert(1) hue-rotate(180deg); font-family: Segoe UI, Tahoma, sans-serif; } </style>
 	<h1>500 <small>Fatal Error</small></h1><span id="message"></span>`;
 	global.document.querySelector('#message')[html ? 'innerHTML' : 'textContent'] = html || text || '';

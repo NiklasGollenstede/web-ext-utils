@@ -42,9 +42,10 @@ async function Home(window, location) {
 			global.setTimeout(() => document.documentElement.classList.remove('preload'), 500);
 		} catch (error) { reportError(`Failed to display tab "${ id }"`, error); } },
 
-		onShow({ id, title, }) {
-			id !== '404' && (location.name = id);
+		onShow({ id, title, content: frame, }) {
+			id !== '404' && location.name !== id && (location.name = id);
 			document.title = title +' – '+ manifest.name;
+			setTimeout(() => updateHash(frame.contentWindow.document, location.hash), 50);
 		},
 	});
 
