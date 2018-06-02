@@ -192,7 +192,7 @@ class ContentScript {
 /* eslint-disable no-throw-literal */ /* eslint-disable prefer-promise-reject-errors */
 
 const contentPath = new global.URL(require.toUrl('./content.js')).pathname;
-const requirePath = new global.URL(require.toUrl('../lib/pbq/require.js')).pathname;
+const requirePath = new global.URL(require.toUrl('node_modules/pbq/require.js')).pathname;
 const allowContentEval = (gecko ? (await Browser.rawManifest) : manifest).permissions.includes('contentEval');
 const getScource = ((f = x=>x, fromFunction = f.call.bind(f.toString)) =>
 	code => allowContentEval && typeof code === 'string' ? `function() { ${ code } }` : fromFunction(code)
@@ -376,7 +376,7 @@ class Frame {
 			self.fireUnload = setEvent(self, 'onUnload', { lazy: false, once: true, }); return self.onUnload;
 		},
 		async connect(name, { wait = true, } = { }) {
-			const [ Port, web_ext_PortMulti, ] = (await Promise.all([ require.async('../lib/multiport/'), require.async('./multiplex'), ]));
+			const [ Port, web_ext_PortMulti, ] = (await Promise.all([ require.async('node_modules/multiport/'), require.async('./multiplex'), ]));
 			if (!(await self.connect({ name, wait, content: false, }))) { return null; }
 			return new Port({ port: self.port, thisArg: self.arg, channel: name, }, web_ext_PortMulti);
 		},

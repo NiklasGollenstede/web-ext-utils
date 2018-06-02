@@ -37,7 +37,7 @@ function setEvent(target, name, { init, lazy = true, async: _async = false, writ
 			try { (await listener(...args)); return true; } catch (error) { console.error(`${name } listener threw`, error); return false; }
 		}));
 		if (last) { all.clear(); all = null; }
-		return !ready ? 0 : (await ready).reduce((c, b) => b && ++c, 0);
+		return !ready ? 0 : (await ready).reduce((c, b) => b ? c + 1 : c, 0);
 	};
 }
 

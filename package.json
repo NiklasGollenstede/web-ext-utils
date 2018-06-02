@@ -1,26 +1,25 @@
 {
 	"name": "web-ext-utils",
-	"version": "0.0.20",
-	"description": "a collection of utilities to use with web extensions",
+	"version": "0.1.0",
+	"description": "A collection of utilities to use with web extensions",
 	"author": "Niklas Gollenstede",
 	"license": "MPL-2.0",
 	"repository": {
 		"type": "git",
 		"url": "git@github.com:NiklasGollenstede/web-ext-utils.git"
 	},
-	"dependencies": {
+	"peerDependencies": {
 		"multiport": "0.2.3",
 		"pbq": "0.3.3"
 	},
 	"devDependencies": {
 		"chai": "3.5.0",
 		"mocha": "2.5.3",
-		"babel-eslint": "7.1.1",
-		"eslint": "3.14.1",
-		"eslintrc": "NiklasGollenstede/eslintrc#c36e3e8"
+		"babel-eslint": "8.2.3",
+		"eslint": "4.19.1",
+		"eslintrc": "NiklasGollenstede/eslintrc#88b3327"
 	},
 	"scripts": {
-		"postinstall": "node test/scripts/postinstall.js",
 		"test": "mocha -r test/unit/setup.js --recursive test/unit",
 		"lint": "eslint --ignore-path .gitignore --ignore-pattern lib/* ."
 	},

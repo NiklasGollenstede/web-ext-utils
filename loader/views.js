@@ -266,12 +266,14 @@ if ((await FS.exists('views'))) { for (const name of (await FS.readdir('views'))
 } }
 
 if ( // automatically create inline options view if options view is required but not explicitly defined
-	!handlers.options && manifest.options_ui && (/^(?:(?:chrome|moz|ms)-extension:\/\/.*?)?\/?[\w-]+#options(?:\?|$)/).test(manifest.options_ui.page)
-	&& (await FS.exists('node_modules/web-ext-utils/options/editor/inline.js'))
+	!handlers.options && manifest.options_ui && (
+		   manifest.options_ui.page === viewPath +'options' // firefox resolves the url
+		|| manifest.options_ui.page === viewName +'#options' // chrome doesn't
+	) && (await FS.exists('node_modules/web-ext-utils/options/editor/inline.js'))
 ) {
 	const options = (await require.async('node_modules/web-ext-utils/options/editor/inline'));
 	exports.setHandler('options', options);
-	!handlers[''] && exports.setHandler('', options);
+	!handlers[''] && exports.setHandler('', (_, location) => (location.name = 'options'));
 }
 
 function loadFrame(path, view) {
