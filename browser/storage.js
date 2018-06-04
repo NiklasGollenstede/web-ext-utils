@@ -7,7 +7,7 @@ const storage = { }, internal = { };
 /**
  * Wraps the `.local` and `.sync` `browser.storage` with the following changes:
  * `.get()` is synchronous and reads values from a write-through in-memory cache.
- * `.get()` can be called with (key, value), `.delete()` as alias for `.remove()` (Map interface).
+ * `.set()` can be called with (key, value), `.delete()` as alias for `.remove()` (Map interface).
  * Modifications are applied to the cache immediately and return Promises for their backend completion.
  * Any values to be set must be JSON values and will be deeply frozen and written to the cache,
  * so getting the same key afterwards may return the exact same object (`===`).

@@ -1,6 +1,6 @@
 (function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { manifest, rootUrl, Windows, Tabs, },
-	'../browser/version': { fennec, opera, chrome, },
+	'../browser/': { manifest, rootUrl, Windows, Tabs, Sessions, },
+	'../browser/version': { gecko, fennec, opera, chrome, },
 	'../utils/': { reportError, },
 	'../utils/files': FS,
 	'../utils/event': { setEvent, setEventGetter, },
@@ -67,6 +67,7 @@ const exports = {
 				active && open.tabId !== TAB_ID_NONE && Tabs.update(open.tabId, { active: true, }),
 			])); return open; }
 		}
+		if (type === 'panel') { location = location.replace('#', '?emulatePanel=true#'); type = 'popup'; }
 		const tab = type === 'popup'
 		? (await Windows.create({ type: 'popup', url: location, focused, state, width, height, left, top, })).tabs[0]
 		: (await Tabs.create({ url: location, active, pinned, windowId, openerTabId, index, }));
@@ -191,22 +192,12 @@ async function initView(view, options = { }) { try { options = parseSearch(optio
 
 	const get = what => new Promise(got => (view.browser || view.chrome)[what +'s'].getCurrent(got));
 
-	let type = 'other', tabId = TAB_ID_NONE, windowId = WINDOW_ID_NONE, activeTab = TAB_ID_NONE, resize;
-	if (options.emulatePanel) {
-		({ windowId, } = (await get('tab')));
-		'originalActiveTab' in options && (activeTab = options.originalActiveTab);
-		type = 'panel';
-
-		view.addEventListener('blur', () => Windows.remove(windowId));
-		resize = view.resize = (width, height) => { const rect = view.document.scrollingElement.getBoundingClientRect();
-			Windows.update(windowId, { width: (width || rect.width) + 14 |0, height: (height || rect.height) + 42 |0, }); // provide a function for the view to resize itself.
-		};
-		(await Windows.update(windowId, { top: options.top, left: options.left, })); // firefox currently ignores top and left in .create(), so move it here
-	} else if (fennec) {
-		const tab = (await get('tab')); tabId = tab.id; type = 'tab';
+	let tab, window, type = 'other', tabId = TAB_ID_NONE, windowId = WINDOW_ID_NONE, activeTab = TAB_ID_NONE, resize;
+	if (fennec) {
+		tab = (await get('tab')); tabId = tab.id; type = 'tab';
 		view.innerWidth < tab.width && (type = 'frame');
 	} else {
-		const [ tab, window, ] = (await Promise.all([ get('tab'), get('window'), ]));
+		[ tab, window, ] = (await Promise.all([ get('tab'), get('window'), ]));
 		if (tab) {
 			tabId = tab.id; windowId = tab.windowId; type = window && [ 'popup', 'panel', ].includes(window.type) ? 'popup' : 'tab'; // window is (sometimes?) undefined in edge
 			view.innerWidth < tab.width && (type = 'frame');
@@ -218,10 +209,25 @@ async function initView(view, options = { }) { try { options = parseSearch(optio
 			: body.clientWidth < 15 ? 'panel' : 'sidebar';
 		}
 	}
+	if (options.emulatePanel && type === 'popup') {
+		type = 'panel'; 'originalActiveTab' in options && (activeTab = options.originalActiveTab);
+
+		const hOff = tab && window ? window.height - tab.height : 42, wOff = tab && window ? window.width - tab.width : 42;
+		view.addEventListener('blur', () => Windows.remove(windowId));
+		resize = view.resize = (width, height) => { const rect = view.document.scrollingElement.getBoundingClientRect();
+			Windows.update(windowId, { width: (width || rect.width) + wOff |0, height: (height || rect.height) + hOff |0, }); // provide a function for the view to resize itself.
+		};
+		(await Windows.update(windowId, { top: options.top, left: options.left, })); // firefox currently ignores top and left in .create(), so move it here
+		gecko && windowId && Sessions && Windows.onRemoved.addListener(async function forget(closedId) {
+			if (closedId !== windowId) { return; } Windows.onRemoved.removeListener(forget);
+			const session = (await Sessions.getRecentlyClosed({ maxResults: 1, }))[0];
+			session && session.window && Sessions.forgetClosedWindow(session.window.sessionId);
+		});
+	}
 	// TODO: in firefox panels don't have focus for (all?) keyboard input before the user clicks in them. It would be nice if the focus could be forced to the panel
 	const location = new LocationP(view, { type, tabId, windowId, activeTab, });
 
-	let handler = handlers[location.name];
+	const handler = handlers[location.name];
 	handler && (await handler(view, location.public));
 
 	'originalTab' in options && (tabId = options.originalTab);
@@ -229,11 +235,10 @@ async function initView(view, options = { }) { try { options = parseSearch(optio
 		pending[tabId].resolve(location.public);
 		delete pending[tabId];
 	} else if (!handler) {
-		handler = handlers['404'] || defaultError;
-		(await handler(view, location.public));
+		(await (handlers['404'] || defaultError)(view, location.public));
 	}
 
-	location.updateHash(); resize && resize();
+	location.updateHash(); resize && handler && resize();
 
 	fireOpen([ location.public, ]);
 

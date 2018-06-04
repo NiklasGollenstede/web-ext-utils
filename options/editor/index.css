@@ -90,7 +90,7 @@ input[type="number"][disabled]:hover {
 }
 .pref-description code {
 	padding: 0 3px;
-	border-radius: 2px;
+	border-radius: 3px;
 }
 .input-row, .add-value-entry {
 	margin-bottom: 5px;
@@ -106,6 +106,13 @@ input[type="number"][disabled]:hover {
 }
 .value-suffix {
 	padding: 0 .5em;
+}
+details {
+	display: inline;
+}
+summary {
+	display: inline;
+	cursor: pointer;
 }
 
 /* sizes */

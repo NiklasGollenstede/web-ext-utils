@@ -134,7 +134,7 @@ class ValueList {
 	get current() { return Self.get(this.parent).values; }
 	get is() { return !!Self.get(this.parent).values.find(x => x); }
 	get isSet() { return Self.get(this.parent).isSet; }
-	get(index) {
+	get(index = 0) {
 		return Self.get(this.parent).values[index];
 	}
 	set(index, value) {

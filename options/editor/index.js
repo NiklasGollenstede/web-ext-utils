@@ -15,7 +15,7 @@ const queryChild = (() => {
 
 const propsMap = new Map/*<id, props>*/; let window = null;
 
-return function loadEditor({ host, options, onCommand, prefix = '', }) {
+/* export */ function loadEditor({ host, options, onCommand, prefix = '', }) {
 
 	host.classList.add('options-host');
 
@@ -101,7 +101,7 @@ return function loadEditor({ host, options, onCommand, prefix = '', }) {
 		displayPreferences(options, host, prefix);
 	} finally { window = null; }
 	return host;
-};
+}
 
 function setButtonDisabled(element) {
 	if (element.pref.model.disabled) {
@@ -320,12 +320,12 @@ function copyProperties(target, source) {
 }
 
 function sanatize(html) {
-	const allowed = /^(a|abbr|b|br|code|div|i|p|pre|kbd|li|ol|ul|small|spam|span|sup|sub|tt|var)$/;
-	return html.replace(
-		(/<(\/?)(\w+)[^>]*?( href="(?!(?:javascript|data):)[^"]*?")?( title="[^"]*?")?[^>]*?>/g),
-		(match, slash, tag, href, title) => allowed.test(tag) ? ('<'+ slash + tag + (title || '') + (href ? href +'target="_blank"' : '') +'>') : ''
-	);
+	const parts = (html ? html +'' : '').split(rTag);
+	return parts.map((s, i) => i % 2 ? s : s.replace(rEsc, c => oEsc[c])).join('');
 }
+const rTag = /(<\/?(?:a|abbr|b|br|code|details|i|p|pre|kbd|li|ol|ul|small|spam|span|summary|sup|sub|tt|var)(?: download(?:="[^"]*")?)?(?: href="(?!(?:javascript|data):)[^\s"]*?")?(?: title="[^"]*")?>)/;
+const oEsc = { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;', '/': '&#47;', };
+const rEsc = new RegExp('['+ Object.keys(oEsc).join('') +']', 'g');
 
 function displayPreferences(prefs, host, prefix) { prefs.forEach(pref => {
 	const { model, } = pref;
@@ -399,5 +399,7 @@ function displayPreferences(prefs, host, prefix) { prefs.forEach(pref => {
 
 	setButtonDisabled(element);
 }); return host; }
+
+return loadEditor;
 
 }); })(this);
