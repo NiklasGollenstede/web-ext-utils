@@ -1,5 +1,5 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { runtime, extension, Tabs, Windows, Notifications, },
+	'../browser/': { runtime, extension, Tabs, Windows, },
 	require,
 }) => {
 
@@ -88,95 +88,12 @@ async function showExtensionTab(url, match = url) {
 	return Tabs.create({ url, });
 }
 
-/**
- * Uses a Notification to report a critical error to the user.
- * Only displays a single message at once and hides that message after 7.5 seconds.
- * Falls back to console.error if Notifications are unavailable.
- * @param  {string?}    title     Optional. The Notification's title.
- * @param  {...string}  messages  Additional message strings.
- * @param  {Error}      error     The error that was thrown.
- */
-async function reportError(...messages) { try {
-	try { console.error(...messages); } catch (_) { }
-	if (!Notifications) { return; }
-	const error = messages.pop();
-	const title = (messages.shift() || `That didn't work ...`) +'';
-	let message = messages.join('\n') + (messages.length ? ' ' : '');
-	if (typeof error === 'string') {
-		message += error;
-	} else if (error) {
-		if (error.name) { message += error.name +': '; }
-		if (error.message) { message += error.message; }
-	}
-	if (!message && !error) { message = 'at all'; }
-
-	Notifications.create('web-ext-utils:error', {
-		type: 'basic', title, message,
-		iconUrl: (await getIcon('error')),
-	});
-	clearErrorSoon();
-} catch (_) { try { console.error(...messages); console.error(`failed to show notification`, _); } catch (_) { } } }
-const clearErrorSoon = debounce(() => Notifications.clear('web-ext-utils:error'), 7500);
-
-/**
- * Uses a Notification to report an operations success.
- * Only displays a single message at once and hides that message after 5 seconds.
- * @param  {string?}    title     Optional. The Notification's title.
- * @param  {...string}  messages  Additional message strings.
- */
-async function reportSuccess(...messages) {
-	if (!Notifications) { return void console.info(...messages); }
-	const title = messages.shift() || `Operation completed successfully!`;
-	const message = messages.join('\n');
-
-	Notifications.create('web-ext-utils:success', {
-		type: 'basic', title, message,
-		iconUrl: (await getIcon('success')),
-	});
-	clearSuccessSoon();
-}
-const clearSuccessSoon = debounce(() => Notifications.clear('web-ext-utils:success'), 5000);
-
-/**
- * Uses a Notification to report an informative notification.
- * Only displays a single message at once and hides that message after 3.5 seconds.
- * @param  {string}     title     The Notification's title.
- * @param  {...string}  messages  Additional message strings.
- */
-async function reportInfo(...messages) {
-	if (!Notifications) { return void console.info(...messages); }
-	const title = messages.shift(); if (!title) { return; }
-	const message = messages.join('\n');
-
-	Notifications.create('web-ext-utils:info', {
-		type: 'basic', title, message,
-		iconUrl: (await getIcon('info')),
-	});
-	clearInfoSoon();
-}
-const clearInfoSoon = debounce(() => Notifications.clear('web-ext-utils:info'), 3500);
-
-const icons = { }; let FS; async function getIcon(name) {
-	if (icons[name]) { return icons[name]; }
-	FS || (FS = (await require.async('./files')));
-	const included = [ `${ name }.svg`, `${ name }.png`, `icons/${ name }.svg`, `icons/${ name }.png`, ].find(FS.exists);
-	if (included) { return (icons[name] = require.toUrl(included)); }
-
-	const ext = FS.exists('icon.svg') ? 'svg' : 'png', mime = 'image/'+ ext.replace('svg', 'svg+xml');
-	if (name === 'info') { return (icons[name] = require.toUrl('icon.'+ ext)); }
-	const iconUrl = `data:${mime};base64,`+ global.btoa(String.fromCharCode.apply(null, new Uint8Array(
-		global.buffer = (await FS.readFile('icon.'+ ext))
-	)));
-	const svg = (await require.async(`fetch!./icons/${name}.svg`)).replace('{{iconUrl}}', iconUrl);
-	return (icons[name] = global.URL.createObjectURL(new global.Blob([ svg, ], { type: 'image/svg+xml', })));
-}
-
-function debounce(callback, time) {
-	let timer = null;
-	return function() {
-		global.clearTimeout(timer);
-		timer = global.setTimeout(() => callback.apply(this, arguments), time); // eslint-disable-line no-invalid-this
-	};
+let getNotify; async function notify(method, ...args) {
+	const notify = (await (getNotify = getNotify || (() => {
+		console.warn('Deprecated, use `notify` module!');
+		return require.async('./notify');
+	})()));
+	return notify[method](...args);
 }
 
 return {
@@ -184,9 +101,8 @@ return {
 	parseMatchPatterns,
 	attachAllContentScripts,
 	showExtensionTab,
-	reportError,
-	reportSuccess,
-	reportInfo,
+	reportError: notify.bind(null, 'error'),
+	reportSuccess: notify.bind(null, 'success'),
 };
 
 }); })(this);

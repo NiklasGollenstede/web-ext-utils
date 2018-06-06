@@ -1,7 +1,7 @@
 (function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../browser/': { manifest, rootUrl, Windows, Tabs, Sessions, },
 	'../browser/version': { gecko, fennec, opera, chrome, },
-	'../utils/': { reportError, },
+	'../utils/notify': notify,
 	'../utils/files': FS,
 	'../utils/event': { setEvent, setEventGetter, },
 	require,
@@ -244,7 +244,7 @@ async function initView(view, options = { }) { try { options = parseSearch(optio
 
 } catch (error) {
 	const tabId = options.originalTab || view.tabId; if (tabId != null && pending[tabId]) { pending[tabId].reject(error); delete pending[tabId]; }
-	else { (await reportError(`Failed to display page "${ view.location.hash }"`, error)); }
+	else { (await notify.error(`Failed to display page "${ view.location.hash }"`, error)); }
 } }
 
 if ((await FS.exists('views'))) { for (const name of (await FS.readdir('views'))) {
