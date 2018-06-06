@@ -278,6 +278,54 @@ function inContext(root, action) {
 	}
 }
 
+
+// Uses only one listener per `storage` and routes updates based on prefix.
+// Register each by `.prefix` in a sorted list.
+// On updates, finds the location of the key in the list.
+// Only a sequence of predecessors of that position can match by prefix.
+class ChangeListener {
+	constructor(event) {
+		if (changeListeners.has(event)) { return changeListeners.get(event); }
+		(this.event = event).addListener(this.onChanged = this.onChanged.bind(this));
+		this.prefixes = [ ]; this.listeners = [ ]; changeListeners.set(event, this);
+	}
+	destroy() { this.event.removeListener(this.onChanged); changeListeners.delete(this); }
+
+	onChanged(key, value) {
+		let index = ChangeListener.findIndex(this.prefixes, key);
+		while (index) { index -= 1;
+			if (key.startsWith(this.prefixes[index])) { break; } // skip "siblings" with smaller suffix
+		} index += 1;
+		while (index) { index -= 1;
+			if (!key.startsWith(this.prefixes[index])) { return; }
+			try { this.listeners[index].call(null, key, value); } catch (error) { console.error(error); }
+		}
+	}
+
+	register(prefix, listener) {
+		const index = ChangeListener.findIndex(this.prefixes, prefix);
+		this.prefixes.splice(index, 0, prefix);
+		this.listeners.splice(index, 0, listener);
+	}
+	unregister(listener) {
+		const index = this.listeners.indexOf(listener);
+		this.prefixes.splice(index, 1);
+		this.listeners.splice(index, 1);
+		!this.listeners.length && this.destroy();
+	}
+
+	static findIndex(A, T) { // returns the number of elements <= T
+		// see: https://en.wikipedia.org/wiki/Binary_search_algorithm#Alternative_procedure
+		if (!A.length) { return 0; }
+		let L = 0, R = A.length - 1, m; do {
+			m = (((L + R) / 2) + .5) |0;
+			if (A[m] > T) { R = m - 1; }
+			else { L = m; }
+		} while (L < R);
+		m = A[m] === T ? m : L; return T < A[m] ? m : m + 1;
+	}
+} const changeListeners = new WeakMap;
+
 return class OptionsRoot {
 	constructor({ model, storage, prefix, }) {
 		this.model = deepFreeze(model); this.storage = storage; this.prefix = prefix;
@@ -287,7 +335,7 @@ return class OptionsRoot {
 
 		this.destroy = this.destroy.bind(this);
 		this.onChanged = this.onChanged.bind(this);
-		storage.onChanged && storage.onChanged.addListener(this.onChanged);
+		storage.onChanged && new ChangeListener(storage.onChanged).register(prefix, this.onChanged);
 		Content && Content.onUnload.addListener(this.destroy);
 	}
 
@@ -315,7 +363,7 @@ return class OptionsRoot {
 			self.onChange && self.onChange(null, { last: true, });
 			self.onAnyChange && self.onAnyChange(null, { last: true, });
 		});
-		this.storage.onChanged && this.storage.onChanged.removeListener(this.onChanged);
+		this.storage.onChanged && new ChangeListener(this.storage.onChanged).unregister(this.onChanged);
 		Content && Content.onUnload.removeListener(this.destroy);
 	}
 
