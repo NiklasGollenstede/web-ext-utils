@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="64px" height="64px">
+	<image href="{{iconUrl}}" height="64" width="64"/>
+	<g fill="hsla(215, 100%, 45%, 0.75)" stroke="white" stroke-width="3" stroke-linecap="round">
+		<circle stroke-width=".25" r="14.75" cx="49" cy="49"/>
+		<circle stroke-width="0" fill="white" r="4.25" cx="49" cy="41"/>
+		<line x1="47.5" x2="50.5" y1="49" y2="49"/>
+		<line x1="49" x2="49" y1="49" y2="59"/>
+		<line x1="46" x2="52" y1="59" y2="59"/>
+	</g>
+</svg>

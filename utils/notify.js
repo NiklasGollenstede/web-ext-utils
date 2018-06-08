@@ -7,19 +7,21 @@
  * Displays a basic notification to the user.
  * @param  {string}   .title    Notification title.
  * @param  {string}   .message  Notification body text.
- * @param  {string}   .icon     Notification icon URL or one of [ 'error', 'success', 'info', 'warn', 'default', ]
+ * @param  {string}   .icon     Notification icon URL or one of [ 'default', 'info', 'warn', 'error', 'success', ]
  *                              to choose and/or generate an icon automatically.
- * @param  {natural}  .timeout  Timeout in ms after which to clear the notification.
+ * @param  {natural?} .timeout  Timeout in ms after which to clear the notification.
  * @return {boolean}            Whether the notification was clicked or closed (incl. timeout).
  */
-let notify = async function notify({ title, message, icon = 'default', timeout = 5000, }) { try {
+let notify = async function notify({ title, message, icon = 'default', timeout, }) { try {
 	if (!Notifications) { console.info('notify', arguments[0]); return false; }
-	const create = !open; open = true;
-	try { (await Notifications[create ? 'create' : 'create']('web-ext-utils:notice', {
+	const create = !open; open = true; const options = {
 		type: 'basic', title, message,
 		iconUrl: (/^\w+$/).test(icon) ? (await getIcon(icon)) : icon,
-	})); } catch (_) { open = false; throw _; }
-	clearNotice(timeout);
+	}; !isGecko && (options.requireInteraction = true);
+	try { (await Notifications[create || isGecko ? 'create' : 'update'](
+		'web-ext-utils:notice', options,
+	)); } catch (_) { open = false; throw _; }
+	clearNotice(timeout == null ? -1 : typeof timeout === 'number' && timeout > 1e3 && timeout < 30 ** 2 ? timeout : 5000);
 	onhide && onhide(); onclick = onhide = null;
 	return new Promise(done => { onclick = () => done(true); onhide = () => done(false); });
 } catch (_) { try {
@@ -69,31 +71,21 @@ Object.assign(notify, {
 		return notify({ title, message, icon: 'success', timeout: 5000, });
 	},
 
-	/**
-	 * Uses a Notification to report an informative notification.
-	 * Only displays a single message at once and hides that message after 3.5 seconds.
-	 * @param  {string}     title     The Notification's title.
-	 * @param  {...string}  messages  Additional message lines.
-	 * @return {boolean}              Whether the notification was clicked or closed (incl. timeout).
-	 */
-	async info(...messages) {
-		const title = messages.shift(); if (!title) { return false; }
-		const message = messages.join('\n');
+	/// Displays a logging notification for up to 3 seconds. `title` is mandatory.
+	async log(title, ...messages) {
+		if (!title) { return false; } const message = messages.join('\n');
+		return notify({ title, message, icon: 'default', timeout: 3000, });
+	},
 
+	/// Displays a informative notification for up to 3.5 seconds. `title` is mandatory.
+	async info(title, ...messages) {
+		if (!title) { return false; } const message = messages.join('\n');
 		return notify({ title, message, icon: 'info', timeout: 3500, });
 	},
 
-	/**
-	 * Uses a Notification to report a warning notification.
-	 * Only displays a single message at once and hides that message after 3.5 seconds.
-	 * @param  {string}     title     The Notification's title.
-	 * @param  {...string}  messages  Additional message lines.
-	 * @return {boolean}              Whether the notification was clicked or closed (incl. timeout).
-	 */
-	async warn(...messages) {
-		const title = messages.shift(); if (!title) { return false; }
-		const message = messages.join('\n');
-
+	/// Displays a informative warning for up to 6 seconds. `title` is mandatory.
+	async warn(title, ...messages) {
+		if (!title) { return false; } const message = messages.join('\n');
 		return notify({ title, message, icon: 'warn', timeout: 6000, });
 	},
 });
@@ -113,19 +105,16 @@ Notifications.onClosed.addListener(id => {
 });
 let open = false, onclick = null, onhide = null;
 
-const icons = { }; let FS; async function getIcon(name) { try {
-	if (name === 'info') { name = 'default'; } // TODO: blue info i
-	if (name === 'warn') { name = 'error'; } // TODO: yellow triangle
+const icons = { }; let FS, iconUrl; async function getIcon(name) { try {
 	if (icons[name]) { return icons[name]; }
 	FS || (FS = (await require.async('./files')));
 	const included = [ `${ name }.svg`, `${ name }.png`, `icons/${ name }.svg`, `icons/${ name }.png`, ].find(FS.exists);
 	if (included) { return (icons[name] = require.toUrl(included)); }
 
 	const ext = FS.exists('icon.svg') ? 'svg' : 'png', mime = 'image/'+ ext.replace('svg', 'svg+xml');
-	if (name === 'default') { return (icons[name] = require.toUrl('icon.'+ ext)); }
-	const iconUrl = `data:${mime};base64,`+ global.btoa(String.fromCharCode.apply(null, new Uint8Array(
+	!iconUrl && (iconUrl = `data:${mime};base64,`+ global.btoa(String.fromCharCode.apply(null, new Uint8Array(
 		global.buffer = (await FS.readFile('icon.'+ ext))
-	)));
+	))));
 	const svg = (await require.async(`fetch!./icons/${name}.svg`)).replace('{{iconUrl}}', iconUrl);
 	return (icons[name] = global.URL.createObjectURL(new global.Blob([ svg, ], { type: 'image/svg+xml', })));
 } catch (error) { console.error(error); return icons[name]; } }

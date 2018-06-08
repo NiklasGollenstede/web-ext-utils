@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="64px" height="64px">
+	<image href="{{iconUrl}}" height="64" width="64"/>
+	<g transform="translate(32.2 33.3) scale(.065)">
+		<path fill="hsla(60, 100%, 50%, 0.75)" stroke="white" stroke-width="5" d="M 480,425 L 269,30 c -5,-10 -16,-16 -27,-16 l -0,0 c -11,0 -21,6 -27,16 L 4,425 c -5,9 -5,21 1,30 c 6,9 15,15 26,15 l 423,0 c 11,0 21,-6 26,-15 c 6,-9 6,-20 1,-30 z"/>
+		<path fill="white" d="M 241,413 c -19,-0 -33,-16 -33,-35 c 0,-18 16,-35 34,-35 c 18,-0 33,16 34,35 c 0,19 -16,34 -35,34 z m 25,-125 c -1,16 -8,30 -25,30 c -16,0 -21,-14 -23,-30 L 206,166 c -1,-17 14,-35 36,-35 c 21,0 37,17 35,35 z"/>
+	</g>
+</svg>

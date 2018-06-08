@@ -19,7 +19,7 @@ const storage = { }, internal = { };
 (await Promise.all([ 'local', 'sync', ].map(async type => {
 	const async = Async[type];
 	let data = (await async.get());	if (Array.isArray(data) && data.length === 1) { data = data[0]; } // some weird Firefox bug (2016-12)
-	Object.values(data).forEach(deepFreeze);
+	data = Object.assign(Object.create(null), data); Object.values(data).forEach(deepFreeze);
 
 	function get(key) { return data[key]; }
 	async function set(key, value, ref) { let update; if (typeof key !== 'object' || key === null) {

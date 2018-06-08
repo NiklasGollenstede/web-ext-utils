@@ -6,17 +6,13 @@ const { document, location, history, } = global;
 if (!(/^[\w-]+-extension:\/\//).test(location.href)) { return void console.error(`This script can only be loaded in extension pages`); }
 document.currentScript.remove(); // ==> body is now empty
 
-const chrome = global.browser || global.chrome;
-let main; if (chrome) { try {
-	main = global.background = chrome.extension.getBackgroundPage();
-} catch (_) { // edge doesn't allow extension.getBackgroundPage() with event pages
-	main = global.background = (await new Promise(done => chrome.runtime.getBackgroundPage(done)));
-} }
+const chrome = global.browser || global.chrome || null;
+const main = global.background = chrome && (await new Promise(done => chrome.runtime.getBackgroundPage(done)));
 const options = { }; location.search && location.search.replace(/^\?/, '').split('&').map(s => (/^([^=]*)=?(.*)$/).exec(s)).forEach(([ _, k, v, ]) => (options[k] = v));
 
 if (options.waitForReload === 'true') { // after extension reload. Just wait for the background to reload all unhandled browser.extension.getViews()s
 	delete options.waitForReload; history.replaceState(history.state, '', getUrl());
-	if (!main || !main.initView) { return void (global.document.body.innerHTML = `<h1 style="font-family: Segoe UI, Tahoma, sans-serif;">Loading ...</a>`); }
+	if (!main || !main.define) { return void (global.document.body.innerHTML = `<h1 style="font-family: Segoe UI, Tahoma, sans-serif;">Loading ...</a>`); }
 }
 
 if (options.skipChecks === 'true') { // avoid recursion, which would be very hard for the user to stop
@@ -61,14 +57,14 @@ if (!main) {
 }
 
 // failed to move to non-private window. This only happens in very weird situations (e.g. in the All-in-One Sidebar)
-if (!main) { return void showError({ html: `
+if (!main) { return void showError({ title: 'Invalid context', html: `
 	This extension page can't be displayed in private windows, container tabs or other non-normal contexts.
 	<br><br>Please try to open <a href="${ global.location.href.replace(/"/g, '&quot;') }">${ global.location.href.replace(/</g, '&lt;') }</a> in a normal tab.
-`, title: 'Invalid context', }); }
+`, }); }
 
 history.replaceState(history.state, '', getUrl(null));
 
-for (let retry = 100; retry >= 0 && typeof main.define !== 'function'; --retry) {
+for (let retry = 50; retry >= 0 && typeof main.define !== 'function'; --retry) {
 	(await new Promise(done => global.setTimeout(done, 500)));
 }
 if (!main.define) { throw new Error(`This extension did not start correctly. Reloading this page or disabling and enabling the extension may help.`); }

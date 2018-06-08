@@ -1,5 +1,6 @@
 (function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { manifest, Storage, },
+	'../browser/': { manifest, storage: _Storage, },
+	'../browser/storage': Storage,
 	'../browser/version': { current: currentBrowser, version: browserVersion, },
 	'../utils/semver': Version,
 	'../utils/files': { readDir, },
@@ -9,12 +10,12 @@
 let inProgress = { version: null, component: null, };
 
 // load data
-const getLocal   = Storage.local.get([ `__update__.local.version`, `__update__.${ currentBrowser }.version`, ]);
-const getSync    = Storage.sync !== Storage.local ? Storage.sync.get([ '__update__.sync.version', ]) : { '__update__.sync.version': null, };
+// const getLocal   = Storage.local.get([ `__update__.local.version`, `__update__.${ currentBrowser }.version`, ]);
+// const getSync    = Storage.sync !== Storage.local ? Storage.sync.get([ '__update__.sync.version', ]) : { '__update__.sync.version': null, };
 
-const extension  = ({ from: new Version((await getLocal)[`__update__.local.version`]),               to: new Version(manifest.version), });
-const browser    = ({ from: new Version((await getLocal)[`__update__.${ currentBrowser }.version`]), to: new Version(browserVersion), });
-const synced     = ({ from: new Version((await getSync )[`__update__.sync.version`]),                to: new Version(Storage.sync !== Storage.local ? manifest.version : null), });
+const extension  = ({ from: new Version(Storage.local.get(`__update__.local.version`)),               to: new Version(manifest.version), });
+const browser    = ({ from: new Version(Storage.local.get(`__update__.${ currentBrowser }.version`)), to: new Version(browserVersion), });
+const synced     = ({ from: new Version(Storage.sync .get(`__update__.sync.version`)),                to: new Version(_Storage.sync !== _Storage.local ? manifest.version : null), });
 const _updated   = ({ extension, browser, synced, });
 
 for (const component of Object.keys(_updated)) {
@@ -29,8 +30,7 @@ for (const component of Object.keys(_updated)) {
 	});
 }
 
-for (const component of Object.keys(_updated)) {
-	const updated = _updated[component];
+for (const [ component, updated, ] of Object.entries(_updated)) {
 	const { from: last, to: now, } = updated;
 	inProgress.component = component;
 
@@ -79,9 +79,9 @@ for (const component of Object.keys(_updated)) {
 
 	// write the new version
 	switch (component) {
-		case 'extension': (await Storage.local.set({ [`__update__.local.version`]:               now +'', })); break;
-		case 'browser'  : (await Storage.local.set({ [`__update__.${ currentBrowser }.version`]: now +'', })); break;
-		case 'synced'   : (await Storage.sync .set({ [`__update__.sync.version`]:                now +'', })); break;
+		case 'extension': Storage.local.set(`__update__.local.version`,               now +''); break;
+		case 'browser'  : Storage.local.set(`__update__.${ currentBrowser }.version`, now +''); break;
+		case 'synced'   : Storage.sync .set(`__update__.sync.version`,                now +''); break;
 	}
 
 	Object.freeze(updated);
