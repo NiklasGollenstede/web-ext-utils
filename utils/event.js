@@ -29,13 +29,13 @@
  * @param  {boolean?}   .async      Whether to fire the event asynchronously after the call to `fire`. Defaults to `false`.
  * @param  {boolean?}   .writeable  Whether to define the event as writable property. Defaults to `false`.
  * @param  {boolean?}   .once       Whether the first call to `fire` is also the last. Defaults to `false`.
- * @return {function}               Async function to call to `fire` the event.
+ * @return {function}               Async function to call to `fire` the event:
  *
  * Errors thrown by the listeners are logged. Arguments to `fire`:
  * @param  {iterable?}  args        Iterable of arguments for the listeners. Skips firing if `null`.
  * @param  {boolean?}   .last       Whether to destroy the `Event` after firing. Defaults to `.once`.
  * @param  {function?}  .filter     Optional function(listener) that may filter the listeners to be called.
- * @return {natural}                The number of listeners that did not throw (or reject).
+ * @return {natural}                The number of called listeners that did not throw (or reject).
  * The `fire` function has the following additional properties:
  * @property {number}     size      Getter that returns the current number of listeners.
  * @property {function?}  onadd     Function that, if set, is called with every added listener ands its optional options.
@@ -101,10 +101,11 @@ function setEvent(target, name, { init, async: _async = false, writeable = false
  *     instance.fire('nothing'); // no-op, self.fireEvent not defined yet
  *     instance.onEvent.addListener(thing => console.log('hello', thing));
  *     instance.fire('world'); // logs 'hello world'
- * @param  {function}  Class   Constructor function on whose prototype the event will be set.
- * @param  {string}    name    Name of the event. The first letter will be capitalized and prefixed with 'on'.
- * @param  {WeakMap}   Self    A WeakMap that mapps valid instances of `Class` to private objects.
+ * @param  {function}  Class   Constructor function on whose prototype the event getter will be defined.
+ * @param  {string}    name    Name of the event. The first letter will be capitalized and prefixed with 'on'/'fire'.
+ * @param  {WeakMap}   Self    A WeakMap that maps valid instances of `Class` to private objects.
  *                             Invoking the getter on objects that are not keys in the map will throw.
+ *                             (Specifically, a object with a `get()` method that takes instances and returns objects.)
  * @param  {boolean}   .async  Forwarded as `setEvent(..., { async, })`.
  * @param  {boolean}   .once   Forwarded as `setEvent(..., { once, })`.
  */
