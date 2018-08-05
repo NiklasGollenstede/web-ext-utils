@@ -108,7 +108,7 @@ let open = false, onclick = null, onhide = null;
 const icons = { }; let FS, iconUrl; async function getIcon(name) { try {
 	if (icons[name]) { return icons[name]; }
 	FS || (FS = (await require.async('./files')));
-	const included = [ `${ name }.svg`, `${ name }.png`, `icons/${ name }.svg`, `icons/${ name }.png`, ].find(FS.exists);
+	const included = [ `${name}.svg`, `${name}.png`, `icons/${name}.svg`, `icons/${name}.png`, ].find(FS.exists);
 	if (included) { return (icons[name] = require.toUrl(included)); }
 
 	const ext = FS.exists('icon.svg') ? 'svg' : 'png', mime = 'image/'+ ext.replace('svg', 'svg+xml');

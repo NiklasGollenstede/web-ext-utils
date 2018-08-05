@@ -19,6 +19,22 @@ require([ 'node_modules/web-ext-utils/loader/views', ], ({ getHandler, setHandle
 });
 
 async function Home(window, location) {
+
+	// child view
+	if (window.top !== window) { const id = location.name; try {
+		const view = window, { document, } = view;
+		view.background = global;
+		document.documentElement.classList.add('preload');
+
+		Array.isArray(head) && head.forEach(node => document.head.appendChild(node.cloneNode(true)));
+		try { view.history.replaceState(window.history.state, null); } catch (_) { }
+
+		(await (handlers[id] || handlers['404'])(view, location));
+		updateHash(document, location.hash);
+		global.setTimeout(() => document.documentElement.classList.remove('preload'), 500);
+	} catch (error) { reportError(`Failed to display tab "${ id }"`, error); } return; }
+
+	// main window
 	const { document, } = window;
 
 	if (style.includes('dark')) { document.body.style.background = '#222'; }
@@ -29,18 +45,10 @@ async function Home(window, location) {
 		host: document.body, template: document.createElement('iframe'),
 		active: location.name || index, tabs, style, linkStyle: false,
 
-		async onLoad({ id, content: frame, }) { try {
-			const view = frame.contentWindow, { document, } = view;
-			view.background = global;
-			document.documentElement.classList.add('preload');
-
-			Array.isArray(head) && head.forEach(node => document.head.appendChild(node.cloneNode(true)));
-			try { view.history.replaceState(window.history.state, null); } catch (_) { }
-
-			(await (handlers[id] || handlers['404'])(view, location));
-			updateHash(document, location.hash);
-			global.setTimeout(() => document.documentElement.classList.remove('preload'), 500);
-		} catch (error) { reportError(`Failed to display tab "${ id }"`, error); } },
+		async onLoad({ id, content: frame, }) {
+			id !== '404' && location.name !== id && (location.name = id);
+			frame.contentWindow.location = window.location;
+		},
 
 		onShow({ id, title, content: frame, }) {
 			id !== '404' && location.name !== id && (location.name = id);

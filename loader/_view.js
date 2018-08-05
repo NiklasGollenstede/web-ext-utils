@@ -10,12 +10,12 @@ const chrome = global.browser || global.chrome || null;
 const main = global.background = chrome && (await new Promise(done => chrome.runtime.getBackgroundPage(done)));
 const options = { }; location.search && location.search.replace(/^\?/, '').split('&').map(s => (/^([^=]*)=?(.*)$/).exec(s)).forEach(([ _, k, v, ]) => (options[k] = v));
 
-if (options.waitForReload === 'true') { // after extension reload. Just wait for the background to reload all unhandled browser.extension.getViews()s
+if (options.waitForReload === 'true') { // After extension reload. Just wait for the background to reload all unhandled `browser.extension.getViews()`s.
 	delete options.waitForReload; history.replaceState(history.state, '', getUrl());
 	if (!main || !main.define) { return void (global.document.body.innerHTML = `<h1 style="font-family: Segoe UI, Tahoma, sans-serif;">Loading ...</a>`); }
 }
 
-if (options.skipChecks === 'true') { // avoid recursion, which would be very hard for the user to stop
+if (options.skipChecks === 'true') { // Avoid recursion, which would be very hard for the user to stop.
 	delete options.skipChecks; history.replaceState(history.state, '', getUrl());
 } else
 if (!main) {
@@ -25,25 +25,30 @@ if (!main) {
 	}
 	// in a Firefox incognito context without access to the background page
 	console.error(`Can't open view in non-normal context`);
-	const browser = global.browser;
+	const browser = global.browser; // This only happens in Firefox, so `browser` with promise support is present.
 	const tab = (await browser.tabs.getCurrent());
 	if (tab) { // in a container or incognito tab
 		const windows = (await browser.windows.getAll());
-		const parent = windows.find(_=>!_.incognito && _.type === 'normal'); // get any window that is non-private
+		const current = windows.find(_=>_.id === tab.windowId);
+		const parent = !current.incognito ? current : windows.find(_=>!_.incognito && _.type === 'normal') || null; // get any window that is non-private
 		options.skipChecks = 'true'; // very much avoid recursion
 		options.originalTab = tab.id; // needed to resolve promises
-		browser.tabs.create({
-			url: getUrl(), windowId: parent.id, index: tab.index, active: !document.hidden, // the new tab should be active if the current one is
-		});
-		// the window of the new tab should be focused if the current one is
-		!document.hidden && windows.find(_=>_.id === tab.windowId).focused && browser.windows.update(parent.id, { focused: true, });
-		browser.tabs.remove(tab.id); // global.close() won't do
+		const focused = tab.active && current.focused; // the window of the new tab should be focused if the current tab is focused
+		const index = parent === current ? tab.index : 1e6; // if replacing a container tab, open at original position
+		if (parent) {
+			browser.tabs.create({ url: getUrl(), windowId: parent.id, index, active: tab.active, });
+			focused && browser.windows.update(parent.id, { focused: true, });
+		} else {
+			const { id, } = (await browser.windows.create({ type: 'normal', url: getUrl(), }));
+			focused && browser.windows.update(id, { focused: true, });
+		}
+		browser.tabs.remove(tab.id); // global.close() won't do // TODO: if possible, go `history.back()` instead?
 		return; // abort
 	} else if (global.innerHeight < 100 && global.innerWidth < 100) { // in a panel attached to a private window. Open a non-private mode pop-up where the panel would be
 		const getActive = browser.tabs.query({ currentWindow: true, active: true, });
 		const parent = (await browser.windows.getLastFocused());
 		 // the pop-up will not resize itself as the panel would, so the dimensions can be passed as query params 'w' and 'h'
-		const width = (options.w <<0 || 700) + 14, height = (options.h <<0 || 600) + 42; // the maximum size for panels is somewhere around 700x800. Firefox needs some additional pixels: 14x42 for FF54 on Win 10 with dpi 1.25
+		const width = (options.w |0 || 700) + 14, height = (options.h |0 || 600) + 42; // the maximum size for panels is somewhere around 700x800. Firefox needs some additional pixels: 14x42 for FF54 on Win 10 with dpi 1.25
 		const left = Math.round(parent.left + parent.width - width - 25);
 		const top = Math.round(parent.top + 74); // the actual frame height of the main window varies, but 74px should place the pop-up at the bottom if the button
 		options.skipChecks = 'true'; options.left = left; options.top = top;
@@ -52,7 +57,7 @@ if (!main) {
 		(await browser.windows.create({
 			type: 'popup', url: getUrl(), top, left, width, height,
 		}));
-		return; // abort (opening the popup closes this panel)
+		return; // abort (opening the popup closes this panel) // BUG[FF60]: closing the panel sometimes brings the (old) window to the front without focusing it, but there is no good workaround here
 	}
 }
 
@@ -64,8 +69,8 @@ if (!main) { return void showError({ title: 'Invalid context', html: `
 
 history.replaceState(history.state, '', getUrl(null));
 
-for (let retry = 50; retry >= 0 && typeof main.define !== 'function'; --retry) {
-	(await new Promise(done => global.setTimeout(done, 500)));
+for (let retry = 1; retry <= 10 && typeof main.define !== 'function'; --retry) {
+	(await new Promise(wake => global.setTimeout(wake, retry * 100)));
 }
 if (!main.define) { throw new Error(`This extension did not start correctly. Reloading this page or disabling and enabling the extension may help.`); }
 

@@ -22,7 +22,6 @@ document.title = 'Options - '+ manifest.name;
 	const link = document.createElement('link');
 	link.href = require.toUrl(`./${ style }.css`);
 	link.rel = 'stylesheet';
-	link.scoped = true;
 	document.body.appendChild(link);
 });
 
