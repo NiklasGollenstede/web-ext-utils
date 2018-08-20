@@ -28,7 +28,7 @@ let notify = async function notify({ title, message, icon = 'default', timeout, 
 	console.error(`failed to show notification`, arguments[0], _);
 } catch (_) { } } return false; };
 
-if (isGecko) { notify = throttle(notify, 300); } // what a great idea to rate-limit calls to Notify.create and NO implement Notify.update -.-
+if (isGecko) { notify = throttle(notify, 300); } // what a great idea to rate-limit calls to Notify.create and NOT implement Notify.update -.-
 
 Object.assign(notify, {
 
@@ -44,12 +44,12 @@ Object.assign(notify, {
 	async error(...messages) {
 		try { console.error(...messages); } catch (_) { }
 		const error = messages.pop();
-		const title = (messages.shift() || `That didn't work ...`) +'';
+		const title = (messages.shift() || error && error.title || `That didn't work ...`) +'';
 		let message = messages.join('\n') + (messages.length ? '\n' : '');
 		if (typeof error === 'string') {
 			message += error;
 		} else if (error) {
-			if (error.name) { message += error.name +': '; }
+			if (error.name && !error.title) { message += error.name +': '; }
 			if (error.message) { message += error.message; }
 		}
 		if (!message && !error) { message = 'at all'; }

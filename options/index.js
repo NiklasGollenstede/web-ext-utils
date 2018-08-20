@@ -210,7 +210,8 @@ class Restriction extends RestrictionBase {
 				return other && other.values.current.indexOf(value) !== -1 && 'This value must be unique, but it is already used in "'+ other.title +'"';
 			}).find(x => x));
 		})();
-		typeof restrict.custom === 'function' && checks.push(restrict.custom);
+		if (typeof restrict.custom === 'string') { checks.push(currentRoot.checks[restrict.custom]); }
+		else if (typeof restrict.custom === 'function') { checks.push(restrict.custom); }
 		this.checks = Object.freeze(checks);
 		return Object.freeze(this);
 	}
@@ -234,7 +235,7 @@ class TupelRestriction extends RestrictionBase {
 } Object.freeze(TupelRestriction);
 
 function getUniqueSet(unique, parent) {
-	const paths = (typeof unique === 'string' ? [ unique, ] : unique || [ ]).map(path => path.split(/[\/\\]/));
+	const paths = (typeof unique === 'string' ? [ unique, ] : unique || [ ]).map(path => path.split(/[/\\]/));
 	const result = new Set;
 	paths.forEach(path => walk(parent, path));
 	return Object.freeze(Array.from(result));
@@ -280,7 +281,7 @@ function inContext(root, action) {
 
 
 // Uses only one listener per `storage` and routes updates based on prefix.
-// Register each by `.prefix` in a sorted list.
+// Registers each by `.prefix` in a sorted list.
 // On updates, finds the location of the key in the list.
 // Only a sequence of predecessors of that position can match by prefix.
 class ChangeListener {
@@ -327,8 +328,8 @@ class ChangeListener {
 } const changeListeners = new WeakMap;
 
 return class OptionsRoot {
-	constructor({ model, storage, prefix, }) {
-		this.model = deepFreeze(model); this.storage = storage; this.prefix = prefix;
+	constructor({ model, storage, prefix, checks, }) {
+		this.model = deepFreeze(model); this.storage = storage; this.prefix = prefix; this.checks = checks;
 		this.options = new Map;
 		this._shadow = inContext(this, () => new Option({ children: model, }, null));
 		this.children = this._shadow.children;

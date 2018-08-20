@@ -124,15 +124,14 @@ function fieldEnabled(field, reason, enabled) {
 function fieldsEnabled(root, reason, enabled) {
 	Array.prototype.forEach.call(root.querySelectorAll('textarea, input:not(.toggle-switch), select'), field => fieldEnabled(field, reason, enabled));
 }
+function markValid(invalid) { invalid.classList.remove('invalid'); invalid.removeAttribute('title'); }
 
 function saveInput(target) {
 	const element = getParent(target, '.pref-container');
 	const { pref, } = element;
 	const values = Array.from(element.querySelector('.values-container').children, getInputRowValues);
 	let error; try { pref.values.replace(values); } catch (e) { error = e; }
-	Array.from(element.querySelectorAll('.invalid')).concat(element).forEach(invalid => {
-		invalid.classList.remove('invalid'); invalid.removeAttribute('title');
-	});
+	element.querySelectorAll('.invalid').forEach(markValid); markValid(element);
 	if (error) {
 		if ('index' in error) {
 			const wrapper = element.querySelector('.values-container').children[error.index];
@@ -330,7 +329,7 @@ const rEsc = new RegExp('['+ Object.keys(oEsc).join('') +']', 'g');
 
 const color2hex = (() => {
 	const element = document.createElement('p'), set = element.style, get = global.getComputedStyle(element);
-	return color => { set.color = 'initial'; set.color = color; return '#'+ (/^rgba?\((\d+), (\d+), (\d+)(, (.*))?\)$/).exec(get.color).slice(1, 4).map(n => (+n).toString(16).padStart(2, '0')).join(''); }
+	return color => { set.color = 'initial'; set.color = color; return '#'+ (/^rgba?\((\d+), (\d+), (\d+)(, (.*))?\)$/).exec(get.color).slice(1, 4).map(n => (+n).toString(16).padStart(2, '0')).join(''); };
 })();
 
 function displayPreferences(prefs, host, prefix) { prefs.forEach(pref => {
@@ -393,6 +392,7 @@ function displayPreferences(prefs, host, prefix) { prefs.forEach(pref => {
 		while (valuesContainer.children.length > values.length) { valuesContainer.lastChild.remove(); }
 		values.forEach((value, index) => setInputRowValues(valuesContainer.children[index], value));
 		setButtonDisabled(element);
+		element.querySelectorAll('.invalid').forEach(markValid); markValid(element);
 	}, { owner: window, });
 
 	childrenContainer && displayPreferences(pref.children, childrenContainer, prefix);
