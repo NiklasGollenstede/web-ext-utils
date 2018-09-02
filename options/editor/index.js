@@ -327,10 +327,10 @@ const rTag = /(&(?:[A-Za-z]+|#\d+|#x[0-9A-Ea-e]+);|<\/?(?:a|abbr|b|br|code|detai
 const oEsc = { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;', '/': '&#47;', };
 const rEsc = new RegExp('['+ Object.keys(oEsc).join('') +']', 'g');
 
-const color2hex = (() => {
-	const element = document.createElement('p'), set = element.style, get = global.getComputedStyle(element);
-	return color => { set.color = 'initial'; set.color = color; return '#'+ (/^rgba?\((\d+), (\d+), (\d+)(, (.*))?\)$/).exec(get.color).slice(1, 4).map(n => (+n).toString(16).padStart(2, '0')).join(''); };
-})();
+const color2hex = (() => { const element = document.createElement('p'), set = element.style, get = global.getComputedStyle(element); return color => {
+	set.color = 'initial'; set.color = color; const match = (/^rgba?\((\d+), (\d+), (\d+)(, (.*))?\)$/).exec(get.color || set.color);
+	return match ? '#'+ match.slice(1, 4).map(n => (+n).toString(16).padStart(2, '0')).join('') : color;
+}; })();
 
 function displayPreferences(prefs, host, prefix) { prefs.forEach(pref => {
 	const { model, } = pref;

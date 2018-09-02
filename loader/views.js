@@ -23,9 +23,9 @@ const exports = {
 	},
 	getUrl({ name, query, hash, }) {
 		return viewPath
-		+ (name  ? (name +'')  .replace(/^#/, '') : '')
-		+ (query ? (query +'') .replace(/^\??/, '?') : '')
-		+ (hash  ? (hash +'')  .replace(/^\#?/, '#') : '');
+		+ (name  ? (name +'')  .replace(/^[#]/, '') : '')
+		+ (query ? (query +'') .replace(/^[?]?/, '?') : '')
+		+ (hash  ? (hash +'')  .replace(/^[#]?/, '#') : '');
 	},
 	getViews() { return Array.from(locations, _=>_.public); },
 
@@ -92,11 +92,11 @@ class Location {
 	get name     () { return Self.get(this).name; }
 	get query    () { return Self.get(this).query; }
 	get hash     () { return Self.get(this).hash; }
-	assign      (v) { v = LocationP.normalize(v); Self.get(this).navigate({ href:  v, }, self.href  !== v); }
-	replace     (v) { v = LocationP.normalize(v); Self.get(this).navigate({ href:  v, }, false); }
-	set href    (v) { v = LocationP.normalize(v); Self.get(this).navigate({ href:  v, }, self.href  !== v); }
-	set name    (v) { v += '';                    Self.get(this).navigate({ name:  v, }, self.name  !== v); }
-	set query   (v) { v += '';                    Self.get(this).navigate({ query: v, }, self.query !== v); }
+	assign      (v) { v = LocationP.normalize(v);  const self = Self.get(this); self.navigate({ href:  v, }, self.href  !== v); }
+	replace     (v) { v = LocationP.normalize(v);  const self = Self.get(this); self.navigate({ href:  v, }, false); }
+	set href    (v) { v = LocationP.normalize(v);  const self = Self.get(this); self.navigate({ href:  v, }, self.href  !== v); }
+	set name    (v) { v += '';                     const self = Self.get(this); self.navigate({ name:  v, }, self.name  !== v); }
+	set query   (v) { v += '';                     const self = Self.get(this); self.navigate({ query: v, }, self.query !== v); }
 	set hash    (v) { v += ''; const self = Self.get(this); self.hash  !== v ?  self.navigate({ hash:  v, }, true) : self.updateHash(); }
 }
 setEventGetter(Location, 'change', Self);

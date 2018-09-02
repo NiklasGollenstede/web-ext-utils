@@ -82,7 +82,7 @@ return new Proxy(Object.freeze({
 	then: undefined, // for Promise.resolve()
 }), {
 	get(self, key) {
-		if (self.hasOwnProperty(key)) { return self[key]; }
+		if (Object.hasOwnProperty.call(self, key)) { return self[key]; }
 		throw new Error(`Unknown application "${ key }"`);
 	},
 	set() { },

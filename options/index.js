@@ -241,7 +241,7 @@ function getUniqueSet(unique, parent) {
 	return Object.freeze(Array.from(result));
 
 	function walk(option, path) {
-		if (!path.length) { return void result.add(option); }
+		if (!path.length) { result.add(option); return; }
 		const segment = path.shift();
 		switch (segment) {
 			case '.': {

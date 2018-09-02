@@ -13,11 +13,12 @@
 		"pbq": "0.3.3"
 	},
 	"devDependencies": {
-		"chai": "3.5.0",
-		"mocha": "2.5.3",
-		"babel-eslint": "8.2.3",
-		"eslint": "4.19.1",
-		"eslintrc": "NiklasGollenstede/eslintrc#88b3327"
+		"pbq": "0.3.3",
+		"chai": "4.1.2",
+		"mocha": "5.2.0",
+		"babel-eslint": "9.0.0",
+		"eslint": "5.5.0",
+		"eslintrc": "NiklasGollenstede/eslintrc#8e5b58d"
 	},
 	"scripts": {
 		"test": "mocha -r test/unit/setup.js --recursive test/unit",

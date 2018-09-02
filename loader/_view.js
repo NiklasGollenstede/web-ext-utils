@@ -3,7 +3,7 @@
  * This script is loaded with every extension view and has a single task: pass its global on to the background page for further processing.
  */
 const { document, location, history, } = global;
-if (!(/^[\w-]+-extension:\/\//).test(location.href)) { return void console.error(`This script can only be loaded in extension pages`); }
+if (!(/^[\w-]+-extension:\/\//).test(location.href)) { console.error(`This script can only be loaded in extension pages`); return; }
 document.currentScript.remove(); // ==> body is now empty
 
 const chrome = global.browser || global.chrome || null;
@@ -12,7 +12,7 @@ const options = { }; location.search && location.search.replace(/^\?/, '').split
 
 if (options.waitForReload === 'true') { // After extension reload. Just wait for the background to reload all unhandled `browser.extension.getViews()`s.
 	delete options.waitForReload; history.replaceState(history.state, '', getUrl());
-	if (!main || !main.define) { return void (global.document.body.innerHTML = `<h1 style="font-family: Segoe UI, Tahoma, sans-serif;">Loading ...</a>`); }
+	if (!main || !main.define) { global.document.body.innerHTML = `<h1 style="font-family: Segoe UI, Tahoma, sans-serif;">Loading ...</a>`; return; }
 }
 
 if (options.skipChecks === 'true') { // Avoid recursion, which would be very hard for the user to stop.
@@ -21,7 +21,7 @@ if (options.skipChecks === 'true') { // Avoid recursion, which would be very har
 if (!main) {
 	if (!chrome) { // Firefox's inline options page after extension reload. Must reload once to show up in browser.extension.getViews()
 		options.waitForReload = 'true'; history.replaceState(history.state, '', getUrl());
-		return void location.reload();
+		location.reload(); return;
 	}
 	// in a Firefox incognito context without access to the background page
 	console.error(`Can't open view in non-normal context`);
@@ -62,10 +62,10 @@ if (!main) {
 }
 
 // failed to move to non-private window. This only happens in very weird situations (e.g. in the All-in-One Sidebar)
-if (!main) { return void showError({ title: 'Invalid context', html: `
+if (!main) { showError({ title: 'Invalid context', html: `
 	This extension page can't be displayed in private windows, container tabs or other non-normal contexts.
 	<br><br>Please try to open <a href="${ global.location.href.replace(/"/g, '&quot;') }">${ global.location.href.replace(/</g, '&lt;') }</a> in a normal tab.
-`, }); }
+`, }); return; }
 
 history.replaceState(history.state, '', getUrl(null));
 

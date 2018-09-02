@@ -307,7 +307,7 @@ class Frame {
 		let promise = frames.get(frameId); if (promise) { return promise; }
 		promise = (async () => {
 			const [ port, ] = (await Promise.all([
-				new Promise(async got => { (await null); promise.setPort = got; }),
+				new Promise(got => { Promise.resolve().then(() => (promise.setPort = got)); }),
 				optionsAsGlobal && Tabs.executeScript(tabId, { frameId, matchAboutBlank: true, runAt: 'document_start', code: optionsAsGlobal, }),
 				Frame.run(tabId, frameId, contentPath + optionsAsQuery/* + (gecko ? '&t='+ tabId : '')*/),
 				Frame.run(tabId, frameId, requirePath),
@@ -403,8 +403,8 @@ async function onConnect(port) {
 	port.onMessage.addListener(onMessage.bind(null, port));
 
 	const pending = tabs.has(tabId) && tabs.get(tabId).get(frameId) || null;
-	if (!pending || !pending.setPort) { return void console.error(`Unexpected port connection for tab`, tabId, 'frame', frameId); } // if onDisconnect gets fired correctly, this can't happen
-	pending.setPort(port); delete pending.setPort;
+	if (!pending || !pending.setPort) { console.error(`Unexpected port connection for tab`, tabId, 'frame', frameId); } // if onDisconnect gets fired correctly, this can't happen
+	else { pending.setPort(port); delete pending.setPort; }
 }
 
 async function onMessage(port, [ method, id, args, ]) {

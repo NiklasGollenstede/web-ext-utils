@@ -9,64 +9,66 @@
  *                                      Defaults to `runtime.getManifest()`.
  * @param  {object}   options.browser   Optional. An object of { name, version, } describing the current browser.
  */
-return ({
+function About({
 	host = global.document.querySelector('#about'),
 	manifest = (global.browser || global.chrome).runtime.getManifest(),
 	package: packageJson = null,
 	browser = null,
-} = { }) => {
+} = { }) {
 
-const element = createElement;
-const _ = html => element('span', { innerHTML: sanatize(html), });
-const makeLink = entry => entry.url ? element('a', { href: entry.url, target: '_blank', }, [ _(entry.name || entry.url), ]) : _(entry.name || entry);
-const makePerson = entry => {
-	let { name, url, email, } = entry;
-	if (typeof entry === 'string') {
-		[ , name, url, email, ] = (/(.*?)(?:\s*\<(.*?)\>)?(?:\s*\((.*?)\))?\s*$/).exec(entry) || [ '', entry, ];
-	}
-	if (!name) { name = url || email; }
-	return element('span', { className: 'person', }, [
-		!email && !url && _(name),
-		url && element('a', { href: url, target: '_blank', }, [ _(name), ]),
-		email && !url && element('a', { href: 'mailto:'+ email, target: '_blank', }, [ _(name), ]),
-		email && url && [ ' ', element('a', { href: 'mailto:'+ email, target: '_blank', }, [ '✉', ]), ],
-	]);
-};
-const addCommas = array => array.reduce((result, value) => ((result.push(value, ', ')), result), [ ]).slice(0, -1);
+	const element = createElement;
+	const _ = html => element('span', { innerHTML: sanatize(html), });
+	const makeLink = entry => entry.url ? element('a', { href: entry.url, target: '_blank', }, [ _(entry.name || entry.url), ]) : _(entry.name || entry);
+	const makePerson = entry => {
+		let { name, url, email, } = entry;
+		if (typeof entry === 'string') {
+			[ , name, url, email, ] = (/(.*?)(?:\s*[<](.*?)[>])?(?:\s*\((.*?)\))?\s*$/).exec(entry) || [ '', entry, ];
+		}
+		if (!name) { name = url || email; }
+		return element('span', { className: 'person', }, [
+			!email && !url && _(name),
+			url && element('a', { href: url, target: '_blank', }, [ _(name), ]),
+			email && !url && element('a', { href: 'mailto:'+ email, target: '_blank', }, [ _(name), ]),
+			email && url && [ ' ', element('a', { href: 'mailto:'+ email, target: '_blank', }, [ '✉', ]), ],
+		]);
+	};
+	const addCommas = array => array.reduce((result, value) => ((result.push(value, ', ')), result), [ ]).slice(0, -1);
 
-host.classList.add('about-host');
+	host.classList.add('about-host');
 
-const license = manifest.license || packageJson && packageJson.license;
-const repository = manifest.repository || packageJson && packageJson.repository;
-const contributions = manifest.contributions || packageJson && packageJson.contributions;
+	const license = manifest.license || packageJson && packageJson.license;
+	const repository = manifest.repository || packageJson && packageJson.repository;
+	const contributions = manifest.contributions || packageJson && packageJson.contributions;
 
-[
-	element('h2', [ 'About ', _(manifest.name), ]),
-	element('ul', [
-		element('li', { className: 'version', }, [
-			'Version: ', manifest.version,
+	[
+		element('h2', [ 'About ', _(manifest.name), ]),
+		element('ul', [
+			element('li', { className: 'version', }, [
+				'Version: ', manifest.version,
+			]),
+			element('li', { className: 'author', }, [
+				'Author: ', makePerson(manifest.author),
+			]),
+			// TODO: contributors
+			license && element('li', { className: 'license', }, [
+				'License: ', license, ' ', element('a', { href: '/LICENSE', target: '_blank', }, [ 'full text', ]),
+			]),
+			repository && element('li', { className: 'license', }, [
+				'Repository: ', element('a', { href: repository.url || repository, target: '_blank', }, [ _(repository.text || repository.type || repository.url), ]),
+			]),
+			browser && element('li', { className: 'browser', }, [
+				'Browser: ', browser.name, ' ', browser.version,
+			]),
 		]),
-		element('li', { className: 'author', }, [
-			'Author: ', makePerson(manifest.author),
-		]),
-		// TODO: contributors
-		license && element('li', { className: 'license', }, [
-			'License: ', license, ' ', element('a', { href: '/LICENSE', target: '_blank', }, [ 'full text', ]),
-		]),
-		repository && element('li', { className: 'license', }, [
-			'Repository: ', element('a', { href: repository.url || repository, target: '_blank', }, [ _(repository.text || repository.type || repository.url), ]),
-		]),
-		browser && element('li', { className: 'browser', }, [
-			'Browser: ', browser.name, ' ', browser.version,
-		]),
-	]),
-	contributions && contributions.length && element('h3', [ 'Contributions', ]),
-	contributions && contributions.length && element('ul', contributions.map(({ what, who, license, }) => element('li', [
-		makeLink(what),
-		who ? [ ' by ', Array.isArray(who) ? addCommas(who.map(makePerson)) : makePerson(who), ] : [ ],
-		license ? [ ' (', makeLink(license), ')', ] : [ ],
-	]))),
-].forEach(child => child && host.appendChild(child));
+		contributions && contributions.length && element('h3', [ 'Contributions', ]),
+		contributions && contributions.length && element('ul', contributions.map(({ what, who, license, }) => element('li', [
+			makeLink(what),
+			who ? [ ' by ', Array.isArray(who) ? addCommas(who.map(makePerson)) : makePerson(who), ] : [ ],
+			license ? [ ' (', makeLink(license), ')', ] : [ ],
+		]))),
+	].forEach(child => child && host.appendChild(child));
+
+}
 
 /**
  * Removes any tags (not their content) that are not listed in 'allowed' and any attributes except for href (not data: or javascript:) and title (order must be href, title).
@@ -74,12 +76,12 @@ const contributions = manifest.contributions || packageJson && packageJson.contr
  * @return {[type]}        Sanitized, simple HTML.
  */
 function sanatize(html) {
-	const allowed = /^(?:a|b|big|br|code|div|i|p|pre|li|ol|ul|span|sup|sub|tt|math|semantics|annotation(?:-xml)?|m(?:enclose|error|fenced|frac|i|n|o|over|padded|root|row|s|space|sqrt|sub|supsubsup|table|td|text|tr|under|underover))$/;
-	return !html ? '' : html.replace(
-		(/<(\/?)(\w+)[^>]*?(\s+href="(?!(?:javascript|data):)[^"]*?")?(\s+title="[^"]*?")?[^>]*?>/g),
-		(match, slash, tag, href, title) => allowed.test(tag) ? ('<'+ slash + tag + (title || '') + (href ? href +'target="_blank"' : '') +'>') : ''
-	);
+	const parts = (html ? html +'' : '').split(rTag);
+	return parts.map((s, i) => i % 2 ? s : s.replace(rEsc, c => oEsc[c])).join('');
 }
+const rTag = /(&(?:[A-Za-z]+|#\d+|#x[0-9A-Ea-e]+);|<\/?(?:a|abbr|b|br|code|details|em|i|p|pre|kbd|li|ol|ul|small|spam|span|strong|summary|sup|sub|tt|var)(?: download(?:="[^"]*")?)?(?: href="(?!(?:javascript|data):)[^\s"]*?")?(?: title="[^"]*")?>)/;
+const oEsc = { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;', '/': '&#47;', };
+const rEsc = new RegExp('['+ Object.keys(oEsc).join('') +']', 'g');
 
 /**
  * Creates a DOM Element and sets properties/attributes and children.
@@ -101,11 +103,12 @@ function createElement(tagName, properties, childList) {
 		}
 	}); })(element, properties);
 	childList && (function append(child) {
-		if (Array.isArray(child)) { return void child.forEach(append); }
+		if (Array.isArray(child)) { child.forEach(append); return; }
 		child && element.appendChild(typeof child === 'string' ? global.document.createTextNode(child) : child);
 	})(childList);
 	return element;
 }
 
-};
+return About;
+
 }; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; } } })((function() { return this; })()); // eslint-disable-line

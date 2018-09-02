@@ -78,13 +78,13 @@ async function onMessage([ method, id, args, ]) {
 	}
 }
 
-function request(method, ...args) { // eslint-disable-line no-unused-vars
+function request(method, ...args) {
 	const id = Math.random() * 0x100000000000000;
 	port.postMessage([ method, id, args, ]);
 	return new Promise((resolve, reject) => port.requests.set(id, [ resolve, reject, ]));
 }
 
-function post(method, ...args) { // eslint-disable-line no-unused-vars
+function post(method, ...args) {
 	port.postMessage([ method, 0, args, ]);
 }
 
@@ -109,7 +109,7 @@ const methods = {
 };
 
 async function connect(name, { wait = true, } = { }) {
-	const [ Port, web_ext_PortMulti, ] = (await Promise.all([ require.async('../lib/multiport/'), require.async('./multiplex'), ]));
+	const [ Port, web_ext_PortMulti, ] = (await Promise.all([ require.async('node_modules/multiport/'), require.async('./multiplex'), ]));
 	if (!(await request('connect', name, { wait, }))) { return null; }
 	return new Port({ port, channel: name, }, web_ext_PortMulti);
 }
@@ -167,8 +167,8 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 		callingScriptResolver(offset) {
 			const stack = (new Error).stack.split(/$/m);
 			const line = stack[(/^Error/).test(stack[0]) + 1 + offset];
-			const parts = line.split(/\@(?![^\/]*?\.xpi)|\(|\ /g);
-			const url = parts[parts.length - 1].replace(/\:\d+(?:\:\d+)?\)?$/, '');
+			const parts = line.split(/@(?![^/]*?\.xpi)|\(| /g);
+			const url = parts[parts.length - 1].replace(/[:]\d+(?:[:]\d+)?\)?$/, '');
 			if (hiddenBaseUrl !== null && url.startsWith(hiddenBaseUrl)) { return url.replace(hiddenBaseUrl, rootUrl); }
 			return url;
 		},
