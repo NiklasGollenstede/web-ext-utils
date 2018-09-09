@@ -163,12 +163,12 @@ function createInputRow(pref) {
 			className: 'input-wrapper', style: props.style || { },
 		}, [
 			props.prefix && createElement('span', {
-				innerHTML: sanatize(props.prefix),
+				innerHTML: sanitize(props.prefix),
 				className: 'value-prefix',
 			}),
 			createInput(props, pref),
 			props.suffix && createElement('span', {
-				innerHTML: sanatize(props.suffix),
+				innerHTML: sanitize(props.suffix),
 				className: 'value-suffix',
 			}),
 		]))),
@@ -319,13 +319,19 @@ function copyProperties(target, source) {
 	return target;
 }
 
-function sanatize(html) {
+/**
+ * Sanitizes untrusted HTML by escaping everything that is not recognized as a whitelisted tag or entity.
+ * @param    {string}  html  Untrusted HTML input.
+ * @return   {string}        Sanitized HTML that won't contain any tags but those whitelisted by `rTag` below.
+ * @author   Niklas Gollenstede
+ * @license  MIT
+ */
+function sanitize(html) {
 	const parts = (html ? html +'' : '').split(rTag);
 	return parts.map((s, i) => i % 2 ? s : s.replace(rEsc, c => oEsc[c])).join('');
-}
+} // `rTag` must not contain any capturing groups except the one wrapping the entire expression
 const rTag = /(&(?:[A-Za-z]+|#\d+|#x[0-9A-Ea-e]+);|<\/?(?:a|abbr|b|br|code|details|em|i|p|pre|kbd|li|ol|ul|small|spam|span|strong|summary|sup|sub|tt|var)(?: download(?:="[^"]*")?)?(?: href="(?!(?:javascript|data):)[^\s"]*?")?(?: title="[^"]*")?>)/;
-const oEsc = { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;', '/': '&#47;', };
-const rEsc = new RegExp('['+ Object.keys(oEsc).join('') +']', 'g');
+const oEsc = { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;', '/': '&#47;', }, rEsc = new RegExp('['+ Object.keys(oEsc).join('') +']', 'g');
 
 const color2hex = (() => { const element = document.createElement('p'), set = element.style, get = global.getComputedStyle(element); return color => {
 	set.color = 'initial'; set.color = color; const match = (/^rgba?\((\d+), (\d+), (\d+)(, (.*))?\)$/).exec(get.color || set.color);
@@ -367,7 +373,7 @@ function displayPreferences(prefs, host, prefix) { prefs.forEach(pref => {
 
 		createElement('div', { className: 'toggle-target', }, [
 			model.description && createElement('span', {
-				innerHTML: sanatize(model.description), className: 'pref-description',
+				innerHTML: sanitize(model.description), className: 'pref-description',
 			}),
 			valuesContainer = createElement('div', {
 				className: 'values-container',
