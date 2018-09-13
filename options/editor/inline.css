@@ -23,9 +23,9 @@ body {
 }
 
 .options-host code {
-	background-color: #eee;
-	color: #004f9e;
-	box-shadow: 0 0 1px 0px black inset;
+	background-color: lightgray; color: #131314;
+	box-shadow: 0 0 1.5px 0 black inset;
+	border-radius: 3px;
 }
 
 .options-host ul {
@@ -36,4 +36,8 @@ body {
 	list-style: none;
 	margin: 3px 0;
 	text-indent: -5em; padding-left: 5em;
+}
+
+textarea, input:not([type="button"]), select, .checkbox-wrapper > label {
+    border-color: #b5b5b5;
 }

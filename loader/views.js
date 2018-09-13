@@ -185,7 +185,7 @@ const { TAB_ID_NONE = -1, } = Tabs, { WINDOW_ID_NONE = -1, } = Windows || { };
 async function initView(view, options = { }) { try { options = parseSearch(options);
 	view.location.pathname !== viewName && view.history.replaceState(
 		view.history.state, view.document.title,
-		Object.assign(new view.URL(view.location), { pathname: viewName, })
+		Object.assign(new view.URL(view.location), { pathname: viewName, }),
 	);
 	view.document.querySelector('link[rel="icon"]').href = (manifest.icons[1] || manifest.icons[64]).replace(/^\/?/, '/');
 	makeEdgeSuckLess(view);

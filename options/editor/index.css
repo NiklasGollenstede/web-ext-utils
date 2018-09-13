@@ -103,12 +103,10 @@ textarea[disabled], input[disabled], select[disabled] {
 .value-suffix {
 	padding: 0 .5em;
 }
-details {
-	display: inline;
-}
+details { }
 summary {
-	display: inline;
-	cursor: pointer;
+	user-select: none; -moz-user-select: none;
+	cursor: pointer; outline: none !important;
 }
 
 /* sizes */

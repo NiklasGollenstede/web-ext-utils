@@ -330,7 +330,7 @@ function sanitize(html) {
 	const parts = (html ? html +'' : '').split(rTag);
 	return parts.map((s, i) => i % 2 ? s : s.replace(rEsc, c => oEsc[c])).join('');
 } // `rTag` must not contain any capturing groups except the one wrapping the entire expression
-const rTag = /(&(?:[A-Za-z]+|#\d+|#x[0-9A-Ea-e]+);|<\/?(?:a|abbr|b|br|code|details|em|i|p|pre|kbd|li|ol|ul|small|spam|span|strong|summary|sup|sub|tt|var)(?: download(?:="[^"]*")?)?(?: href="(?!(?:javascript|data):)[^\s"]*?")?(?: title="[^"]*")?>)/;
+const rTag = /(&(?:[A-Za-z]+|#\d+|#x[0-9A-Ea-e]+);|<\/?(?:a|abbr|b|br|code|details|em|i|p|pre|kbd|li|ol|ul|small|spam|span|strong|summary|sup|sub|tt|var)(?: download(?:="[^"]*")?)?(?: href="(?!(?:javascript|data):)[^\s"]*?")?(?: target="(?:_blank)")?(?: title="[^"]*")?>)/;
 const oEsc = { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;', '/': '&#47;', }, rEsc = new RegExp('['+ Object.keys(oEsc).join('') +']', 'g');
 
 const color2hex = (() => { const element = document.createElement('p'), set = element.style, get = global.getComputedStyle(element); return color => {
