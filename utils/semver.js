@@ -19,7 +19,7 @@ class Version {
 		return (versions[number] = (versions[input] = Object.freeze(this)));
 	}
 	[Symbol.toPrimitive](type) {
-		return this.hasOwnProperty(type) ? this[type] : this.string;
+		return Object.hasOwnProperty.call(this, type) ? this[type] : this.string;
 	}
 	static create(s) { return new Version(s); }
 }

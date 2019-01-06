@@ -16,7 +16,7 @@ if (fennec && location && location.type !== 'tab') { // the inline options page 
 
 firefox && location && location.type === 'frame' && (document.documentElement.style.overflowY = 'hidden'); // prevent scrollbar from flashing on resize
 
-(chrome || chromium) && location.type === 'frame' && (document.documentElement.style.minWidth = '700px');
+(chrome || chromium) && location && location.type === 'frame' && (document.documentElement.style.minWidth = '700px');
 
 document.title = 'Options - '+ manifest.name;
 

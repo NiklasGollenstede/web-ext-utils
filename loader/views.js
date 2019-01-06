@@ -8,77 +8,109 @@
 }) => {
 const Self = new WeakMap;
 
+/**
+ * Central manager for all extension views (tabs, popups, panels, sidebars).
+ * The central idea behind this module is that all views are managed and populated by the background script.
+ * Compared with traditional extension pages, where each page has its own HTML file that loads a bunch of
+ * styles and scripts that rely on messaging to communicate with the background page,
+ * this allows for a number of performance and usability advantages:
+ *  * the location of the HTML file is not exposed in the URL bar. It only shows a customizable string (e.g. the extension name) and the name of the current view
+ *  * views don't need to load any JS files when they load, since all modules are (lazily) loaded in the background page
+ *  * there is no need for asynchronous messaging at all, since the background scripts modules are directly accessible
+ *  * this makes it a lot easier to keep things fast and in sync
+ *  * error handling can be done in one central place
+ *
+ * The only drawback is that, in Firefox, views can't be opened in private windows or container tabs,
+ * but these situations are automatically detected and handled as gracefully as possible.
+ *
+ * ## Dependencies
+ *
+ * This module relies on the `../utils/files` module, which requires the `/files.json` to be built,
+ * and a copy of the `./_view.html` file in the extension root. `web-ext-build` takes care of both
+ * and also lets you choose a custom name to display in the URL bar, which for firefox, this doesn't
+ * even require the `.html` extension.
+ *
+ * ## Usage
+ *
+ * The basic usage is pretty simple. Just create JS or HTML files in the `/views/` directory of your extension
+ * and rebuild (s.o.). This script will automatically and lazily load the modules and make then available
+ * as `browser.runtime.getUrl('<chosen_root>#<name>')` from the following paths:
+ *  * `/views/<name>.{js|html}`
+ *  * `/views/<name>/index.{js|html}`
+ * HTML files should only be used for static information. They will be framed to hide the URL,
+ * but are otherwise loaded without modifications.
+ * JS files matching one of the above patterns must be AMD modules that export a function `(view, location)`.
+ * When a view with a matching `name` is opened, the corresponding module will be loaded with the `window`
+ * object and the views `location` (see below).
+ *
+ * Apart from that, this module provides APIs to get open views and open different types of views,
+ * programmatically register named views, generate URLs, and handle redirects and errors.
+ */
+
 const exports = {
+	/**
+	 * Shows or opens a specific extension view in a tab or popup window.
+	 * If the view matches a handler, the handler is run before the view is returned.
+	 * Does not run the 404 handler if no handler is matched.
+	 * @param  {string|null}        location              Name/Location of the view to show. Can be the name as a string,
+	 *                                                    the argument to, or the return value of, `.getUrl()` or the value of a `Location#href` .
+	 * @param  {string|null}        type                  The type of view to open/show. Can be 'tab', 'popup', 'panel' or null, to give no preference (which opens as tabs).
+	 * @param  {boolean|function?}  options.useExisting   Optional. If falsy, a new view will be opened. Otherwise, an existing view may be used and returned if:
+	 *                                                    * `.useExisting` is a function and returns `true`isch for its `Location`
+	 *                                                    * or if the name part of `location` and ` type` match.
+	 *                                                    Defaults to `false` for `openView` and `true` for `showView`.
+	 * @param  {Boolean?}           options.focused       Optional. Whether the window of the returned view should be focused. Defaults to `true`.
+	 * @param  {Boolean?}           options.active        Optional. Whether the tab of the returned view should be active within its window. Defaults to `true`.
+	 * @param  {String?}            options.state         Optional. The state of the new window, if one is created. Defaults to `'normal'`.
+	 * @param  {natural?}           options.windowId      Optional. The window in which a new tab gets placed, if one is created.
+	 *                                                    Should not be a private window. If it is, the view will be moved to a normal window.
+	 * @param  {Boolean?}           options.pinned        Optional. Whether the tab, if one is created, will be pinned. Defaults to `false`.
+	 * @param  {integer?}           options.openerTabId   Optional. The opener tab of the new tab, of one needs to be created.
+	 * @param  {natural?}           options.index         Optional. The position of the new tab, of one needs to be created.
+	 * @param  {integer?}           options.width/height  Optional. The dimensions of the popup, if one is created.
+	 * @param  {integer?}           options.left/top      Optional. The position of the popup, if one is created.
+	 * @return {Location}                                 The `Location` object corresponding to the new or matching exiting view.
+	 */
+	async openView(location, type, options) { return openView(location, type, options && ('useExisting' in options) ? options.useExisting : false, options); },
+	async showView(location, type, options) { return openView(location, type, options && ('useExisting' in options) ? options.useExisting : true, options); },
+
+	/**
+	 * Registers the handler function for a named view.
+	 * Replaces if the name is already (implicitly) registered.
+	 * @param {string?}   name     Optional. Name of the view to register. May be `''` to register a default view. Defaults to `handler.name` if `handler` is a named function.
+	 * @param {function}  handler  (Async) Function `(Window, Location)` called whenever a view with that `name` loads.
+	 */
 	setHandler(name, handler) {
-		if (!handler) { handler = name; name = handler.name; }
-		if (typeof handler !== 'function' || (name === '' && arguments.length < 2) || typeof name !== 'string')
-		{ throw new TypeError(`Signature must be setHandler(name? : string, handler : function)`); }
+		if (typeof name === 'function' && name.name) { handler = name; name = handler.name; }
+		else if (typeof name !== 'string' || typeof handler !== 'function')
+		{ throw new TypeError(`setHandler must be called with a named function or a name and a function`); }
 		handlers[name] = handler;
 	},
-	removeHandler(name) {
-		delete handlers[name];
-	},
-	getHandler(name) {
-		return handlers[name];
-	},
+	/// Unregisters the handler for a given `name`, if one is set.
+	removeHandler(name) { delete handlers[name]; },
+	/// Returns the handler for a given `name`, if one is set.
+	getHandler(name) { return handlers[name]; },
+
+	/// Returns the extension instance specific, absolute, normalized URL to a view.
 	getUrl({ name, query, hash, }) {
 		return viewPath
 		+ (name  ? (name +'')  .replace(/^[#]/, '') : '')
 		+ (query ? (query +'') .replace(/^[?]?/, '?') : '')
 		+ (hash  ? (hash +'')  .replace(/^[#]?/, '#') : '');
 	},
-	getViews() { return Array.from(locations, _=>_.public); },
-
-	/**
-	 * Opens or shows a specific extension view in a tab or popup window.
-	 * If the view matches a handler, the handler is run before the view is returned.
-	 * Does not run the 404 handler if no handler is matched.
-	 * @param  {string|null}        location              Name/Location of the view to show. Can be the name as a string,
-	 *                                                    the argument to or the return value of .getUrl() or the value of a Location#href .
-	 * @param  {string|null}        type                  The type of view to open/show. Can be 'tab', 'popup' or null, to give no preference.
-	 * @param  {boolean|function?}  options.useExisting   Optional. If falsy, a new view will be opened. Otherwise, an existing view may be used and returned if
-	 *                                                    .useExisting is a function and returns true for its Location or if the name part of `location` and ` type` match. Defaults to true.
-	 * @param  {Boolean?}           options.focused       Optional. Whether the window of the returned view should be focused. Defaults to true.
-	 * @param  {Boolean?}           options.active        Optional. Whether the tab of the returned view should be active within its window. Defaults to true.
-	 * @param  {String?}            options.state         Optional. The state of the new window, if one is created. Defaults to 'normal'.
-	 * @param  {natural?}           options.windowId      Optional. The window in which a new tab gets placed, if one is created.
-	 *                                                    Should not be a private window. If it is, the view will be move to a normal window.
-	 * @param  {Boolean?}           options.pinned        Optional. Whether the tab, if one is created, will be pinned. Defaults to false.
-	 * @param  {integer?}           options.openerTabId   Optional. The opener tab of the new tab, of one needs to be created.
-	 * @param  {natural?}           options.index         Optional. The position of the new tab, of one needs to be created.
-	 * @param  {integer?}           options.width/height  Optional. The dimensions of the popup, if one is created.
-	 * @param  {integer?}           options.left/top      Optional. The position of the popup, if one is created.
-	 * @return {Location}                                 The Location object corresponding to the new or old matching view.
-	 */
-	async openView(location = null, type = null, {
-		useExisting = true, focused = true, active = true, state = 'normal',
-		windowId = undefined, pinned = false, openerTabId = undefined, index = undefined,
-		width, height, left, top,
-	} = { }) {
-		location = typeof location === 'string' ? LocationP.normalize(location)
-		: typeof location === 'object' ? exports.getUrl(location || { }) : viewPath;
-		!Windows && (type = 'tab');
-		if (useExisting) {
-			const open = exports.getViews().find(
-				typeof useExisting === 'function' ? useExisting
-				: (name => (_=>_.name === name && (!type || _.type === type)))(location.slice(viewPath.length).replace(/#.*/, ''))
-			); if (open) { (focused || active) && (await Promise.all([
-				focused && open.windowId !== WINDOW_ID_NONE && Windows && Windows.update(open.windowId, { focused: true, }),
-				active && open.tabId !== TAB_ID_NONE && Tabs.update(open.tabId, { active: true, }),
-			])); return open; }
-		}
-		if (type === 'panel') { location = location.replace('#', '?emulatePanel=true#'); type = 'popup'; }
-		const tab = type === 'popup'
-		? (await Windows.create({ type: 'popup', url: location, focused, state, width, height, left, top, })).tabs[0]
-		: (await Tabs.create({ url: location, active, pinned, windowId, openerTabId, index, }));
-		type !== 'popup' && focused && windowId && Windows && Windows.update(windowId, { focused: true, });
-		return new Promise((resolve, reject) => (pending[tab.id] = { resolve, reject, }));
-	},
-	__initView__: initView, // for internal use only
+	/// @return {[Location]}  New array with all open views.
+	getViews() { return Array.from(locations.values(), _=>_.public); },
+	/// Given the global `window` of a view, returns its `Location`.
+	locationFor(view) { const location = locations.get(view); return location ? location.public : null; },
+	/// Creates a view handler that can be registered under any name to redirect to the given `target` name.
+	createRedirect(target) { return (view, location) => {
+		location.replace(target); return (handlers[target] || handlers['404'] || defaultError)(view, location);
+	}; },
 };
+/// `Event` that fires with `(Location)` whenever a view was opened/loaded.
 const fireOpen  = setEvent(exports, 'onOpen', { lazy: false, });
+/// `Event` that fires with the old `(Location)` whenever a view was closed/unloaded.
 const fireClose = setEvent(exports, 'onClose', { lazy: false, });
-Object.freeze(exports);
 
 // location format: #name?query#hash #?query#hash #name#hash ##hash #name?query!query #?query!query #name!hash #!hash
 // view types: 'tab', 'popup', 'panel', 'sidebar', 'frame'
@@ -118,16 +150,23 @@ function defaultError(view, location) {
 
 //////// start of private implementation ////////
 
+Object.defineProperty(exports, '__initView__', { value: initView, });
+Object.freeze(exports);
+
+const handlers = { }, pending = { }, locations = new Map;
+const viewName = (await FS.realpath('view.html')), viewPath = rootUrl + viewName +'#';
+const { TAB_ID_NONE = -1, } = Tabs, { WINDOW_ID_NONE = -1, } = Windows || { };
+
 class LocationP {
 	constructor(view, { type = 'tab', href = view.location.hash, tabId, activeTab, windowId, }) {
 		Self.set(this.public = new Location, this);
-		this.view = view; this.type = type; this.tabId = tabId; this.tabId = tabId; this.windowId = windowId; this.activeTab = activeTab;
+		this.view = view; this.type = type; this.tabId = tabId; this.windowId = windowId; this.activeTab = activeTab;
 		const { name, query, hash, } = LocationP.parse(href || '#');
 		this.name = name; this.query = query; this.hash = hash;
 		view.addEventListener('hashchange', this);
 		view.addEventListener('unload', () => this.destroy());
-		type === 'tab' && Tabs.onAttached.addListener(this.updateWindow = this.updateWindow.bind(this));
-		locations.add(this);
+		type === 'tab' && windowId !== WINDOW_ID_NONE && Tabs.onAttached.addListener(this.updateWindow = this.updateWindow.bind(this));
+		locations.set(view, this);
 	}
 	getUrl(props) { // called with { href, name, query, hash, } as optional strings
 		if (('href' in props)) { return LocationP.normalize(props.href); }
@@ -136,7 +175,9 @@ class LocationP {
 		return exports.getUrl(props);
 	}
 	navigate(target, push = false) {
-		this.view.location[push ? 'assign' : 'replace'](this.getUrl(target));
+		const url = this.getUrl(target);
+		!push && Object.assign(this, LocationP.parse(url));
+		this.view.location[push ? 'assign' : 'replace'](url);
 	}
 	updateHash() {
 		const target = this.hash ? this.view.document.getElementById(this.hash) : null;
@@ -160,7 +201,7 @@ class LocationP {
 		this.fireQueryChange && this.fireQueryChange (null, { last: true, });
 		this.fireHashChange  && this.fireHashChange  (null, { last: true, });
 		fireClose([ this.public, ]);
-		Self.delete(this.public); locations.delete(this);
+		Self.delete(this.public); locations.delete(this.view);
 		this.type === 'tab' && Tabs.onAttached.removeListener(this.updateWindow);
 		this.public = this.view = null;
 	}
@@ -176,12 +217,37 @@ class LocationP {
 	}
 }
 
+async function openView(location, type, useExisting, {
+	focused = true, active = true, state = 'normal',
+	windowId = undefined, pinned = false, openerTabId = undefined, index = undefined,
+	width, height, left, top,
+} = { }) {
+	location = typeof location === 'string' ? LocationP.normalize(location)
+	: typeof location === 'object' ? exports.getUrl(location || { }) : viewPath;
+	!Windows && (type = 'tab');
+	if (useExisting) {
+		const open = exports.getViews().find(
+			typeof useExisting === 'function' ? loc => useExisting(loc)
+			: (name => (_=>_.name === name && (!type || _.type === type)))(location.slice(viewPath.length).replace(/#.*/, ''))
+		); if (open) { (focused || active) && (await Promise.all([
+			focused && open.windowId !== WINDOW_ID_NONE && Windows && Windows.update(open.windowId, { focused: true, }),
+			active && open.tabId !== TAB_ID_NONE && Tabs.update(open.tabId, { active: true, }),
+		])); return open; }
+	}
+	if (type === 'panel') { location = location.replace('#', '?emulatePanel=true#'); type = 'popup'; }
+	const tab = type === 'popup'
+	? (await Windows.create({ type: 'popup', url: location, focused, state, width, height, left, top, })).tabs[0]
+	: (await Tabs.create({ url: location, active, pinned, windowId, openerTabId, index, }));
+	type !== 'popup' && focused && windowId && Windows && Windows.update(windowId, { focused: true, });
+	return new Promise((resolve, reject) => (pending[tab.id] = { resolve, reject, }));
+}
 
-
-const handlers = { }, pending = { }, locations = new Set;
-const viewName = (await FS.realpath('view.html')), viewPath = rootUrl + viewName +'#';
-const { TAB_ID_NONE = -1, } = Tabs, { WINDOW_ID_NONE = -1, } = Windows || { };
-
+/**
+ * Called by the initialization script of each view directly after it loads.
+ * Builds the views `Location` and calls its handler and/or returns it to its creator.
+ * @param  {Window}  view     The views global `window` global variable.
+ * @param  {object}  options  Partially parsed URL query parameters. The keys and values are still undecoded strings.
+ */
 async function initView(view, options = { }) { try { options = parseSearch(options);
 	view.location.pathname !== viewName && view.history.replaceState(
 		view.history.state, view.document.title,
@@ -253,13 +319,13 @@ if ((await FS.exists('views'))) { for (const name of (await FS.readdir('views'))
 	const handler = isFile
 	? (
 		  name.endsWith('.html')
-		? loadFrame.bind(null, path)
+		? FrameLoader(path)
 		: name.endsWith('.js')
 		? (...args) => require.async(path.slice(0, -3)).then(_=>_(...args))
 		: null
 	) : (
 		  (await FS.exists(path +'/index.html'))
-		? loadFrame.bind(null, path +'/index.html')
+		? FrameLoader(path +'/index.html')
 		: (await FS.exists(path +'/index.js'))
 		? (...args) => require.async(path +'/').then(_=>_(...args))
 		: null
@@ -278,10 +344,10 @@ if ( // automatically create inline options view if options view is required but
 ) {
 	const options = (await require.async('node_modules/web-ext-utils/options/editor/inline'));
 	exports.setHandler('options', options);
-	!handlers[''] && exports.setHandler('', (_, location) => (location.name = 'options'));
+	!handlers[''] && exports.setHandler('', exports.createRedirect('options'));
 }
 
-function loadFrame(path, view) {
+function FrameLoader(path) { return function(view) {
 	const frame = global.document.createElement('iframe');
 	frame.src = '/'+ path;
 	frame.style.border = 'none';
@@ -291,13 +357,14 @@ function loadFrame(path, view) {
 	view.document.body.tagName === 'BODY' && (frame.style.position = 'fixed');
 	view.document.body.appendChild(frame);
 	frame.addEventListener('load', () => (view.document.title = frame.contentDocument.title), { once: true, });
-}
+}; }
 
 return exports;
 
 function parseSearch(search) {
 	const config = { };
 	for (let [ key, value, ] of Object.entries(search)) {
+		try { key = decodeURIComponent(key); } catch(_) { }
 		try { value = decodeURIComponent(value); } catch(_) { }
 		try { config[key] = JSON.parse(value); } catch(_) { config[key] = value; }
 	}

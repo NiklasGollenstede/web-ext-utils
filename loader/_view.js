@@ -13,6 +13,7 @@ const options = { }; location.search && location.search.replace(/^\?/, '').split
 if (options.waitForReload === 'true') { // After extension reload. Just wait for the background to reload all unhandled `browser.extension.getViews()`s.
 	delete options.waitForReload; history.replaceState(history.state, '', getUrl());
 	if (!main || !main.define) { global.document.body.innerHTML = `<h1 style="font-family: Segoe UI, Tahoma, sans-serif;">Loading ...</a>`; return; }
+	// or continue if the background page has already loaded (far enough to `require('./views')`)
 }
 
 if (options.skipChecks === 'true') { // Avoid recursion, which would be very hard for the user to stop.

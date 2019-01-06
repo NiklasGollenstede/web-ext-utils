@@ -3,11 +3,6 @@
 	require,
 }) => {
 
-/// escapes a string for usage in a regular expression
-const escape = string => string.replace(/[\-\[\]\{\}\(\)\*\+\?\.\,\\\^\$\|\#]/g, '\\$&');
-
-/// matches all valid match patterns (except '<all_urls>') and extracts [ , scheme, host, path, ]
-const matchPattern = (/^(?:(\*|http|https|file|ftp|app):\/\/(\*|(?:\*\.)?[^\/\*]+|)\/(.*))$/i);
 
 /**
  * Transforms a valid match pattern into a regular expression which matches all URLs included by that pattern.
@@ -18,15 +13,19 @@ const matchPattern = (/^(?:(\*|http|https|file|ftp|app):\/\/(\*|(?:\*\.)?[^\/\*]
  */
 function matchPatternToRegExp(pattern) {
 	if (pattern === '<all_urls>') { return (/^(?:https?|file|ftp|app):\/\//); } // TODO: this is from mdn, check if chrome behaves the same
-	const match = matchPattern.exec(pattern);
+	const match = rMatchPattern.exec(pattern);
 	if (!match) { throw new TypeError(`"${ pattern }" is not a valid MatchPattern`); }
 	const [ , scheme, host, path, ] = match;
 	return new RegExp('^(?:'
-		+ (scheme === '*' ? 'https?' : escape(scheme)) +':\/\/'
-		+ (host === '*' ? '[^\/]+?' : escape(host).replace(/^\\\*\\./g, '(?:[^\/]+?.)?'))
-		+ (path ? '\/'+ escape(path).replace(/\\\*/g, '.*') : '\/?')
+		+ (scheme === '*' ? 'https?' : escapeForRegExp(scheme)) +'://'
+		+ (host === '*' ? '[^/]+?' : escapeForRegExp(host).replace(/^\\\*\\./g, '(?:[^/]+?.)?'))
+		+ (path ? '/'+ escapeForRegExp(path).replace(/\\\*/g, '.*') : '/?')
 	+')$');
 }
+/// escapes a string for usage in a regular expression
+const escapeForRegExp = string => string.replace(/[[\]{}()*-+?.,^$|#\\]/g, '\\$&');
+/// matches all valid match patterns (except '<all_urls>') and extracts [ , scheme, host, path, ]
+const rMatchPattern = (/^(?:(\*|http|https|file|ftp|app):\/\/(\*|(?:\*\.)?[^/*]+|)\/(.*))$/i);
 
 function parseMatchPatterns(patterns) {
 	!Array.isArray(patterns) && (patterns = [ patterns, ]);

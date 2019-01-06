@@ -96,7 +96,7 @@ const clearNotice = debounce(() => {
 });
 Notifications.onClicked.addListener(id => {
 	if (id !== 'web-ext-utils:notice') { return; }
-	onclick && onclick(); clearNotice();
+	onclick && onclick(); clearNotice(0);
 });
 Notifications.onClosed.addListener(id => {
 	if (id !== 'web-ext-utils:notice') { return; }
@@ -120,22 +120,23 @@ const icons = { }; let FS, iconUrl; async function getIcon(name) { try {
 } catch (error) { console.error(error); return icons[name]; } }
 
 function debounce(callback) { let timer = null; return function(time) {
-	global.clearTimeout(timer); if (time == null) { callback(); return; } if (time < 0) { return; }
-	timer = global.setTimeout(callback, time); // eslint-disable-line no-invalid-this
+	global.clearTimeout(timer); if (time == null) { time = 0; }
+	if (time >= 0) { timer = global.setTimeout(callback, time); }
 }; }
 
 function throttle(callback, time) {
 	let call = null, last = 0;
 	return function(...args) {
-		if (!call) {
+		if (!call) { // schedule next call
 			const wait = last + time - Date.now();
 			setTimeout(() => {
-				last = Date.now();
-				call.done(callback(...call.args));
-				call = null;
+				const { args, done, fail, } = call;
+				last = Date.now(); call = null;
+				try { done(callback(...args)); }
+				catch (error) { fail(error); }
 			}, wait > 0 ? wait : 0); // mustn't be << 0 in chrome 53+
-		} else { call.done(false); }
-		return new Promise(done => (call = { args, done, }));
+		} else { call.done(false); } // cancel prev call
+		return new Promise((done, fail) => (call = { args, done, fail, }));
 	};
 }
 

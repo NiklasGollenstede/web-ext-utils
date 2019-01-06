@@ -14,7 +14,7 @@ class Option {
 		this.model = model; this.parent = parent; this.name = name;
 		this.path = (parent ? parent.path +'.' : '') + this.name;
 
-		if (!model.hasOwnProperty('default')) {
+		if (!Object.hasOwnProperty.call(model, 'default')) {
 			this.defaults = Object.freeze([ ]);
 		} else if (Array.isArray(model.default)) {
 			this.defaults = model.default;
@@ -127,8 +127,8 @@ class ValueList {
 		this.parent = parent;
 		this.key = currentRoot.prefix + this.parent.path;
 		const { model, } = parent;
-		this.max = model.hasOwnProperty('maxLength') ? +model.maxLength : 1;
-		this.min = model.hasOwnProperty('minLength') ? +model.minLength : +!model.hasOwnProperty('maxLength');
+		this.max = Object.hasOwnProperty.call(model, 'maxLength') ? +model.maxLength : 1;
+		this.min = Object.hasOwnProperty.call(model, 'minLength') ? +model.minLength : +!Object.hasOwnProperty.call(model, 'maxLength');
 		return Object.freeze(this);
 	}
 	get current() { return Self.get(this.parent).values; }
@@ -198,11 +198,11 @@ class Restriction extends RestrictionBase {
 
 		readOnly && checks.push(() => 'This value is read only');
 		type && checks.push(value => typeof value !== type && ('This value must be of type "'+ type +'" but is "'+ (typeof value) +'"'));
-		restrict.hasOwnProperty('from') && checks.push(value => value < from && ('This value must be at least '+ from));
-		restrict.hasOwnProperty('to') && checks.push(value => value > to && ('This value can be at most '+ to));
+		Object.hasOwnProperty.call(restrict, 'from') && checks.push(value => value < from && ('This value must be at least '+ from));
+		Object.hasOwnProperty.call(restrict, 'to') && checks.push(value => value > to && ('This value can be at most '+ to));
 		match && checks.push(value => !match.exp.test(value) && match.message);
 		isRegExp && checks.push(value => void RegExp(value));
-		restrict.hasOwnProperty('unique') && (() => { let _unique;
+		Object.hasOwnProperty.call(restrict, 'unique') && (() => { let _unique;
 			checks.push((value, values, option) => (_unique || (_unique = getUniqueSet(unique, parent))).map(other => {
 				if (other === option) {
 					return values.filter(v => v === value).length > 1 && 'This value must be unique within this option';
