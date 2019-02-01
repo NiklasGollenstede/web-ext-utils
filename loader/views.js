@@ -27,7 +27,7 @@ const Self = new WeakMap;
  *
  * This module relies on the `../utils/files` module, which requires the `/files.json` to be built,
  * and a copy of the `./_view.html` file in the extension root. `web-ext-build` takes care of both
- * and also lets you choose a custom name to display in the URL bar, which for firefox, this doesn't
+ * and also lets you choose a custom name to display in the URL bar, which for Firefox, doesn't
  * even require the `.html` extension.
  *
  * ## Usage
@@ -106,6 +106,7 @@ const exports = {
 	createRedirect(target) { return (view, location) => {
 		location.replace(target); return (handlers[target] || handlers['404'] || defaultError)(view, location);
 	}; },
+	async getCustomElements() { return getCustomElements(); },
 };
 /// `Event` that fires with `(Location)` whenever a view was opened/loaded.
 const fireOpen  = setEvent(exports, 'onOpen', { lazy: false, });
@@ -115,7 +116,7 @@ const fireClose = setEvent(exports, 'onClose', { lazy: false, });
 // location format: #name?query#hash #?query#hash #name#hash ##hash #name?query!query #?query!query #name!hash #!hash
 // view types: 'tab', 'popup', 'panel', 'sidebar', 'frame'
 class Location {
-	get view     () { return Self.get(this).view; }
+	get view     () { return (Self.get(this) || { }).view; }
 	get type     () { return Self.get(this).type; }
 	get tabId    () { return Self.get(this).tabId; }
 	get windowId () { return Self.get(this).windowId; }
@@ -153,7 +154,7 @@ function defaultError(view, location) {
 Object.defineProperty(exports, '__initView__', { value: initView, });
 Object.freeze(exports);
 
-const handlers = { }, pending = { }, locations = new Map;
+const handlers = { __proto__: null, }, pending = { __proto__: null, }, locations = new Map;
 const viewName = (await FS.realpath('view.html')), viewPath = rootUrl + viewName +'#';
 const { TAB_ID_NONE = -1, } = Tabs, { WINDOW_ID_NONE = -1, } = Windows || { };
 
@@ -254,7 +255,7 @@ async function initView(view, options = { }) { try { options = parseSearch(optio
 		Object.assign(new view.URL(view.location), { pathname: viewName, }),
 	);
 	view.document.querySelector('link[rel="icon"]').href = (manifest.icons[1] || manifest.icons[64]).replace(/^\/?/, '/');
-	makeEdgeSuckLess(view);
+	makeEdgeSuckLess(view); const customElements = getCustomElements();
 
 	const get = what => new Promise(got => (view.browser || view.chrome)[what +'s'].getCurrent(got));
 
@@ -293,6 +294,11 @@ async function initView(view, options = { }) { try { options = parseSearch(optio
 	// TODO: in firefox panels don't have focus for (all?) keyboard input before the user clicks in them. It would be nice if the focus could be forced to the panel
 	const location = new LocationP(view, { type, tabId, windowId, activeTab, });
 
+	for (const { 0: name, 1: getClass, } of Object.entries((await customElements))) {
+		const Element = getClass(view); if (!Element) { continue; }
+		view.customElements.define(name, Element, Element.options);
+	}
+
 	const handler = handlers[location.name];
 	handler && (await handler(view, location.public));
 
@@ -313,9 +319,10 @@ async function initView(view, options = { }) { try { options = parseSearch(optio
 	else { (await notify.error(`Failed to display page "${ view.location.hash }"`, error)); }
 } }
 
-if ((await FS.exists('views'))) { for (const name of (await FS.readdir('views'))) {
+if (FS.exists('views')) { for (let name of FS.readdir('views')) {
+	if (name[0] === '.' || name[0] === '_') { continue; }
 	const path = FS.resolve('views', name);
-	const isFile = (await FS.stat(path)).isFile();
+	const isFile = FS.stat(path).isFile();
 	const handler = isFile
 	? (
 		  name.endsWith('.html')
@@ -324,15 +331,16 @@ if ((await FS.exists('views'))) { for (const name of (await FS.readdir('views'))
 		? (...args) => require.async(path.slice(0, -3)).then(_=>_(...args))
 		: null
 	) : (
-		  (await FS.exists(path +'/index.html'))
+		  FS.exists(path +'/index.html')
 		? FrameLoader(path +'/index.html')
-		: (await FS.exists(path +'/index.js'))
+		: FS.exists(path +'/index.js')
 		? (...args) => require.async(path +'/').then(_=>_(...args))
 		: null
 	);
 	if (handler) {
-		exports.setHandler(isFile ? name.replace(/\.(?:html|js)$/, '') : name, handler);
-		(isFile ? (/^index\.(?:html|js)$/) : (/^index$/)).test(name) && exports.setHandler('', handler);
+		isFile && (name = name.replace(/\.(?:html|js)$/, '')); if (name === 'index') {
+			exports.setHandler('', handler); exports.setHandler('index', exports.createRedirect(''));
+		} else { exports.setHandler(name, handler); }
 	}
 } }
 
@@ -342,10 +350,17 @@ if ( // automatically create inline options view if options view is required but
 		|| manifest.options_ui.page === viewName +'#options' // chrome doesn't
 	) && (await FS.exists('node_modules/web-ext-utils/options/editor/inline.js'))
 ) {
-	const options = (await require.async('node_modules/web-ext-utils/options/editor/inline'));
-	exports.setHandler('options', options);
+	exports.setHandler('options', (...args) => require.async('node_modules/web-ext-utils/options/editor/inline').then(_=>_(...args)));
 	!handlers[''] && exports.setHandler('', exports.createRedirect('options'));
 }
+
+function getCustomElements() { return getCustomElements.called || (getCustomElements.called = (async () => {
+	const elements = { __proto__: null, }; if (FS.exists('views/_elements')) { (await Promise.all(FS.readdir('views/_elements').map(async name => {
+		if (name[0] === '.' || name[0] === '_' || !name.endsWith('.js')) { return; }
+		name = name.slice(0, -3); const path = 'views/_elements/'+ name;
+		FS.stat(path +'.js').isFile() && (elements[name] = (await require.async(path)));
+	}))); } return elements;
+})()); }
 
 function FrameLoader(path) { return function(view) {
 	const frame = global.document.createElement('iframe');

@@ -1,10 +1,12 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../../browser/': { manifest, },
 	'../../browser/version': { current: currentBrowser, version: browserVersion, chrome, chromium, fennec, firefox, },
-	'./': Editor,
-	about,
 	'common/options': options,
+	About, './': Editor,
 	'fetch!package.json:json': packageJson,
+	'fetch!./index.css:css?': indexCss,
+	'fetch!./inline.css:css?': inlineCss,
+	'fetch!./about.css:css?': aboutCss,
 	require,
 }) => { return ({ document, onCommand, }, location) => {
 
@@ -20,11 +22,8 @@ firefox && location && location.type === 'frame' && (document.documentElement.st
 
 document.title = 'Options - '+ manifest.name;
 
-[ 'index', 'inline', 'about', ].forEach(style => {
-	const link = document.createElement('link');
-	link.href = require.toUrl(`./${ style }.css`);
-	link.rel = 'stylesheet';
-	document.body.appendChild(link);
+[ indexCss, inlineCss, aboutCss, ].forEach(css => {
+	const style = document.head.appendChild(document.createElement('style')); style.textContent = css;
 });
 
 new Editor({
@@ -32,7 +31,7 @@ new Editor({
 	host: Object.assign(document.body.appendChild(document.createElement('form')), { id: 'options', }),
 });
 
-about({
+About({
 	manifest, package: packageJson,
 	host: Object.assign(document.body.appendChild(document.createElement('div')), { id: 'about', }),
 	browser: { name: currentBrowser.replace(/^./, c => c.toUpperCase()), version: browserVersion, },

@@ -1,6 +1,6 @@
 {
 	"name": "web-ext-utils",
-	"version": "0.1.9",
+	"version": "0.1.10",
 	"description": "A collection of utilities to use with web extensions",
 	"author": "Niklas Gollenstede",
 	"license": "MPL-2.0",
@@ -10,7 +10,7 @@
 	},
 	"peerDependencies": {
 		"multiport": "^0.2.3",
-		"pbq": "^0.3.3"
+		"pbq": "^0.3.6"
 	},
 	"devDependencies": {
 		"eslintrc": "github:NiklasGollenstede/eslintrc#5837452",

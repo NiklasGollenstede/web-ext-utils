@@ -11,9 +11,15 @@ if (chrome.extension.getBackgroundPage() !== global) { // stop loading at once i
 const { require, } = define(null);
 
 // show notification if the extension failed to start
-require('background/', () => null, async error => (await require.async('../utils/notify')).error(
-	`${ (await require.async('../browser/')).manifest.name } failed to start!`, error,
-));
+require('background/', () => null, async error => {
+	require.async('../utils/notify').then(_=>_.error(
+		`${ chrome.runtime.getManifest().name } failed to start!`, error,
+	));
+	const Menus = chrome.menus || chrome.contextMenus; if (Menus) {
+		Menus.create({ contexts: [ 'browser_action', ], id: 'web-ext-utils:restart', title: 'Restart Extension', });
+		Menus.onClicked.addListener(({ menuItemId, }) => { menuItemId === 'web-ext-utils:restart' && chrome.runtime.reload(); });
+	}
+});
 
 // reload old views
 const views = chrome.extension.getViews().filter(view => view !== global);

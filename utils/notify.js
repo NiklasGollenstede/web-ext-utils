@@ -53,8 +53,9 @@ Object.assign(notify, {
 			if (error.message) { message += error.message; }
 		}
 		if (!message && !error) { message = 'at all'; }
+		const timeout = error && typeof error.timeout === 'number' ? error.timeout : 7500;
 
-		return notify({ title, message, icon: 'error', timeout: 7500, });
+		return notify({ title, message, icon: 'error', timeout, });
 	},
 
 	/**

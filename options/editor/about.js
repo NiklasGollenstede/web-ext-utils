@@ -36,7 +36,7 @@ function About({
 	host.classList.add('about-host');
 
 	const license = manifest.license || packageJson && packageJson.license;
-	const repository = manifest.repository || packageJson && packageJson.repository;
+	const repo = manifest.repository || packageJson && packageJson.repository;
 	const contributions = manifest.contributions || packageJson && packageJson.contributions;
 
 	[
@@ -50,16 +50,18 @@ function About({
 			]),
 			// TODO: contributors
 			license && $('li', { className: 'license', }, [
-				'License: ', license, ' ', $('a', { href: '/LICENSE', target: '_blank', }, [ 'full text', ]),
+				'License: ', license, ' ', $('a', { href: '/LICENSE', target: '_blank', }, 'full text'),
 			]),
-			repository && $('li', { className: 'license', }, [
-				'Repository: ', $('a', { href: repository.url || repository, target: '_blank', }, [ repository.text || repository.type || repository.url, ]),
+			repo && $('li', { className: 'repository', }, [
+				'Repository: ', $('a', { href: repo.url || repo, target: '_blank', }, [
+					repo.title || typeof repo.type === 'string' && repo.type.toUpperCase() || repo.url,
+				]),
 			]),
 			browser && $('li', { className: 'browser', }, [
 				'Browser: ', browser.name, ' ', browser.version,
 			]),
 		]),
-		contributions && contributions.length && $('h3', [ 'Contributions', ]),
+		contributions && contributions.length && $('h3', 'Contributions'),
 		contributions && contributions.length && $('ul', contributions.map(({ what, who, license, }) => $('li', [
 			makeLink(what),
 			who ? [ ' by ', Array.isArray(who) ? addCommas(who.map(makePerson)) : makePerson(who), ] : [ ],

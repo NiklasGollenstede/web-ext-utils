@@ -1,4 +1,4 @@
-(function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'fetch!files.json:json': files,
 }) => {
 
@@ -40,7 +40,7 @@ function readDir(path) { try {
 	throw new Error(`"${ path }" is not a directory`);
 } }
 
-async function stat(path) {
+function stat(path) {
 	const node = find(split(path));
 	return {
 		isFile() { return node === true; },
@@ -48,7 +48,7 @@ async function stat(path) {
 	};
 }
 
-async function realpath(path) {
+function realpath(path) {
 	const parts = split(path), node = find(parts);
 	return typeof node === 'string' ? node : parts.join('/');
 }
