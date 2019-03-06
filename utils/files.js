@@ -20,7 +20,7 @@ function split(path) {
 
 function find(parts) {
 	let node = files;
-	for (const part of parts) { node = node[part]; }
+	for (const part of parts) { node = node && node[part]; }
 	return node;
 }
 
@@ -29,16 +29,14 @@ function resolve(...fragments) {
 }
 
 function exists(path) {
-	try { return !!find(split(path)); } catch (_) { return false; }
+	return !!find(split(path));
 }
 
-function readDir(path) { try {
+function readDir(path) {
 	const dir = find(split(path));
-	if (!dir || dir === true) { throw null; } // eslint-disable-line no-throw-literal
-	return Object.keys(dir);
-} catch (_) {
+	if (dir && typeof dir === 'object') { return Object.keys(dir); }
 	throw new Error(`"${ path }" is not a directory`);
-} }
+}
 
 function stat(path) {
 	const node = find(split(path));
@@ -60,7 +58,7 @@ function realpath(path) {
  * @return {any}               [description]
  */
 async function readFile(path, encoding) {
-	const url = browser.extension.getURL((await realpath(path)));
+	const url = browser.extension.getURL(realpath(path));
 
 	return new Promise((resolve, reject) => {
 		const xhr = new global.XMLHttpRequest;

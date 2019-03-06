@@ -254,7 +254,7 @@ async function initView(view, options = { }) { try { options = parseSearch(optio
 		view.history.state, view.document.title,
 		Object.assign(new view.URL(view.location), { pathname: viewName, }),
 	);
-	view.document.querySelector('link[rel="icon"]').href = (manifest.icons[1] || manifest.icons[64]).replace(/^\/?/, '/');
+	view.document.querySelector('link[rel="icon"]').href = (manifest.icons[1] || manifest.icons[64]).replace(/^\/?(?!.*:\/\/)/, '/');
 	makeEdgeSuckLess(view); const customElements = getCustomElements();
 
 	const get = what => new Promise(got => (view.browser || view.chrome)[what +'s'].getCurrent(got));

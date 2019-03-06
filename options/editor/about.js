@@ -61,7 +61,7 @@ function About({
 				'Browser: ', browser.name, ' ', browser.version,
 			]),
 		]),
-		contributions && contributions.length && $('h3', 'Contributions'),
+		contributions && contributions.length && $('h3', null, 'Contributions'),
 		contributions && contributions.length && $('ul', contributions.map(({ what, who, license, }) => $('li', [
 			makeLink(what),
 			who ? [ ' by ', Array.isArray(who) ? addCommas(who.map(makePerson)) : makePerson(who), ] : [ ],

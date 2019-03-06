@@ -23,8 +23,20 @@ firefox && location && location.type === 'frame' && (document.documentElement.st
 document.title = 'Options - '+ manifest.name;
 
 [ indexCss, inlineCss, aboutCss, ].forEach(css => {
-	const style = document.head.appendChild(document.createElement('style')); style.textContent = css;
+	document.head.append(_('style', { textContent: css, }));
 });
+
+const intro = document.body.appendChild(_('div', { id: 'intro', }));
+fennec && intro.appendChild(_('h1', { textContent: 'manifest.name', }));
+!firefox && intro.appendChild(_('p', { style: 'margin: .25em 0 1.25em 0', })).append(
+	(manifest.description || packageJson.description).replace(/([^!?.])$/, '$1.') +' ',
+	manifest.homepage_url || packageJson.homepage ? _('a', {
+		href: manifest.homepage_url || packageJson.homepage,
+		target: '_blank', textContent: 'More information',
+		style: 'display: inline-block',
+	}) : '',
+);
+intro.appendChild(_('h2', { textContent: 'Options', style: 'margin: 0; font-weight: normal;', }));
 
 new Editor({
 	options, prefix: '', onCommand,
@@ -36,5 +48,7 @@ About({
 	host: Object.assign(document.body.appendChild(document.createElement('div')), { id: 'about', }),
 	browser: { name: currentBrowser.replace(/^./, c => c.toUpperCase()), version: browserVersion, },
 });
+
+function _(tag, props) { return Object.assign(document.createElement(tag), props); }
 
 }; }); })(this);

@@ -2,7 +2,7 @@
 	'../utils/event': { setEvent, setEventGetter, },
 	require,
 }) => {
-let Content = null; if ((global.browser || global.chrome).extension.getBackgroundPage !== 'function')
+let Content = null; if (typeof (global.browser || global.chrome).extension.getBackgroundPage !== 'function')
 { try { Content = require('../loader/content'); } catch (_) { } }
 
 let currentRoot = null; // a OptionsRoot during its construction
