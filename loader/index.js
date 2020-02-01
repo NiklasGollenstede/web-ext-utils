@@ -5,6 +5,8 @@
 	'../utils/event': { setEvent, setEventGetter, },
 	'../utils/files': FS,
 	require,
+	'lazy!./multiplex': _1,
+	'lazy!./content': _2,
 }) => {
 const Self = new Map/*<ContentScript, object>*/;
 

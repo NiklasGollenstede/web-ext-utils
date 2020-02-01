@@ -1,0 +1,21 @@
+
+##
+# `include: web-ext-utils` will overwrite/extend the `start-default` and `manifest` pipleine segments such that
+# all implicitly or explicitly required files are included, and the manifest starts with some default keys.
+# See the function descriptions in `./web-ext-build.js` for more details.
+# `stages.web-ext-utils-files.options.viewName` should probably be set explicitly.
+##
+
+pipelines:
+  start-default: [ read-fs, web-ext-utils-files ]
+  manifest: [ web-ext-utils-manifest, build-manifest ]
+
+stages:
+
+  web-ext-utils-files:
+    from: ./web-ext-build:extend-fs
+    options:
+      viewName:
+
+  web-ext-utils-manifest:
+    from: ./web-ext-build:prepare-manifest

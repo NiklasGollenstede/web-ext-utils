@@ -5,6 +5,7 @@
 	'../utils/files': FS,
 	'../utils/event': { setEvent, setEventGetter, },
 	require,
+	'lazy!fetch!./_view.js': _2,
 }) => {
 const Self = new WeakMap;
 
@@ -98,7 +99,7 @@ const exports = {
 		+ (query ? (query +'') .replace(/^[?]?/, '?') : '')
 		+ (hash  ? (hash +'')  .replace(/^[#]?/, '#') : '');
 	},
-	/// @return {[Location]}  New array with all open views.
+	/// @return {[Location]}  New array with all open views' `Location`s.
 	getViews() { return Array.from(locations.values(), _=>_.public); },
 	/// Given the global `window` of a view, returns its `Location`.
 	locationFor(view) { const location = locations.get(view); return location ? location.public : null; },
@@ -155,7 +156,7 @@ Object.defineProperty(exports, '__initView__', { value: initView, });
 Object.freeze(exports);
 
 const handlers = { __proto__: null, }, pending = { __proto__: null, }, locations = new Map;
-const viewName = (await FS.realpath('view.html')), viewPath = rootUrl + viewName +'#';
+const viewName = (await FS.realpath('view.html')).replace(/[.]html$/, gecko ? '' : '.html'), viewPath = rootUrl + viewName +'#';
 const { TAB_ID_NONE = -1, } = Tabs, { WINDOW_ID_NONE = -1, } = Windows || { };
 
 class LocationP {
@@ -262,12 +263,12 @@ async function initView(view, options = { }) { try { options = parseSearch(optio
 	let tab, window, type = 'other', tabId = TAB_ID_NONE, windowId = WINDOW_ID_NONE, activeTab = TAB_ID_NONE, resize;
 	if (fennec) {
 		tab = (await get('tab')); tabId = tab.id; type = 'tab';
-		view.innerWidth < tab.width && (type = 'frame');
+		view.innerWidth < tab.width && (type = 'frame'); // TODO: this test is dumb
 	} else {
 		[ tab, window, ] = (await Promise.all([ get('tab'), get('window'), ]));
 		if (tab) {
 			tabId = tab.id; windowId = tab.windowId; type = window && [ 'popup', 'panel', ].includes(window.type) ? 'popup' : 'tab'; // window is (sometimes?) undefined in edge
-			view.innerWidth < tab.width && (type = 'frame');
+			view.innerWidth < tab.width && (type = 'frame'); // TODO: this test is dumb
 		} else {
 			windowId = window.id;
 			const body = view.document.body; type =
@@ -346,8 +347,8 @@ if (FS.exists('views')) { for (let name of FS.readdir('views')) {
 
 if ( // automatically create inline options view if options view is required but not explicitly defined
 	!handlers.options && manifest.options_ui && (
-		   manifest.options_ui.page === viewPath +'options' // firefox resolves the url
-		|| manifest.options_ui.page === viewName +'#options' // chrome doesn't
+		   manifest.options_ui.page === rootUrl +'view.html#options' // firefox resolves the url
+		|| manifest.options_ui.page === 'view.html#options' // chrome doesn't
 	) && (await FS.exists('node_modules/web-ext-utils/options/editor/inline.js'))
 ) {
 	exports.setHandler('options', (...args) => require.async('node_modules/web-ext-utils/options/editor/inline').then(_=>_(...args)));

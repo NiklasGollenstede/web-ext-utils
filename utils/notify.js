@@ -1,6 +1,7 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../browser/': { Notifications, isGecko, },
 	require,
+	'lazy!fetch!./icons/?': _1,
 }) => {
 
 /**
@@ -10,6 +11,9 @@
  * @param  {string}   .icon     Notification icon URL or one of [ 'default', 'info', 'warn', 'error', 'success', ]
  *                              to choose and/or generate an icon automatically.
  * @param  {natural?} .timeout  Timeout in ms after which to clear the notification.
+ *                              Note that Firefox does not support the native
+ *                              `NotificationOptions#requireInteraction` and thus closes
+ *                              notifications automatically (in the desktop version).
  * @return {boolean}            Whether the notification was clicked or closed (incl. timeout).
  */
 let notify = async function notify({ title, message, icon = 'default', timeout, }) { try {

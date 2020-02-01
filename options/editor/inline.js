@@ -8,6 +8,7 @@
 	'fetch!./inline.css:css?': inlineCss,
 	'fetch!./about.css:css?': aboutCss,
 	require,
+	'lazy!fetch!../../loader/_view.js': _1,
 }) => { return ({ document, onCommand, }, location) => {
 
 if (fennec && location && location.type !== 'tab') { // the inline options page in fennec is small and buggy
@@ -27,7 +28,7 @@ document.title = 'Options - '+ manifest.name;
 });
 
 const intro = document.body.appendChild(_('div', { id: 'intro', }));
-fennec && intro.appendChild(_('h1', { textContent: 'manifest.name', }));
+fennec && intro.appendChild(_('h1', { textContent: manifest.name, }));
 !firefox && intro.appendChild(_('p', { style: 'margin: .25em 0 1.25em 0', })).append(
 	(manifest.description || packageJson.description).replace(/([^!?.])$/, '$1.') +' ',
 	manifest.homepage_url || packageJson.homepage ? _('a', {
