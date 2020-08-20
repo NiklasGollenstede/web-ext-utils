@@ -5,6 +5,7 @@
 	'../utils/files': FS,
 	'../utils/event': { setEvent, setEventGetter, },
 	require,
+	'fetch!package.json:json': packageJson,
 	'lazy!fetch!./_view.js': _2,
 }) => {
 const Self = new WeakMap;
@@ -156,7 +157,8 @@ Object.defineProperty(exports, '__initView__', { value: initView, });
 Object.freeze(exports);
 
 const handlers = { __proto__: null, }, pending = { __proto__: null, }, locations = new Map;
-const viewName = (await FS.realpath('view.html')).replace(/[.]html$/, gecko ? '' : '.html'), viewPath = rootUrl + viewName +'#';
+const viewName = (packageJson.config && packageJson.config['web-ext-utils'] && packageJson.config['web-ext-utils'].viewName || packageJson.name) + (gecko ? '' : '.html');
+const viewPath = rootUrl + viewName +'#';
 const { TAB_ID_NONE = -1, } = Tabs, { WINDOW_ID_NONE = -1, } = Windows || { };
 
 class LocationP {
@@ -256,14 +258,15 @@ async function initView(view, options = { }) { try { options = parseSearch(optio
 		Object.assign(new view.URL(view.location), { pathname: viewName, }),
 	);
 	view.document.querySelector('link[rel="icon"]').href = (manifest.icons[1] || manifest.icons[64]).replace(/^\/?(?!.*:\/\/)/, '/');
-	makeEdgeSuckLess(view); const customElements = getCustomElements();
+	makeEdgeSuckLess(view); const gettingCustomElements = getCustomElements();
 
 	const get = what => new Promise(got => (view.browser || view.chrome)[what +'s'].getCurrent(got));
 
 	let tab, window, type = 'other', tabId = TAB_ID_NONE, windowId = WINDOW_ID_NONE, activeTab = TAB_ID_NONE, resize;
 	if (fennec) {
 		tab = (await get('tab')); tabId = tab.id; type = 'tab';
-		view.innerWidth < tab.width && (type = 'frame'); // TODO: this test is dumb
+		view.innerHeight < tab.height * .75 && (type = 'frame'); // TODO: this test is dumb
+		type === 'frame' && (view.document.body.style.minHeight = Math.floor(tab.height * .75) +'px'); // maybe this helps to make the tiny inline options view in fennec (68) larger, allowing to move the options back there
 	} else {
 		[ tab, window, ] = (await Promise.all([ get('tab'), get('window'), ]));
 		if (tab) {
@@ -295,7 +298,7 @@ async function initView(view, options = { }) { try { options = parseSearch(optio
 	// TODO: in firefox panels don't have focus for (all?) keyboard input before the user clicks in them. It would be nice if the focus could be forced to the panel
 	const location = new LocationP(view, { type, tabId, windowId, activeTab, });
 
-	for (const { 0: name, 1: getClass, } of Object.entries((await customElements))) {
+	for (const { 0: name, 1: getClass, } of Object.entries((await gettingCustomElements))) {
 		const Element = getClass(view); if (!Element) { continue; }
 		view.customElements.define(name, Element, Element.options);
 	}
@@ -320,9 +323,11 @@ async function initView(view, options = { }) { try { options = parseSearch(optio
 	else { (await notify.error(`Failed to display page "${ view.location.hash }"`, error)); }
 } }
 
-if (FS.exists('views')) { for (let name of FS.readdir('views')) {
+const baseUrl = require.toUrl('/').slice(rootUrl.length);
+if (FS.exists(baseUrl +'views')) { includeImplicitViews(baseUrl +'views'); }
+function includeImplicitViews(base) { for (let name of FS.readdir(base)) {
 	if (name[0] === '.' || name[0] === '_') { continue; }
-	const path = FS.resolve('views', name);
+	const path = base +'/'+ name;
 	const isFile = FS.stat(path).isFile();
 	const handler = isFile
 	? (
@@ -347,9 +352,9 @@ if (FS.exists('views')) { for (let name of FS.readdir('views')) {
 
 if ( // automatically create inline options view if options view is required but not explicitly defined
 	!handlers.options && manifest.options_ui && (
-		   manifest.options_ui.page === rootUrl +'view.html#options' // firefox resolves the url
-		|| manifest.options_ui.page === 'view.html#options' // chrome doesn't
-	) && (await FS.exists('node_modules/web-ext-utils/options/editor/inline.js'))
+		   manifest.options_ui.page === viewPath +'options' // firefox resolves the url
+		|| manifest.options_ui.page === `/${viewName}#options` // chrome doesn't
+	) && FS.exists('node_modules/web-ext-utils/options/editor/inline.js')
 ) {
 	exports.setHandler('options', (...args) => require.async('node_modules/web-ext-utils/options/editor/inline').then(_=>_(...args)));
 	!handlers[''] && exports.setHandler('', exports.createRedirect('options'));

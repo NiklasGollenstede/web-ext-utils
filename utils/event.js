@@ -69,7 +69,7 @@ function setEvent(target, name, { init, async: _async = false, writeable = false
 	async function fire(args, options) {
 		if (!all) { return 0; } if (_async) { (await null); }
 		const ready = args !== null && Promise.all(Array.from(
-			all // must create a slice if the map before calling the handlers, otherwise any additional handlers added will catch this event
+			all // must create a slice of the map before calling the handlers, otherwise any additional handlers added will catch this event
 		).map(async ([ listener, ctx, ]) => {
 			ctx && ctx.once && event.removeListener(listener);
 			if (options && options.filter && !options.filter(listener)) { return false; }

@@ -205,6 +205,7 @@ const getActiveTabId = async () => ((await Tabs.query({ currentWindow: true, act
 const tabs = new Map/*<tabId, Map<frameId, Promise<Frame>{ setPort(), }>>*/;
 const options = { }; let optionsAsGlobal = '', optionsAsQuery = '';
 gecko && (setOptions({ b: current, v: version, }));
+const baseUrl = require.toUrl('/').slice(rootUrl.length); baseUrl && setOptions({ baseUrl, });
 function setOptions(props) {
 	Object.assign(options, props);
 	if (gecko || edge) { // query params don't work in chrome
@@ -349,7 +350,7 @@ class Frame {
 	}
 	async call(code, args) {
 		const id = Math.random().toString(32).slice(2);
-		code = `require("${ contentPath.slice(0, -3) }").setScript("${ id }", ${ code })`;
+		code = `require("${ contentPath.slice(0, -3) }").__setScript__("${ id }", ${ code })`;
 		(await Tabs.executeScript(this.tabId, { code, frameId: this.frameId, matchAboutBlank: true, runAt: 'document_start', }));
 		return this.request('callScript', id, args);
 	}

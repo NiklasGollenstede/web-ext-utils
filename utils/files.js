@@ -46,11 +46,6 @@ function stat(path) {
 	};
 }
 
-function realpath(path) {
-	const parts = split(path), node = find(parts);
-	return typeof node === 'string' ? node : parts.join('/');
-}
-
 /**
  * Loads a file included in the extension.
  * @param  {string}  path      Absolute path of the file to read.
@@ -58,7 +53,7 @@ function realpath(path) {
  * @return {any}               [description]
  */
 async function readFile(path, encoding) {
-	const url = browser.extension.getURL(realpath(path));
+	const url = browser.extension.getURL(path);
 
 	return new Promise((resolve, reject) => {
 		const xhr = new global.XMLHttpRequest;
@@ -73,7 +68,6 @@ async function readFile(path, encoding) {
 return {
 	exists,
 	readdir: readDir, readDir,
-	realpath,
 	readFile,
 	resolve,
 	stat,

@@ -1,5 +1,5 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { Notifications, isGecko, },
+	'../browser/': { Notifications, isGecko, rootUrl, },
 	require,
 	'lazy!fetch!./icons/?': _1,
 }) => {
@@ -113,12 +113,13 @@ let open = false, onclick = null, onhide = null;
 const icons = { }; let FS, iconUrl; async function getIcon(name) { try {
 	if (icons[name]) { return icons[name]; }
 	FS || (FS = (await require.async('./files')));
-	const included = [ `${name}.svg`, `${name}.png`, `icons/${name}.svg`, `icons/${name}.png`, ].find(FS.exists);
+	const prefix = require.toUrl('/').slice(rootUrl.length);
+	const included = [ `${name}.svg`, `${name}.png`, `icons/${name}.svg`, `icons/${name}.png`, ].find(icon => FS.exists(prefix + icon));
 	if (included) { return (icons[name] = require.toUrl(included)); }
 
-	const ext = FS.exists('icon.svg') ? 'svg' : 'png', mime = 'image/'+ ext.replace('svg', 'svg+xml');
+	const ext = FS.exists(prefix +'icon.svg') ? 'svg' : 'png', mime = 'image/'+ ext.replace('svg', 'svg+xml');
 	!iconUrl && (iconUrl = `data:${mime};base64,`+ global.btoa(String.fromCharCode.apply(null, new Uint8Array(
-		global.buffer = (await FS.readFile('icon.'+ ext))
+		global.buffer = (await FS.readFile(prefix +'icon.'+ ext))
 	))));
 	const svg = (await require.async(`fetch!./icons/${name}.svg`)).replace('{{iconUrl}}', iconUrl);
 	return (icons[name] = global.URL.createObjectURL(new global.Blob([ svg, ], { type: 'image/svg+xml', })));

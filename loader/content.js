@@ -160,7 +160,13 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 	let hiddenBaseUrl = null;
 
 	const config = {
-		baseUrl: rootUrl,
+		baseUrl: rootUrl + (options.baseUrl || ''),
+		paths: {
+			'package.json': '/package.json',
+			'node_modules': '/node_modules',
+			'manifest.json': '/manifest.json',
+			'files.json': '/files.json',
+		},
 		async defaultLoader(url) {
 			return request('loadScript', url);
 		},
@@ -180,13 +186,15 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 				const config = module.config();
 				config && setOptions(config);
 				debug && console.info('loader', module.id, options);
-				require = _require; require.config({
+				require = _require;
+				config && config.baseUrl && require.config({ baseUrl: config.baseUrl, });
+				require.config({
 					map: { '*': { './': module.id, './views': module.id, }, },
 					config: config && config.v && { 'node_modules/web-ext-utils/browser/index': { name: config.b, version: config.v, }, },
 				});
 				gRequire = global.require; loaded();
 				return ({
-					onUnload, getUrl, setScript, connect,
+					onUnload, getUrl, __setScript__: setScript, connect,
 					get debug() { return debug; },
 				});
 			});
