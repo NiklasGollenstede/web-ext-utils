@@ -73,6 +73,7 @@ const schemas = {
 	tabs: { async: key => key !== 'connect', children: {
 		create: gecko && (() => createTabInNormalWindow),
 		connect: !gecko && addPortError,
+		// executeScript(value, api, key) { return function() { console.log('executeScript(', ...arguments, ')'); return promisify(value, api)(...arguments); }; },
 	}, },
 	tts: { async: key => (/^(?:speak|isSpeaking|getVoices)$/).test(key), },
 	windows: gecko && { children: { create: create => arg => { delete arg.focused; return create(arg); }, }, },

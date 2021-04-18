@@ -1,6 +1,6 @@
 {
 	"name": "web-ext-utils",
-	"version": "0.1.13",
+	"version": "0.1.14",
 	"description": "A collection of utilities to use with web extensions",
 	"author": "Niklas Gollenstede",
 	"license": "MPL-2.0",
@@ -27,6 +27,7 @@
 		}
 	},
 	"eslintConfig": {
-		"extends": "./node_modules/eslintrc/web-ext.js"
+		"extends": "./node_modules/eslintrc/web-ext.js",
+		"root": true
 	}
 }

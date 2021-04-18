@@ -207,14 +207,15 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 		global.require = config;
 	}
 
-	global.fetch = new Proxy(_fetch, {
+	const newFetch = global.fetch = new Proxy(_fetch, {
 		async apply(target, self, [ url, arg, ]) {
-			if (typeof url === 'string' && url.startsWith(rootUrl)) { url = (await request('getUrl', url)); }
+			if (typeof url !== 'string' || !url.startsWith(rootUrl)) { return _fetch(url, arg); }
+			url = (await request('getUrl', url));
 			try { return (await _fetch(url, arg)); }
 			catch (error) {
 				if (url.startsWith('data:')) { throw error; }
-				post('useDataUrls');
-				return global.fetch(...arguments[2]);
+				post('useDataUrls'); // fall back to using data:-URLs
+				return newFetch(...arguments[2]);
 			}
 		},
 	});

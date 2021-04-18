@@ -266,7 +266,7 @@ async function initView(view, options = { }) { try { options = parseSearch(optio
 	if (fennec) {
 		tab = (await get('tab')); tabId = tab.id; type = 'tab';
 		view.innerHeight < tab.height * .75 && (type = 'frame'); // TODO: this test is dumb
-		type === 'frame' && (view.document.body.style.minHeight = Math.floor(tab.height * .75) +'px'); // maybe this helps to make the tiny inline options view in fennec (68) larger, allowing to move the options back there
+		// for inline option pages in fennec 68, the size assessment of the iframe already happened, it's uselessly small now
 	} else {
 		[ tab, window, ] = (await Promise.all([ get('tab'), get('window'), ]));
 		if (tab) {
@@ -324,23 +324,22 @@ async function initView(view, options = { }) { try { options = parseSearch(optio
 } }
 
 const baseUrl = require.toUrl('/').slice(rootUrl.length);
-if (FS.exists(baseUrl +'views')) { includeImplicitViews(baseUrl +'views'); }
-function includeImplicitViews(base) { for (let name of FS.readdir(base)) {
+if (FS.exists(baseUrl +'views')) { for (let name of FS.readdir(baseUrl +'views')) {
 	if (name[0] === '.' || name[0] === '_') { continue; }
-	const path = base +'/'+ name;
+	const path = baseUrl +'views/'+ name;
 	const isFile = FS.stat(path).isFile();
 	const handler = isFile
 	? (
 		  name.endsWith('.html')
 		? FrameLoader(path)
 		: name.endsWith('.js')
-		? (...args) => require.async(path.slice(0, -3)).then(_=>_(...args))
+		? (...args) => require.async('views/'+ name).then(_=>_(...args))
 		: null
 	) : (
 		  FS.exists(path +'/index.html')
 		? FrameLoader(path +'/index.html')
 		: FS.exists(path +'/index.js')
-		? (...args) => require.async(path +'/').then(_=>_(...args))
+		? (...args) => require.async('views/'+ name +'/').then(_=>_(...args))
 		: null
 	);
 	if (handler) {
@@ -353,7 +352,9 @@ function includeImplicitViews(base) { for (let name of FS.readdir(base)) {
 if ( // automatically create inline options view if options view is required but not explicitly defined
 	!handlers.options && manifest.options_ui && (
 		   manifest.options_ui.page === viewPath +'options' // firefox resolves the url
+		|| manifest.options_ui.page === rootUrl + 'view.html#options'
 		|| manifest.options_ui.page === `/${viewName}#options` // chrome doesn't
+		|| manifest.options_ui.page === `/view.html#options`
 	) && FS.exists('node_modules/web-ext-utils/options/editor/inline.js')
 ) {
 	exports.setHandler('options', (...args) => require.async('node_modules/web-ext-utils/options/editor/inline').then(_=>_(...args)));
