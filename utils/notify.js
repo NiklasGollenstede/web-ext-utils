@@ -2,7 +2,7 @@
 	'../browser/': { Notifications, isGecko, rootUrl, },
 	require,
 	'lazy!fetch!./icons/?': _1,
-}) => {
+}) => { /* globals setTimeout, */
 
 /**
  * Displays a basic notification to the user.

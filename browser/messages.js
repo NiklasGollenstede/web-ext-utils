@@ -31,7 +31,7 @@ const port = new Port({ runtime: Runtime, tabs: Tabs, }, class web_ext_Runtime {
 			promise = this.sendMessage([ name, id, args, ]);
 		}
 		if (id === 0) { return; } // is post
-		promise.then(value => this.onData('', id, value), error => this.onData('', -id, error));
+		promise.then(value => this.onData('', id, value[2]), error => this.onData('', -id, error));
 	}
 
 	destroy() {

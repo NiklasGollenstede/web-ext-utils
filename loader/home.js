@@ -9,7 +9,7 @@
 	index = 'options',
 	style = [ 'vertical browser', ],
 	head = [ ],
-}) {
+}) { /* globals setTimeout, */
 
 const handlers = { };
 
