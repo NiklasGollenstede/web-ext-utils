@@ -1,14 +1,14 @@
 (function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { manifest, rootUrl, Windows, Tabs, Sessions, },
+	'module!../browser/': { manifest, rootUrl, Windows, Tabs, Sessions, },
 	'../browser/version': { gecko, fennec, opera, chrome, },
-	'../utils/notify': notify,
+	'module!../utils/notify': notify,
 	'../utils/files': FS,
-	'../utils/event': { setEvent, setEventGetter, },
+	'module!node_modules/web-ext-event/event': { setEvent, setEventGetter, },
 	require,
 	'fetch!package.json:json': packageJson,
 	'lazy!fetch!./_view.js': _2,
 }) => {
-const Self = new WeakMap;
+const Self = new WeakMap; /* globals URL, */
 
 /**
  * Central manager for all extension views (tabs, popups, panels, sidebars).
@@ -66,12 +66,12 @@ const exports = {
 	 * @param  {String?}            options.state         Optional. The state of the new window, if one is created. Defaults to `'normal'`.
 	 * @param  {natural?}           options.windowId      Optional. The window in which a new tab gets placed, if one is created.
 	 *                                                    Should not be a private window. If it is, the view will be moved to a normal window.
-	 * @param  {Boolean?}           options.pinned        Optional. Whether the tab, if one is created, will be pinned. Defaults to `false`.
+	 * @param  {boolean?}           options.pinned        Optional. Whether the tab, if one is created, will be pinned. Defaults to `false`.
 	 * @param  {integer?}           options.openerTabId   Optional. The opener tab of the new tab, of one needs to be created.
 	 * @param  {natural?}           options.index         Optional. The position of the new tab, of one needs to be created.
 	 * @param  {integer?}           options.width/height  Optional. The dimensions of the popup, if one is created.
 	 * @param  {integer?}           options.left/top      Optional. The position of the popup, if one is created.
-	 * @return {Location}                                 The `Location` object corresponding to the new or matching exiting view.
+	 * @return {Promise<Location>}                        The `Location` object corresponding to the new or matching exiting view.
 	 */
 	async openView(location, type, options) { return openView(location, type, options && ('useExisting' in options) ? options.useExisting : false, options); },
 	async showView(location, type, options) { return openView(location, type, options && ('useExisting' in options) ? options.useExisting : true, options); },
@@ -83,7 +83,7 @@ const exports = {
 	 * @param {function}  handler  (Async) Function `(Window, Location)` called whenever a view with that `name` loads.
 	 */
 	setHandler(name, handler) {
-		if (typeof name === 'function' && name.name) { handler = name; name = handler.name; }
+		if (typeof name === 'function' && /**@type{any}*/(name).name) { handler = name; name = handler.name; }
 		else if (typeof name !== 'string' || typeof handler !== 'function')
 		{ throw new TypeError(`setHandler must be called with a named function or a name and a function`); }
 		handlers[name] = handler;
@@ -192,18 +192,20 @@ class LocationP {
 	handleEvent(event) { // hashchange; reload if name changes to a different handler or the error handler
 		const { name, query, hash, } = this; Object.assign(this, LocationP.parse(this.view.location.hash || '#'));
 		if (handlers[name] !== handlers[this.name]) { event.stopImmediatePropagation(); this.view.location.reload(); return; }
-		this.fireChange  && this.fireChange([ this.view.location.hash, new global.URL(event.oldURL).hash, this.view, ]);
-		if (name  !== this.name)  { this.fireNameChange  && this.fireNameChange  ([ this.name,  name,  this.view, ]); }
-		if (query !== this.query) { this.fireQueryChange && this.fireQueryChange ([ this.query, query, this.view, ]); }
-		if (hash  !== this.hash)  { this.fireHashChange  && this.fireHashChange  ([ this.hash,  hash,  this.view, ]); }
+		const _this = /**@type{any}*/(this);
+		_this.fireChange  && _this.fireChange([ this.view.location.hash, new URL(event.oldURL).hash, this.view, ]);
+		if (name  !== this.name)  { _this.fireNameChange  && _this.fireNameChange  ([ this.name,  name,  this.view, ]); }
+		if (query !== this.query) { _this.fireQueryChange && _this.fireQueryChange ([ this.query, query, this.view, ]); }
+		if (hash  !== this.hash)  { _this.fireHashChange  && _this.fireHashChange  ([ this.hash,  hash,  this.view, ]); }
 		this.updateHash();
 	}
 	updateWindow(id, { newWindowId, }) { this.windowId = newWindowId; }
 	destroy() {
-		this.fireChange      && this.fireChange      (null, { last: true, });
-		this.fireNameChange  && this.fireNameChange  (null, { last: true, });
-		this.fireQueryChange && this.fireQueryChange (null, { last: true, });
-		this.fireHashChange  && this.fireHashChange  (null, { last: true, });
+		const _this = /**@type{any}*/(this);
+		_this.fireChange      && _this.fireChange      (null, { last: true, });
+		_this.fireNameChange  && _this.fireNameChange  (null, { last: true, });
+		_this.fireQueryChange && _this.fireQueryChange (null, { last: true, });
+		_this.fireHashChange  && _this.fireHashChange  (null, { last: true, });
 		fireClose([ this.public, ]);
 		Self.delete(this.public); locations.delete(this.view);
 		this.type === 'tab' && Tabs.onAttached.removeListener(this.updateWindow);
@@ -211,7 +213,7 @@ class LocationP {
 	}
 
 	static parse(url) {
-		const string = typeof url === 'string' ? url.startsWith('#') ? url : new global.URL(url, rootUrl).hash : url.hash;
+		const string = typeof url === 'string' ? url.startsWith('#') ? url : new URL(url, rootUrl).hash : url.hash;
 		const [ , name, query, hash, ] = string.match(/^[#]?(.*?)(?:(?:[#!]|[?]([^#\s]*)#?)(.*))?$/);
 		return { name, query: query || '', hash: hash || '', };
 	}
@@ -224,7 +226,7 @@ class LocationP {
 async function openView(location, type, useExisting, {
 	focused = true, active = true, state = 'normal',
 	windowId = undefined, pinned = false, openerTabId = undefined, index = undefined,
-	width, height, left, top,
+	width = undefined, height = undefined, left = undefined, top = undefined,
 } = { }) {
 	location = typeof location === 'string' ? LocationP.normalize(location)
 	: typeof location === 'object' ? exports.getUrl(location || { }) : viewPath;
@@ -255,12 +257,12 @@ async function openView(location, type, useExisting, {
 async function initView(view, options = { }) { try { options = parseSearch(options);
 	view.location.pathname !== viewName && view.history.replaceState(
 		view.history.state, view.document.title,
-		Object.assign(new view.URL(view.location), { pathname: viewName, }),
+		Object.assign(new /**@type{any}*/(view).URL(view.location), { pathname: viewName, }),
 	);
-	view.document.querySelector('link[rel="icon"]').href = (manifest.icons[1] || manifest.icons[64]).replace(/^\/?(?!.*:\/\/)/, '/');
+	/**@type{HTMLAnchorElement}*/(view.document.querySelector('link[rel="icon"]')).href = (manifest.icons[1] || manifest.icons[64]).replace(/^\/?(?!.*:\/\/)/, '/');
 	makeEdgeSuckLess(view); const gettingCustomElements = getCustomElements();
 
-	const get = what => new Promise(got => (view.browser || view.chrome)[what +'s'].getCurrent(got));
+	const get = what => new Promise(got => (/**@type{any}*/(view).browser || /**@type{any}*/(view).chrome)[what +'s'].getCurrent(got));
 
 	let tab, window, type = 'other', tabId = TAB_ID_NONE, windowId = WINDOW_ID_NONE, activeTab = TAB_ID_NONE, resize;
 	if (fennec) {
@@ -285,7 +287,7 @@ async function initView(view, options = { }) { try { options = parseSearch(optio
 
 		const hOff = tab && window ? window.height - tab.height : 42, wOff = tab && window ? window.width - tab.width : 42;
 		view.addEventListener('blur', () => Windows.remove(windowId));
-		resize = view.resize = (width, height) => { const rect = view.document.scrollingElement.getBoundingClientRect();
+		resize = /**@type{any}*/(view).resize = (width, height) => { const rect = view.document.scrollingElement.getBoundingClientRect();
 			Windows.update(windowId, { width: (width || rect.width) + wOff |0, height: (height || rect.height) + hOff |0, }); // provide a function for the view to resize itself.
 		};
 		(await Windows.update(windowId, { top: options.top, left: options.left, })); // firefox currently ignores top and left in .create(), so move it here
@@ -319,7 +321,7 @@ async function initView(view, options = { }) { try { options = parseSearch(optio
 	fireOpen([ location.public, ]);
 
 } catch (error) {
-	const tabId = options.originalTab || view.tabId; if (tabId != null && pending[tabId]) { pending[tabId].reject(error); delete pending[tabId]; }
+	const tabId = options.originalTab || /**@type{any}*/(view).tabId; if (tabId != null && pending[tabId]) { pending[tabId].reject(error); delete pending[tabId]; }
 	else { (await notify.error(`Failed to display page "${ view.location.hash }"`, error)); }
 } }
 
@@ -361,7 +363,7 @@ if ( // automatically create inline options view if options view is required but
 	!handlers[''] && exports.setHandler('', exports.createRedirect('options'));
 }
 
-function getCustomElements() { return getCustomElements.called || (getCustomElements.called = (async () => {
+function getCustomElements() { return /**@type{any}*/(getCustomElements).called || (/**@type{any}*/(getCustomElements).called = (async () => {
 	const elements = { __proto__: null, }; if (FS.exists('views/_elements')) { (await Promise.all(FS.readdir('views/_elements').map(async name => {
 		if (name[0] === '.' || name[0] === '_' || !name.endsWith('.js')) { return; }
 		name = name.slice(0, -3); const path = 'views/_elements/'+ name;
@@ -370,10 +372,10 @@ function getCustomElements() { return getCustomElements.called || (getCustomElem
 })()); }
 
 function FrameLoader(path) { return function(view) {
-	const frame = global.document.createElement('iframe');
+	const frame = document.createElement('iframe');
 	frame.src = '/'+ path;
 	frame.style.border = 'none';
-	frame.style.margin = 0;
+	frame.style.margin = '0';
 	frame.style.top    = frame.style.left  = '0';
 	frame.style.height = frame.style.width = '100%';
 	view.document.body.tagName === 'BODY' && (frame.style.position = 'fixed');
@@ -397,4 +399,4 @@ function makeEdgeSuckLess(window) {
 	!window.NodeList.prototype.forEach && (window.NodeList.prototype.forEach = window.Array.prototype.forEach);
 }
 
-}); })(this);
+}); })(this); // eslint-disable-line no-invalid-this

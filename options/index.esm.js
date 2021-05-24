@@ -1,23 +1,74 @@
-(function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../utils/event': { setEvent, setEventGetter, },
-	require,
-}) => {
-let Content = null; if (typeof (global.browser || global.chrome).extension.getBackgroundPage !== 'function')
-{ try { Content = require('../loader/content'); } catch (_) { } }
+// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-let currentRoot = null; // a OptionsRoot during its construction
+import Events from 'web-ext-event/event.esm.js'; const { setEvent, } = Events;
+/** @typedef {[ now: Readonly<any[]>, old: Readonly<any[]>, option: Option, ]} EventArgsT */
+/** @typedef {import('web-ext-event/event').Event<EventArgsT>} Event */
+/** @typedef {import('web-ext-event/event').EventTrigger<EventArgsT>} EventTrigger */
+/** @typedef {import('web-ext-event/event').Listener<EventArgsT>} Listener */
+/** @typedef {import('web-ext-event/event').ListenerOptions} ListenerOptions */
 
-const Self = new WeakMap/*<Option, { root, values, isSet, on*, ... }>*/;
+let Content = null; if (typeof (/**@type{any}*/(globalThis).browser || /**@type{any}*/(globalThis).chrome).extension.getBackgroundPage !== 'function')
+{ try { Content = /**@type{any}*/(define(null)).require('../loader/content'); } catch (_) { } }
+
+let currentRoot = /**@type{OptionsRoot}*/(null); // a OptionsRoot during its construction
+
+/** @typedef {{
+	root: OptionsRoot;
+	values: Readonly<any[]>;
+	isSet: boolean;
+	onChange: Event;
+	fireChange: EventTrigger;
+	onAnyChange: Event;
+	fireAnyChange: EventTrigger;
+}} OptionP */
+
+/** @typedef {{
+	type?: 'string'|'number'|'boolean';
+	readOnly?: boolean;
+	from?: number|string;
+	to?: number|string;
+	match?: { exp?: string|RegExp, source?: string, flags?: string, message?: string, };
+	isRegExp?: boolean;
+	unique?: '.';
+	custom?: string | ((value: any, values: any[], option: Option) => string);
+}} RestrictModel */
+
+/** @typedef {{
+	type?: 'string'|'number'|'boolean'|'integer'|'boolInt'|'control'|'select'|'menulist'|'code'|'command'|'keybordKey'|'random'|'color'|'label';
+	prefix?: string; suffix?: string;
+	label?: string; id?: string;
+	off?: any; on?: any;
+	options?: { value: any, label: string, }[];
+	default?: any;
+}} InputModel */
+
+/** @typedef {{
+	name?: string;
+	title?: string;
+	description?: string;
+	expanded?: boolean;
+	default?: any;
+	defaults?: any[];
+	hidden?: boolean;
+	maxLength?: number;
+	minLength?: number;
+	child?: ModelNode;
+	input?: InputModel|InputModel[];
+	restrict?: 'inherit'|RestrictModel|RestrictModel[];
+	children?: Record<string, ModelNode>|'dynamic';
+}} ModelNode */
+
+const Self = /**@type{WeakMap<Option, OptionP>}*/(new WeakMap);
 
 class Option {
-	constructor(model, parent, name = model.name || '') {
+	constructor(/**@type{ModelNode}*/model, /**@type{null|Option}*/parent, name = model.name || '') {
 		this.model = model; this.parent = parent; this.name = name;
 		this.path = (parent ? parent.path +'.' : '') + this.name;
 
 		if (!Object.hasOwnProperty.call(model, 'default')) {
 			this.defaults = Object.freeze([ ]);
 		} else if (Array.isArray(model.default)) {
-			this.defaults = model.default;
+			this.defaults = /**@type{any[]}*/(model.default);
 		} else {
 			this.defaults = Object.freeze([ model.default, ]);
 		} this.default = this.defaults[0];
@@ -25,50 +76,60 @@ class Option {
 		this.values = new ValueList(this);
 		const explicit = currentRoot.storage.get(this.values.key);
 
-		const self = {
+		/**@type{OptionP}*/const self = {
 			root: currentRoot, values: explicit || this.defaults, isSet: !!explicit,
 			onChange: null, fireChange: null,
 			onAnyChange: null, fireAnyChange: null,
 		}; Self.set(this, self);
 
+		/**@type{Readonly<Option[]&Record<string, Option>>}*/let children;
 		if (typeof model.child === 'object') {
-			this.restrict = new Restriction(this, { type: 'string', match: (/^[0-9a-f]{12}$/), unique: '.', });
-			this.children = new ChildOptions(model.child, this, self);
+			this.restrict = new Restriction(this, { type: 'string', match: { exp: (/^[0-9a-f]{12}$/), }, unique: '.', });
+			children = ChildOptions(model.child, this, self);
 		} else {
 			this.restrict = model.restrict === 'inherit' ? parent.restrict : model.restrict ? new Restriction(this, model.restrict) : null;
-			this.children = model.children === 'dynamic' ? [ ] : new OptionList(model.children || [ ], this);
-		}
+			children = model.children === 'dynamic' ? [ ] : /**@type{any}*/(new OptionList(model.children || [ ], this));
+		} this.children = children;
 
 		currentRoot.options.set(this.path, this);
 		return Object.freeze(this);
 	}
 
 	get value() { return this.values.get(0); }
-	set value(value) { return this.values.set(0, value); }
+	set value(value) { this.values.set(0, value); }
 	reset() { return this.values.reset(); }
 	resetAll() { this.reset(); this.children.forEach(_=>_.resetAll()); }
 
-	whenTrue(listener, arg) {
+	whenTrue(/**@type{Listener}*/listener, /**@type{ListenerOptions}*/arg) {
 		return whenToggleTo(this, true, listener, arg);
 	}
-	whenFalse(listener, arg) {
+	whenFalse(/**@type{Listener}*/listener, /**@type{ListenerOptions}*/arg) {
 		return whenToggleTo(this, false, listener, arg);
 	}
-	when(true_false, arg) {
+	when(/**@type{{ true: Listener, false: Listener, }}*/true_false, /**@type{ListenerOptions}*/arg) {
 		true_false && true_false.true  && whenToggleTo(this, true,  true_false.true,  arg);
 		true_false && true_false.false && whenToggleTo(this, false, true_false.false, arg);
 	}
-	whenChange(listener) {
-		const values = Self.get(this).values, added = this.onChange(...arguments);
+	whenChange(/**@type{Listener}*/listener, /**@type{ListenerOptions}*/arg) {
+		const values = Self.get(this).values, added = this.onChange(listener, arg);
 		added && listener(values, [ ], this);
 		return added;
 	}
-}
-setEventGetter(Option, 'change', Self);
-setEventGetter(Option, 'anyChange', Self);
-Object.freeze(Option.prototype);
+	get onChange() {
+		const self = Self.get(this); if (self.onChange) { return self.onChange; }
+		self.fireChange = setEvent(self, 'onChange');
+		return self.onChange;
+	}
+	get onAnyChange() {
+		const self = Self.get(this); if (self.onAnyChange) { return self.onAnyChange; }
+		self.fireAnyChange = setEvent(self, 'onAnyChange');
+		return self.onAnyChange;
+	}
+} Object.freeze(Option.prototype);
 
-function whenToggleTo(option, should, listener, arg) {
+
+
+function whenToggleTo(option, should, /**@type{Listener}*/listener, /**@type{ListenerOptions}*/arg) {
 	const wrapped = (now, old) => {
 		const is = !!now.find(x=>x), was = !!old.find(x=>x);
 		is !== was && is === should && listener(now, old, option);
@@ -88,7 +149,7 @@ class OptionList extends Array {
 		} else {
 			Object.keys(items).forEach((key, index) => items[key] && (this[key] = (this[index] = new Option(items[key], parent, key))));
 		}
-		return Object.freeze(this);
+		return /**@type{this}*/(Object.freeze(this));
 	}
 	static get [Symbol.species]() { return Array; }
 } Object.freeze(OptionList.prototype);
@@ -98,14 +159,14 @@ function ChildOptions(model, parent, self) {
 	parent.onChange(ids => Object.keys(cache).forEach(id => { if (!ids.includes(id)) {
 		toLeafs(cache[id], option => {
 			const self = Self.get(option);
-			self.onChange && self.onChange(null, { last: true, });
-			self.onAnyChange && self.onAnyChange(null, { last: true, });
+			self.fireChange && self.fireChange(null, { last: true, });
+			self.fireAnyChange && self.fireAnyChange(null, { last: true, });
 		});
 		delete cache[id];
 	} }));
 
 	return new Proxy(target || (target = new Uint8Array(1024)), {
-		get(_, key) {
+		get(_, /**@type{string}*/key) {
 			if (key === 'length') { return self.values.length; }
 			if ((/^\d+$/).test(key)) { key = self.values[key]; }
 			if (!self.values.includes(key)) { return Array.prototype[key]; }
@@ -118,12 +179,12 @@ function ChildOptions(model, parent, self) {
 			const value = this.get(_, key);
 			return value === undefined ? value : { enumerable: true, value, };
 		},
-		getPrototypeOf() { return Array.prorotype; },
+		getPrototypeOf() { return Array.prototype; },
 	});
 } let target;
 
 class ValueList {
-	constructor(parent) {
+	constructor(/**@type{Option}*/parent) {
 		this.parent = parent;
 		this.key = currentRoot.prefix + this.parent.path;
 		const { model, } = parent;
@@ -137,26 +198,26 @@ class ValueList {
 	get(index = 0) {
 		return Self.get(this.parent).values[index];
 	}
-	set(index, value) {
+	set(/**@type{number}*/index, /**@type{any}*/value) {
 		const values = Self.get(this.parent).values.slice();
 		values[index] = value;
 		this.parent.restrict && this.parent.restrict.validate(value, values, this.parent);
 		return voidPromise(Self.get(this.parent).root.storage.set(this.key, values));
 	}
-	replace(values) {
+	replace(/**@type{any[]}*/values) {
 		if (values.length < this.min || values.length > this.max) {
 			throw new Error('the number of values for the option "'+ this.key +'" must be between '+ this.min +' and '+ this.max);
 		}
 		this.parent.restrict && this.parent.restrict.validateAll(values, this.parent);
 		return voidPromise(Self.get(this.parent).root.storage.set(this.key, values));
 	}
-	splice(index, remove, ...insert) {
+	splice(/**@type{number}*/index, /**@type{number=}*/remove, /**@type{any[]=}*/...insert) {
 		const values = Self.get(this.parent).values.slice();
 		values.splice.apply(values, arguments);
 		if (values.length < this.min || values.length > this.max) {
 			throw new Error('the number of values for the option "'+ this.key +'" must be between '+ this.min +' and '+ this.max);
 		}
-		this.parent.restrict && this.parent.restrict.validateAll(insert, this.parent, index);
+		this.parent.restrict && this.parent.restrict.validateAll(insert || [ ], this.parent, index);
 		return voidPromise(Self.get(this.parent).root.storage.set(this.key, values));
 	}
 	reset() {
@@ -165,7 +226,8 @@ class ValueList {
 } Object.freeze(ValueList.prototype);
 
 class RestrictionBase {
-	validate(value, values, option) {
+	constructor() { const checks = /**@type{Readonly<({ (value: any, values: any[], option: Option): string, })[]>}*/([ ]); this.checks = checks; }
+	validate(/**@type{any}*/value, /**@type{any[]}*/values, /**@type{Option}*/option) {
 		const message = this.checks.map(check => check(value, values, option)).find(x => x);
 		if (message) { throw new Error(message); }
 	}
@@ -180,9 +242,9 @@ class RestrictionBase {
 } Object.freeze(RestrictionBase.prototype);
 
 class Restriction extends RestrictionBase {
-	constructor(parent, restrict) {
+	constructor(/**@type{Option}*/parent, /**@type{RestrictModel|RestrictModel[]}*/restrict) {
 		if (Array.isArray(restrict)) { return new TupelRestriction(parent, restrict); }
-		super();
+		super(); if (arguments.length === 0) { return this; }
 		this._parent = parent;
 		const from = restrict.from;
 		const to = restrict.to;
@@ -194,7 +256,7 @@ class Restriction extends RestrictionBase {
 		const type = restrict.type;
 		const isRegExp = restrict.isRegExp;
 		const unique = Object.freeze(restrict.unique);
-		const checks = [ ];
+		const checks = (super.checks || [ ]).slice();
 
 		readOnly && checks.push(() => 'This value is read only');
 		type && checks.push(value => typeof value !== type && ('This value must be of type "'+ type +'" but is "'+ (typeof value) +'"'));
@@ -217,16 +279,16 @@ class Restriction extends RestrictionBase {
 	}
 } Object.freeze(Restriction.prototype);
 
-class TupelRestriction extends RestrictionBase {
-	constructor(parent, restricts) {
+class TupelRestriction extends Restriction {
+	constructor(/**@type{Option}*/parent, /**@type{RestrictModel[]}*/restricts) {
 		super();
 		const children = this.children = Object.freeze(restricts.map(_ => new Restriction(parent, _)));
 		this.checks = Object.freeze([
 			tuple => tuple.length > children.length && `Tuple contains to many entries`,
 			tuple => {
 				for (let i = 0; i < children.length; ++i) {
-					const error = children[i].validate(tuple[i], null, null);
-					if (error) { return error; }
+					try { children[i].validate(tuple[i], null, null); }
+					catch (error) { return error.message; }
 				} return null;
 			},
 		]);
@@ -260,23 +322,21 @@ function getUniqueSet(unique, parent) {
 	}
 }
 
-function toLeafs(option, action) {
+function toLeafs(/**@type{Option}*/option, /**@type{(option:Option) => void}*/action) {
 	action(option);
 	option.children.forEach(option => toLeafs(option, action));
 }
 
-function toRoot(option, action) {
+function toRoot(/**@type{Option}*/option, /**@type{(option:Option) => void}*/action) {
 	action(option);
 	option.parent && toRoot(option.parent, action);
 }
 
-function inContext(root, action) {
-	try {
-		currentRoot = root;
+/**@template ReturnT */
+function inContext(/**@type{OptionsRoot}*/root, /**@type{() => ReturnT}*/action) {
+	{ currentRoot = root; } try {
 		return action();
-	} finally {
-		currentRoot = null;
-	}
+	} finally { currentRoot = null; }
 }
 
 
@@ -327,10 +387,10 @@ class ChangeListener {
 	}
 } const changeListeners = new WeakMap;
 
-return class OptionsRoot {
-	constructor({ model, storage, prefix, checks, }) {
+ export default class OptionsRoot {
+	constructor(/**@type{{ model: Record<String, ModelNode>, storage: import('../browser/storage.esm.js').CachedStorageArea, prefix: string, checks?: Record<string, (value: any, values: any[], option: Option) => string>, }}*/{ model, storage, prefix, checks, }) {
 		this.model = deepFreeze(model); this.storage = storage; this.prefix = prefix; this.checks = checks;
-		this.options = new Map;
+		this.options = /**@type{Map<String, Option>}*/(new Map);
 		this._shadow = inContext(this, () => new Option({ children: model, }, null));
 		this.children = this._shadow.children;
 
@@ -340,29 +400,29 @@ return class OptionsRoot {
 		Content && Content.onUnload.addListener(this.destroy);
 	}
 
-	onChanged(key, values) {
+	onChanged(/**@type{string}*/key, /**@type{any[]}*/values) {
 		if (!key.startsWith(this.prefix) || this.destroyed) { return; }
 		const option = this.options.get(key.slice(this.prefix.length));
 		const self = Self.get(option); if (!self) { return; }
 		const old = self.values, now = values || option.defaults;
 		self.values = now; self.isSet = !!values;
 		const args = [ now, old, option, ];
-		self.fireChange && self.fireChange(args);
+		self.fireChange && self.fireChange(/**@type{EventArgsT}*/(args));
 		toRoot(option, other => {
 			const that = Self.get(other);
-			that.fireAnyChange && that.fireAnyChange(args);
+			that.fireAnyChange && that.fireAnyChange(/**@type{EventArgsT}*/(args));
 		});
 	}
 
 	resetAll() { return this._shadow.resetAll(); }
-	onAnyChange() { return this._shadow.onAnyChange(...arguments); }
+	onAnyChange(/**@type{Listener}*/listener, /**@type{ListenerOptions}*/arg) { return this._shadow.onAnyChange(listener, arg); }
 
 	destroy() {
 		this.destroyed = true;
 		toLeafs(this._shadow, option => {
 			const self = Self.get(option);
-			self.onChange && self.onChange(null, { last: true, });
-			self.onAnyChange && self.onAnyChange(null, { last: true, });
+			self.fireChange && self.fireChange(null, { last: true, });
+			self.fireAnyChange && self.fireAnyChange(null, { last: true, });
 		});
 		this.storage.onChanged && new ChangeListener(this.storage.onChanged).unregister(this.onChanged);
 		Content && Content.onUnload.removeListener(this.destroy);
@@ -370,23 +430,24 @@ return class OptionsRoot {
 
 	static ObjectMap(data = { }) {
 		const storage = {
-			data, get(key) { return data[key]; }, delete(key) { return delete data[key]; },
-			set(key, value) { onChanged([ key, value, data[key], ]); data[key] = value; },
-		}; const onChanged = setEvent(storage, 'onChenged', { async: true, }); return storage;
+			data, get(/**@type{string}*/key) { return data[key]; }, delete(key) { return delete data[key]; },
+			set(/**@type{string}*/key, /**@type{any}*/value) { onChanged([ key, value, data[key], ]); data[key] = value; },
+			onChanged: /**@type{import('../browser/storage.esm.js').CachedStorageArea['onChanged']}*/(null),
+		}; const onChanged = setEvent(storage, 'onChanged', { async: true, });
+		return storage;
 	}
-};
+}
 
-function deepFreeze(object) {
+/** @template ObjectT */
+function deepFreeze(/**@type{ObjectT}*/object) {
 	const done = new WeakSet; (function doIt(object) {
-		if (typeof object !== 'object' || object === null || done.has(object)) { return; }
-		Object.freeze(object); done.add(object);
+		if (typeof object !== 'object' || object === null || done.has(/**@type{object}*/(object))) { return; }
+		Object.freeze(object); done.add(/**@type{object}*/(object));
 		Object.values(object).forEach(doIt);
-	})(object); return object;
+	})(object); return /**@type{DeepReadonly<ObjectT>}*/(object);
 }
 
 function voidPromise(promise) {
 	if (typeof promise.then !== 'function') { return undefined; }
 	return promise.then(() => undefined); // eslint-disable-line
 }
-
-}); })(this);

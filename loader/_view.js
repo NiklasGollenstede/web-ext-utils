@@ -6,7 +6,7 @@ const { document, location, history, } = global;
 if (!(/^[\w-]+-extension:\/\//).test(location.href)) { console.error(`This script can only be loaded in extension pages`); return; }
 document.currentScript.remove(); // ==> body is now empty
 
-const chrome = global.browser || global.chrome || null;
+const chrome = /**@type{any}*/(global).browser || global.chrome || null;
 const main = global.background = chrome && (await new Promise(done => chrome.runtime.getBackgroundPage(done)));
 const options = { }; location.search && location.search.replace(/^\?/, '').split('&').map(s => (/^([^=]*)=?(.*)$/).exec(s)).forEach(([ _, k, v, ]) => (options[k] = v));
 
@@ -26,7 +26,7 @@ if (!main) {
 	}
 	// in a Firefox incognito context without access to the background page
 	console.error(`Can't open view in non-normal context`);
-	const browser = global.browser; // This only happens in Firefox, so `browser` with promise support is present.
+	const browser = /**@type{any}*/(global).browser; // This only happens in Firefox, so `browser` with promise support is present.
 	const tab = (await browser.tabs.getCurrent());
 	if (tab) { // in a container or incognito tab
 		const windows = (await browser.windows.getAll());
@@ -83,9 +83,9 @@ function getUrl(query = options) { return location.href.replace(/(?:\?.*?)?(?=#.
 } catch (error) {
 	showError({ title: 'Unexpected Error', text: (error ? (error.name ? error.name +': ' : '') + (error.message || '') : ''), });
 	console.error(error);
-} function showError({ title, text, html, }) {
+} function showError({ title, text = '', html = '', }) {
 	global.document.title = title; global.document.body.innerHTML
 	= `<style> :root { background: #424F5A; filter: invert(1) hue-rotate(180deg); font-family: Segoe UI, Tahoma, sans-serif; } </style>
 	<h1>500 <small>Fatal Error</small></h1><span id="message"></span>`;
 	global.document.querySelector('#message')[html ? 'innerHTML' : 'textContent'] = html || text || '';
-} })(this);
+} })(this); // eslint-disable-line no-invalid-this

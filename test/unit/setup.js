@@ -1,3 +1,4 @@
+/// @ts-nocheck
 'use strict'; // license: MPL-2.0
 
 const chai = require('chai');

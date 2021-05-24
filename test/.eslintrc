@@ -2,5 +2,6 @@
 	"extends": "../node_modules/eslintrc/node-js.js",
 	"rules": {
 		"no-console": "off"
-	}
+	},
+	"root": true
 }

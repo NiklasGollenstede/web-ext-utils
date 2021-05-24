@@ -30,7 +30,7 @@ async function getUrl(url) {
 /* global window, document, CustomEvent, */
 
 let debug = false, require = null, gRequire = null, loaded; const loading = new Promise(_=>(loaded = _));
-const chrome = (global.browser || global.chrome);
+const chrome = (/**@type{any}*/(global).browser || /**@type{any}*/(global).chrome);
 const rootUrl = chrome.extension.getURL('');
 const gecko = rootUrl.startsWith('moz-');
 const options = { }; function setOptions(props) {
@@ -38,7 +38,7 @@ const options = { }; function setOptions(props) {
 	if ('d' in props) { debug = options.d; }
 }
 if ('__options__' in global) {
-	setOptions(global.__options__); delete global.__options__;
+	setOptions(/**@type{any}*/(global).__options__); delete /**@type{any}*/(global).__options__;
 } else {
 	const stack = (new Error).stack;
 	(/\bd=(?:true|1)\b/).test(stack) && (debug = true);
@@ -117,7 +117,7 @@ async function connect(name, { wait = true, } = { }) {
 function doUnload() {
 	if (unloaded) { return; } unloaded = true;
 	debug && console.info('unloading content');
-	delete global.require; delete global.define; delete global.__content_loadedd__;
+	delete /**@type{any}*/(global).require; delete /**@type{any}*/(global).define; delete global.__content_loadedd__;
 	global.fetch = _fetch;
 	Object.keys(methods).forEach(key => delete methods[key]);
 
@@ -172,7 +172,7 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 		},
 		callingScriptResolver(offset) {
 			const stack = (new Error).stack.split(/$/m);
-			const line = stack[(/^Error/).test(stack[0]) + 1 + offset];
+			const line = stack[+(/^Error/).test(stack[0]) + 1 + offset];
 			const parts = line.split(/@(?![^/]*?\.xpi)|\(| /g);
 			const url = parts[parts.length - 1].replace(/[:]\d+(?:[:]\d+)?\)?$/, '');
 			if (hiddenBaseUrl !== null && url.startsWith(hiddenBaseUrl)) { return url.replace(hiddenBaseUrl, rootUrl); }
@@ -192,7 +192,7 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 					map: { '*': { './': module.id, './views': module.id, }, },
 					config: config && config.v && { 'node_modules/web-ext-utils/browser/index': { name: config.b, version: config.v, }, },
 				});
-				gRequire = global.require; loaded();
+				gRequire = /**@type{any}*/(global).require; loaded();
 				return ({
 					onUnload, getUrl, __setScript__: setScript, connect,
 					get debug() { return debug; },
@@ -201,10 +201,10 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 		},
 	};
 
-	if (typeof global.require === 'function') {
-		global.require.config(config);
+	if (typeof /**@type{any}*/(global).require === 'function') {
+		/**@type{any}*/(global).require.config(config);
 	} else {
-		global.require = config;
+		/**@type{any}*/(global).require = config;
 	}
 
 	const newFetch = global.fetch = new Proxy(_fetch, {
@@ -221,4 +221,4 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 	});
 }
 
-})(this);
+})(this); // eslint-disable-line no-invalid-this

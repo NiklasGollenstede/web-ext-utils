@@ -1,5 +1,5 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { runtime, extension, Tabs, Windows, },
+	'module!../browser/': { runtime, extension, Tabs, Windows, },
 	require,
 }) => {
 
@@ -45,10 +45,10 @@ function parseMatchPatterns(patterns) {
  *       To avoid this (and to have a clean update when the extension is reloaded) your content scripts should set global destroy() functions that can be called by the options.cleanup function.
  * @param  {object}    options          Optional options object.
  * @param  {function}  options.cleanup  Optional function whose code is executed in each included tab before each content script to remove old versions of the script.
- * @return {Promise([ natural, ])}      Promise that resolves once the cleanup function ran in all included tabs. The numbers are the number of tabs each content script is applied to.
+ * @return {Promise<number[]>}      Promise that resolves once the cleanup function ran in all included tabs. The numbers are the number of tabs each content script is applied to.
  *                                      Note, that the content scripts themselves have not necessarily been executed yet.
  */
-async function attachAllContentScripts({ cleanup, } = { }) {
+async function attachAllContentScripts({ cleanup, } = { cleanup: null, }) {
 	if (typeof (cleanup = cleanup || (() => void 0)) !== 'function') { throw new TypeError('"Cleanup" parameter must be a function or falsey'); }
 	const allTabs = (await Tabs.query({ }));
 	const scripts = runtime.getManifest().content_scripts;
@@ -72,9 +72,10 @@ async function attachAllContentScripts({ cleanup, } = { }) {
 /**
  * Shows or opens a tab containing an extension page.
  * Shows the fist tab whose .pathname equals 'match' and that has a window.tabId set, or opens a new tab containing 'url' if no such tab is found.
- * @param  {string}        url    The url to open in the new tab if no existing tab was found.
- * @param  {string}        match  Optional value of window.location.pathname a existing tab must have to be focused.
- * @return {Promise<Tab>}         The chrome.tabs.Tab that is now the active tab in the focused window.
+ * @param  {string}         url    The url to open in the new tab if no existing tab was found.
+ * @param  {string|RegExp}  match  Optional value of window.location.pathname a existing tab must have to be focused.
+ * @return {Promise<import('../node_modules/webextension-polyfill-ts/lib/index').Tabs.Tab>}
+ *                                 The `browser.tabs.Tab` that is now the active tab in the focused window.
  */
 async function showExtensionTab(url, match = url) {
 	match = extension.getURL(match || url); url = extension.getURL(url);
@@ -90,7 +91,7 @@ async function showExtensionTab(url, match = url) {
 let getNotify; async function notify(method, ...args) {
 	const notify = (await (getNotify = getNotify || (() => {
 		console.warn('Deprecated, use `notify` module!');
-		return require.async('./notify');
+		return require.async('module!./notify');
 	})()));
 	return notify[method](...args);
 }
@@ -100,8 +101,10 @@ return {
 	parseMatchPatterns,
 	attachAllContentScripts,
 	showExtensionTab,
+	/** @deprecated */
 	reportError: notify.bind(null, 'error'),
+	/** @deprecated */
 	reportSuccess: notify.bind(null, 'success'),
 };
 
-}); })(this);
+}); })(this); // eslint-disable-line no-invalid-this

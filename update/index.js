@@ -1,5 +1,5 @@
 (function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { manifest, storage: _Storage, },
+	'module!../browser/': { manifest, storage: _Storage, },
 	'../browser/storage': Storage,
 	'../browser/version': { current: currentBrowser, version: browserVersion, },
 	'../utils/semver': Version,
@@ -88,7 +88,7 @@ for (const [ component, updated, ] of Object.entries(_updated)) {
 }
 
 // done
-inProgress = { };
+inProgress = { version: null, component: null, };
 return Object.freeze(_updated);
 
 /// does one step of the update process, returns true iff the step ran successfully
@@ -101,4 +101,4 @@ function runStep(file, version) {
 /// numeric sorter
 function numeric(a, b) { return a - b; }
 
-}); })(this);
+}); })(this); // eslint-disable-line no-invalid-this

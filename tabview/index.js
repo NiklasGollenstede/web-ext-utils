@@ -98,6 +98,7 @@ return class TabView {
 				get content() { return tab.content; },
 				get title() { return tab.title; },
 			}),
+			titleElement: null, iconElement: null,
 		};
 		tab.tile = self.tablist.insertBefore(createElement('div', {
 			classList: 'tab',
@@ -154,4 +155,4 @@ function setIcon(icon, value) {
 	return icon;
 }
 
-}); })(this);
+}); })(this); // eslint-disable-line no-invalid-this

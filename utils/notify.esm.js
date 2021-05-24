@@ -1,20 +1,24 @@
-(function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { Notifications, isGecko, rootUrl, },
-	require,
-	'lazy!fetch!./icons/?': _1,
-}) => { /* globals setTimeout, */
+
+import Browser from '../browser/index.esm.js'; const { Notifications, isGecko, rootUrl, } = Browser;
+
+if (false) { // eslint-disable-line
+	// @ts-ignore
+	import('./icons/'); import('./files.js');
+} const { require, } = define(null);
+
 
 /**
  * Displays a basic notification to the user.
- * @param  {string}   .title    Notification title.
- * @param  {string}   .message  Notification body text.
- * @param  {string}   .icon     Notification icon URL or one of [ 'default', 'info', 'warn', 'error', 'success', ]
+ * @param  {object}   options
+ * @param  {string}   options.title    Notification title.
+ * @param  {string}   options.message  Notification body text.
+ * @param  {string=}  options.icon     Notification icon URL or one of [ 'default', 'info', 'warn', 'error', 'success', ]
  *                              to choose and/or generate an icon automatically.
- * @param  {natural?} .timeout  Timeout in ms after which to clear the notification.
+ * @param  {number=}  options.timeout  Timeout in ms after which to clear the notification.
  *                              Note that Firefox does not support the native
  *                              `NotificationOptions#requireInteraction` and thus closes
  *                              notifications automatically (in the desktop version).
- * @return {boolean}            Whether the notification was clicked or closed (incl. timeout).
+ * @return {Promise<boolean>}   Whether the notification was clicked or closed (incl. timeout).
  */
 let notify = async function notify({ title, message, icon = 'default', timeout, }) { try {
 	if (!Notifications) { console.info('notify', arguments[0]); return false; }
@@ -34,20 +38,20 @@ let notify = async function notify({ title, message, icon = 'default', timeout, 
 
 if (isGecko) { notify = throttle(notify, 300); } // what a great idea to rate-limit calls to Notify.create and NOT implement Notify.update -.-
 
-Object.assign(notify, {
+export default Object.assign(notify, {
 
 	/**
 	 * Uses a Notification to report a critical error to the user.
 	 * Only displays a single message at once and hides that message after 7.5 seconds.
 	 * Falls back to console.error if Notifications are unavailable.
 	 * @param  {string?}    title     Optional. The Notification's title.
-	 * @param  {...string}  messages  Additional message lines.
+	 * @param  {...string}  lines     Additional message lines.
 	 * @param  {Error?}     error     The error that was thrown.
-	 * @return {boolean}              Whether the notification was clicked or closed (incl. timeout).
+	 * @return {Promise<boolean>}     Whether the notification was clicked or closed (incl. timeout).
 	 */
-	async error(...messages) {
+	async error(/**@type{string[] | [ ...string[], Error, ]}*/...messages) {
 		try { console.error(...messages); } catch (_) { }
-		const error = messages.pop();
+		const error = /**@type{any}*/(messages.pop());
 		const title = (messages.shift() || error && error.title || `That didn't work ...`) +'';
 		let message = messages.join('\n') + (messages.length ? '\n' : '');
 		if (typeof error === 'string') {
@@ -65,31 +69,31 @@ Object.assign(notify, {
 	/**
 	 * Uses a Notification to report an operations success.
 	 * Only displays a single message at once and hides that message after 5 seconds.
-	 * @param  {string?}    title     Optional. The Notification's title.
+	 * @param  {string=}    title     Optional. The Notification's title.
 	 * @param  {...string}  messages  Additional message lines.
-	 * @return {boolean}              Whether the notification was clicked or closed (incl. timeout).
+	 * @return {Promise<boolean>}     Whether the notification was clicked or closed (incl. timeout).
 	 */
-	async success(...messages) {
-		const title = messages.shift() || `Operation completed successfully!`;
+	async success(title, ...messages) {
+		title ||= `Operation completed successfully!`;
 		const message = messages.join('\n');
 
 		return notify({ title, message, icon: 'success', timeout: 5000, });
 	},
 
 	/// Displays a logging notification for up to 3 seconds. `title` is mandatory.
-	async log(title, ...messages) {
+	async log(/**@type{string}*/title, /**@type{string[]}*/...messages) {
 		if (!title) { return false; } const message = messages.join('\n');
 		return notify({ title, message, icon: 'default', timeout: 3000, });
 	},
 
 	/// Displays a informative notification for up to 3.5 seconds. `title` is mandatory.
-	async info(title, ...messages) {
+	async info(/**@type{string}*/title, /**@type{string[]}*/...messages) {
 		if (!title) { return false; } const message = messages.join('\n');
 		return notify({ title, message, icon: 'info', timeout: 3500, });
 	},
 
 	/// Displays a informative warning for up to 6 seconds. `title` is mandatory.
-	async warn(title, ...messages) {
+	async warn(/**@type{string}*/title, /**@type{string[]}*/...messages) {
 		if (!title) { return false; } const message = messages.join('\n');
 		return notify({ title, message, icon: 'warn', timeout: 6000, });
 	},
@@ -118,16 +122,14 @@ const icons = { }; let FS, iconUrl; async function getIcon(name) { try {
 	if (included) { return (icons[name] = require.toUrl(included)); }
 
 	const ext = FS.exists(prefix +'icon.svg') ? 'svg' : 'png', mime = 'image/'+ ext.replace('svg', 'svg+xml');
-	!iconUrl && (iconUrl = `data:${mime};base64,`+ global.btoa(String.fromCharCode.apply(null, new Uint8Array(
-		global.buffer = (await FS.readFile(prefix +'icon.'+ ext))
-	))));
+	!iconUrl && (iconUrl = `data:${mime};base64,`+ globalThis.btoa(String.fromCharCode.apply(null, new Uint8Array((await FS.readFile(prefix +'icon.'+ ext))))));
 	const svg = (await require.async(`fetch!./icons/${name}.svg`)).replace('{{iconUrl}}', iconUrl);
-	return (icons[name] = global.URL.createObjectURL(new global.Blob([ svg, ], { type: 'image/svg+xml', })));
+	return (icons[name] = globalThis.URL.createObjectURL(new globalThis.Blob([ svg, ], { type: 'image/svg+xml', })));
 } catch (error) { console.error(error); return icons[name]; } }
 
 function debounce(callback) { let timer = null; return function(time) {
-	global.clearTimeout(timer); if (time == null) { time = 0; }
-	if (time >= 0) { timer = global.setTimeout(callback, time); }
+	clearTimeout(timer); if (time == null) { time = 0; }
+	if (time >= 0) { timer = setTimeout(callback, time); }
 }; }
 
 function throttle(callback, time) {
@@ -145,7 +147,3 @@ function throttle(callback, time) {
 		return new Promise((done, fail) => (call = { args, done, fail, }));
 	};
 }
-
-return notify;
-
-}); })(this);

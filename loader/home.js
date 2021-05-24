@@ -1,6 +1,6 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'../tabview/': TabView,
-	'../browser/': { manifest, },
+	'module!../browser/': { manifest, },
 	'../utils/': { reportError, },
 	'fetch!../tabview/index.css:css': css,
 	require,
@@ -72,4 +72,4 @@ async function Home(window, location) {
 
 return Home;
 
-}); })(this);
+}); })(this); // eslint-disable-line no-invalid-this

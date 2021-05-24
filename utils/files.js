@@ -2,7 +2,7 @@
 	'fetch!files.json:json': files,
 }) => {
 
-const browser = (global.browser || global.chrome);
+const browser = (/**@type{any}*/(global).browser || global.chrome);
 
 function split(path) {
 	const parts = path.split(/\/|\\/g);
@@ -50,7 +50,7 @@ function stat(path) {
  * Loads a file included in the extension.
  * @param  {string}  path      Absolute path of the file to read.
  * @param  {string}  encoding  Optional. Allowed values: 'utf-8'
- * @return {any}               [description]
+ * @return {Promise<string|ArrayBuffer>}  The file's content.
  */
 async function readFile(path, encoding) {
 	const url = browser.extension.getURL(path);
@@ -73,4 +73,4 @@ return {
 	stat,
 };
 
-}); })(this);
+}); })(this); // eslint-disable-line no-invalid-this

@@ -1,24 +1,31 @@
 
 ##
-# Use by adding `include: web-ext-utils` to the extensions `web-ext-build.yaml`.
+# Use by adding `include: web-ext-utils` to the extension's `web-ext-build.yaml`.
 # This will overwrite/extend the `start-default` and `manifest` pipeline segments such that
 # all implicitly or explicitly required files are included, and the manifest starts with some default keys.
 # Some basic configuration can be set in the extension's `package.json` in `config.'web-ext-utils'`:
-# * viewName: Name for the base HTML file showing all `views/`. Full URL will be
+# * `viewName`: Name for the base HTML file showing all `views/`. Full URL will be
 #             `<vendor>-extension://<uuid>/<viewName>`, with an appended `.html` for non-gecko browsers.
-# * srcDir: Base directory for all non-generated files, except for `package.json` and `node_modules/`.
+# * `srcDir`: Base directory for all non-generated files, except for `package.json` and `node_modules/`.
 # See the function descriptions in `./web-ext-build.js` for more details.
-# `stages.web-ext-utils-files.options.viewName` should probably be set explicitly.
 ##
 
 pipelines:
-  start-default: [ read-fs, web-ext-utils-files ]
+  start-default: [ read-fs, web-ext-utils-files, import-deps ]
   manifest: [ web-ext-utils-manifest, build-manifest ]
 
 stages:
 
   web-ext-utils-files:
     from: ./web-ext-build:extend-fs
+
+  import-deps:
+    options:
+      tracers:
+        pbq: import-deps-pbq
+  import-deps-pbq:
+    from: pbq/node/get-deps:getDeps
+    options:
 
   web-ext-utils-manifest:
     from: ./web-ext-build:prepare-manifest

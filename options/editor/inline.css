@@ -33,11 +33,14 @@ body {
 	margin: 5px 0;
 }
 .options-host li {
-	list-style: none;
-	margin: 3px 0;
-	text-indent: -5em; padding-left: 5em;
+	margin: 3px 0 3px 6px;
+	text-indent: -1em; padding-left: 1em;
 }
 
 textarea, input:not([type="button"]), select, .checkbox-wrapper > label {
     border-color: #b5b5b5;
 }
+
+/* details in checkbox descriptions */
+.options-host .checkbox-wrapper { vertical-align: top !important; }
+.options-host .value-suffix details[open] { max-width: calc(100% - 40px); }

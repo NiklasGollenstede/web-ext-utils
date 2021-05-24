@@ -2,6 +2,7 @@
 
 /**
  * Prints the version and contributions information of the extension to an HTML element.
+ * @param  {object}   options
  * @param  {Element}  options.host      The DOM element to which the about section should be written.
  * @param  {object}   options.manifest  Optional. An object, e.g. `runtime.getManifest()` containing
  *                                      the `title` || `name`, `version`, `author`, `contributors`, `repository` and `license` keys from the manifest.json or package.json.
@@ -14,7 +15,7 @@ function About({
 	manifest = (global.browser || global.chrome).runtime.getManifest(),
 	package: packageJson = null,
 	browser = null,
-} = { }) {
+} = /**@type{any}*/({ })) {
 
 	const $ = createElement.bind(host.ownerDocument.defaultView);
 	const makeLink = entry => entry.url ? $('a', { href: entry.url, target: '_blank', }, [ entry.name || entry.url, ]) : entry.name || entry;
@@ -92,7 +93,7 @@ function createElement(tagName, properties, childList) {
 		}
 	}); })(element, properties);
 	childList && (function append(child) {
-		if (Array.isArray(child)) { child.forEach(append); return; }
+		if (Array.isArray(child)) { child.forEach(/**@type{any}*/(append)); return; }
 		child && element.appendChild(typeof child === 'string' ? window.document.createTextNode(child) : child);
 	})(childList);
 	return element;

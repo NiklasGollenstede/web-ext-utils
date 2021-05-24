@@ -1,6 +1,6 @@
 {
 	"name": "web-ext-utils",
-	"version": "0.1.15",
+	"version": "0.2.0",
 	"description": "A collection of utilities to use with web extensions",
 	"author": "Niklas Gollenstede",
 	"license": "MPL-2.0",
@@ -10,24 +10,39 @@
 	},
 	"dependencies": {},
 	"peerDependencies": {
-		"multiport": "^0.2.3",
-		"pbq": "^0.5.0"
+		"multiport": "^0.3.0",
+		"pbq": "^0.6.0",
+		"web-ext-build": "^0.2.0",
+		"web-ext-event": "^0.2.0"
 	},
 	"devDependencies": {
-		"eslintrc": "github:NiklasGollenstede/eslintrc#fe4414d",
-		"ghooks": "^2.0.4"
+		"eslintrc": "github:NiklasGollenstede/eslintrc#de4265f",
+		"@typescript-eslint/eslint-plugin": "^4.25.0",
+		"typescript": "^4.2.4",
+		"ghooks": "^2.0.4",
+		"webextension-polyfill-ts": "^0.25.0",
+		"multiport": "^0.3.0",
+		"pbq": "^0.6.0",
+		"web-ext-build": "^0.2.0",
+		"web-ext-event": "^0.2.0"
 	},
 	"scripts": {
 		"test": "mocha -r test/unit/setup.js --recursive test/unit",
-		"lint": "eslintrc --ignore-path .gitignore ."
+		"lint": "eslintrc --ignore-path .gitignore"
 	},
 	"config": {
 		"ghooks": {
-			"pre-commit": "npm run lint --silent -- --color"
+			"pre-commit": "npm run lint --silent"
 		}
 	},
 	"eslintConfig": {
 		"extends": "./node_modules/eslintrc/web-ext.js",
-		"root": true
+		"root": true,
+		"parserOptions": {
+			"sourceType": "module"
+		},
+		"rules": {
+			"strict": "off"
+		}
 	}
 }

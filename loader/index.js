@@ -1,8 +1,8 @@
 (function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../browser/': { manifest, rootUrl, runtime, WebNavigation, Tabs, }, '../browser/': Browser,
+	'module!../browser/': { manifest, rootUrl, runtime, WebNavigation, Tabs, }, 'module!../browser/': Browser,
 	'../browser/version': { gecko, edge, current, version, },
 	'../utils/': { parseMatchPatterns, },
-	'../utils/event': { setEvent, setEventGetter, },
+	'module!node_modules/web-ext-event/event': { setEvent, setEventGetter, },
 	'../utils/files': FS,
 	require,
 	'lazy!./multiplex': _1,
@@ -12,13 +12,13 @@ const Self = new Map/*<ContentScript, object>*/;
 
 /**
  * Dynamically executes functions as content scripts.
- * @param  {natural|null}     tabId    The id of the tab to run in. Default to an active tab, preferably in the current window.
- * @param  {natural|null}     frameId  The id of the frame within the tab to run in. Defaults to the top level frame.
+ * @param  {number|null}     tabId    The id of the tab to run in. Default to an active tab, preferably in the current window.
+ * @param  {number|null}     frameId  The id of the frame within the tab to run in. Defaults to the top level frame.
  * @param  {function|string}  script   A function that will be decompiled and run as content script.
  *                                     If the "contentEval" manifest permission is set, this may also be a code string that will be wrapped in a function.
  * @param  {...any}           args     Arguments that will be cloned to call the function with.
  *                                     `this` in the function will be the global object (not necessarily `window`).
- * @return {any}                       The value returned or promised by `script`.
+ * @return {Promise<any>}              The value returned or promised by `script`.
  * @throws {any}                       If `script` throws or otherwise fails to execute.
  */
 async function runInFrame(tabId, frameId, script, ...args) {
@@ -28,11 +28,11 @@ async function runInFrame(tabId, frameId, script, ...args) {
 
 /**
  * Dynamically loads content scripts by `require()`ing them in the content context.
- * @param  {natural|null}     tabId    The id of the tab to run in. Default to an active tab, preferably in the current window.
- * @param  {natural|null}     frameId  The id of the frame within the tab to run in. Defaults to the top level frame.
+ * @param  {number|null}     tabId    The id of the tab to run in. Default to an active tab, preferably in the current window.
+ * @param  {number|null}     frameId  The id of the frame within the tab to run in. Defaults to the top level frame.
  * @param  {[string]|object}  modules  An Array if module ids to load, or an object where each key is a module id
  *                                     and the values will be made available as `module.config()`.
- * @return {natural}                   The number of modules loaded.
+ * @return {Promise<number>}           The number of modules loaded.
  * @throws {any}                       If any of the modules throws or otherwise fails to load.
  */
 async function requireInFrame(tabId, frameId, modules) {
@@ -44,8 +44,8 @@ async function requireInFrame(tabId, frameId, modules) {
  * Detaches all content scripts from the given context. Specifically, it performs the same steps for that context as when the extension is unloaded.
  * That is, it fires the onUnload event (both on the frame reference and in the content script),
  * deletes the global define and require functions and closes the loader connection.
- * @param  {natural|null}     tabId    The id of the tab to run in. Default to an active tab, preferably in the current window.
- * @param  {natural|null}     frameId  The id of the frame within the tab to run in. Defaults to the top level frame.
+ * @param  {number|null}     tabId    The id of the tab to run in. Default to an active tab, preferably in the current window.
+ * @param  {number|null}     frameId  The id of the frame within the tab to run in. Defaults to the top level frame.
  */
 async function unloadFrame(tabId, frameId) {
 	if (typeof tabId !== 'number') { tabId = (await getActiveTabId()); }
@@ -64,7 +64,7 @@ function register(prefix, files) {
 		prefix = prefix.split('/'); if (prefix.shift() !== '' || prefix.pop() !== '') { throw new TypeError(`"prefix" must be an absolute path prefix`); }
 	} else { prefix = prefix.slice(); }
 	if (typeof files !== 'object') { throw new TypeError(`"files" must be an object`); }
-	virtualFiles.add(prefix, files);
+	virtualFiles.set(prefix, files);
 }
 
 /**
@@ -88,8 +88,8 @@ class ContentScript {
 	 * @throws {TypeError}                 If the description above is not met.
 	 * @return {[string]}                  The sources of the created RegExps.
 	 */
-	set include(v)   { Self.get(this).include = parsePatterns(v); listenToNavigation(); }
-	get include()    { return Self.get(this).include.map(_=>_.source); }
+	set include(include) { Self.get(this).include = parsePatterns(include); listenToNavigation(); }
+	get include() { return Self.get(this).include.map(_=>_.source); }
 
 	/**
 	 * Same format as `.include`. Frames with matching URLs will not be included, even if they are also matched by include patterns.
@@ -109,8 +109,8 @@ class ContentScript {
 	 *     'top'       Only execute in matching top level frames. Default value.
 	 *     'matching'  Execute in all matching frames, regardless of the top level url.
 	 */
-	set frames(v)    { if (edge) { return; } Self.get(this).frames = checkEnum([ 'top', 'matching', /*'children', 'all',*/ ], v); }
-	get frames()     { return Self.get(this).frames; }
+	set frames(frames) { if (edge) { return; } Self.get(this).frames = checkEnum([ 'top', 'matching', /*'children', 'all',*/ ], frames); }
+	get frames() { return Self.get(this).frames; }
 
 	/**
 	 * The ids of the modules to load. Same as the `modules` parameter to `requireInFrame()`.
@@ -123,8 +123,8 @@ class ContentScript {
 	 * @param  {function|null}  script  Same as the script parameter to runInFrame().
 	 * @return {string|null}            The decompiled source of the function, if set.
 	 */
-	set script(v)    { Self.get(this).script = v == null ? null : getScource(v); }
-	get script()     { return Self.get(this).script; }
+	set script(script) {  Self.get(this).script = script == null ? null : getScource(script); }
+	get script() { return Self.get(this).script; }
 
 	/**
 	 * Arguments to `.script`. Mutable array. Default is empty.
@@ -135,7 +135,7 @@ class ContentScript {
 	/**
 	 * Applies the ContentScript to all already open tabs and frames it matches.
 	 * Does NOT throw if the content script can't be applied to or throws for individual tabs.
-	 * @return {Set<Frame>}  An of all the Frames this ContentScript was successfully applied to.
+	 * @return {Promise<Set<Frame>>}  An of all the Frames this ContentScript was successfully applied to.
 	 */
 	async applyNow() {
 		return applyScript(Self.get(this));
@@ -143,9 +143,9 @@ class ContentScript {
 
 	/**
 	 * Applies the ContentScript to a specific frame now, regardless of whether it matches.
-	 * @param  {natural|null}     tabId    The id of the tab to run in. Default to an active tab, preferably in the current window.
-	 * @param  {natural|null}     frameId  The id of the frame within the tab to run in. Defaults to the top level frame.
-	 * @return {[Frame, null, Promise]}    The Frame applied to, null (unknown URL), and a Promise that resolves after all `.modules` resolved, with the return value of `.script`, if set.
+	 * @param  {number|null}     tabId    The id of the tab to run in. Default to an active tab, preferably in the current window.
+	 * @param  {number|null}     frameId  The id of the frame within the tab to run in. Defaults to the top level frame.
+	 * @return {Promise<any[] | [ Frame, null, Promise, ]>}    The Frame applied to, null (unknown URL), and a Promise that resolves after all `.modules` resolved, with the return value of `.script`, if set.
 	 */
 	async applyToFrame(tabId, frameId) {
 		if (typeof tabId !== 'number') { tabId = (await getActiveTabId()); }
@@ -154,9 +154,9 @@ class ContentScript {
 
 	/**
 	 * Checks whether this ContentScript has been applied to a frame.
-	 * @param  {natural|null}     tabId    The id of the tab to run in. Default to an active tab, preferably in the current window.
-	 * @param  {natural|null}     frameId  The id of the frame within the tab to run in. Defaults to the top level frame.
-	 * @return {boolean}                   True iff this content script was applied to the given tab/frame.
+	 * @param  {number|null}     tabId    The id of the tab to run in. Default to an active tab, preferably in the current window.
+	 * @param  {number|null}     frameId  The id of the frame within the tab to run in. Defaults to the top level frame.
+	 * @return {Promise<boolean>}                   True iff this content script was applied to the given tab/frame.
 	 */
 	async appliedToFrame(tabId, frameId) {
 		if (typeof tabId !== 'number') { tabId = (await getActiveTabId()); }
@@ -284,7 +284,7 @@ async function applyIfMatches({ tabId, frameId, script, url = null, incognito = 
 	})());
 	url && script.fireMatch && script.fireMatch([ frame.eventArg, url, done, ]);
 	frame.scripts.add(script);
-	return [ frame.eventArg, null, done, ];
+	return /**@type{[ Frame, null, Promise, ]} */([ frame.eventArg, null, done, ]);
 }
 
 class Frame {
@@ -523,4 +523,4 @@ return Object.freeze({
 	set debug(v) { v = !!v; if (debug === v) { return; } debug = v; setOptions({ d: v ? 1 : 0, }); }, get debug() { return debug; },
 });
 
-}); })(this);
+}); })(this); // eslint-disable-line no-invalid-this

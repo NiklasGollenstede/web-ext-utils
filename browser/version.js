@@ -2,7 +2,7 @@
 	module,
 }) => {
 
-const _api = global.browser || global.chrome;
+const _api = /**@type{any}*/(global).browser || global.chrome;
 const ua = global.navigator.userAgent;
 const rootUrl = _api.extension.getURL('');
 const info = typeof _api.runtime.getBrowserInfo === 'function' && (await _api.runtime.getBrowserInfo()) || module.config();
@@ -81,11 +81,11 @@ return new Proxy(Object.freeze({
 	current: currentApp, version: appVersion,
 	then: undefined, // for Promise.resolve()
 }), {
-	get(self, key) {
+	get(self, /**@type{string}*/key) {
 		if (Object.hasOwnProperty.call(self, key)) { return self[key]; }
 		throw new Error(`Unknown application "${ key }"`);
 	},
-	set() { },
+	set() { return false; },
 });
 
-}); })(this);
+}); })(this); // eslint-disable-line no-invalid-this

@@ -26,4 +26,4 @@ return class Multiplex {
 	}
 };
 
-}); })(this);
+}); })(this); // eslint-disable-line no-invalid-this

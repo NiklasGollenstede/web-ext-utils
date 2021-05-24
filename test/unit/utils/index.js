@@ -1,4 +1,5 @@
 /*eslint strict: ["error", "global"], no-implicit-globals: "off"*/ 'use strict'; /* globals require, describe, it, assert, */ // license: MPL-2.0
+/// @ts-nocheck
 
 const file = require('fs').readFileSync('utils/index.js', 'utf8').split((/\r?\n|\r/g)).slice(4, -3).join('\n');
 

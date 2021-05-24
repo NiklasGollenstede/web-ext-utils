@@ -1,15 +1,18 @@
-(function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'../../browser/': { manifest, },
+(function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	'module!../../browser/': { manifest, rootUrl, },
 	'../../browser/version': { current: currentBrowser, version: browserVersion, chrome, chromium, fennec, firefox, },
-	'common/options': options,
 	About, './': Editor,
 	'fetch!package.json:json': packageJson,
 	'fetch!./index.css:css?': indexCss,
 	'fetch!./inline.css:css?': inlineCss,
 	'fetch!./about.css:css?': aboutCss,
+	'../../utils/files': FS,
 	require,
 	'lazy!fetch!../../loader/_view.js': _1,
-}) => { return ({ document, onCommand, }, location) => {
+}) => { const options = (await (() => {
+	const modulePath = require.toUrl('/').slice(rootUrl.length) +'common/options.esm.js';
+	return FS.exists(modulePath) ? import('/'+ modulePath).then(_=>_.default) : require.async('common/options');
+})()); return ({ document, onCommand, }, location) => {
 
 if (fennec && location && location.type !== 'tab') { // the inline options page in fennec is small and buggy
 	document.body.innerHTML = `<button>Show Options</button>`;
@@ -52,4 +55,4 @@ About({
 
 function _(tag, props) { return Object.assign(document.createElement(tag), props); }
 
-}; }); })(this);
+}; }); })(this); // eslint-disable-line no-invalid-this

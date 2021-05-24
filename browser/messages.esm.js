@@ -1,7 +1,7 @@
-(function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'./': { Runtime, Tabs, },
-	'node_modules/multiport/': Port,
-}) => {
+// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+import Browser from './index.esm.js'; const { Runtime, Tabs, } = Browser;
+import Port, { PortAdapter, } from 'multiport/index.esm.js';
 
 /**
  * A multiport/Port that wraps the runtime/tabs.on/sendMessage API for more convenient message sending and receiving.
@@ -12,9 +12,9 @@
  *
  * @see https://github.com/NiklasGollenstede/multiport for the full Port API
 **/
-const port = new Port({ runtime: Runtime, tabs: Tabs, }, class web_ext_Runtime {
+const port = new Port({ runtime: Runtime, tabs: Tabs, }, class web_ext_Runtime extends PortAdapter {
 
-	constructor(api, onData) {
+	constructor(api, onData) { super(api, onData, () => null);
 		this.api = api; this.onData = onData;
 		this.onMessage = (data, sender, reply) => onData(data[0], data[1], data[2], sender, (...args) => reply(args), true);
 		this.sendMessage = api.runtime.sendMessage;
@@ -31,7 +31,9 @@ const port = new Port({ runtime: Runtime, tabs: Tabs, }, class web_ext_Runtime {
 			promise = this.sendMessage([ name, id, args, ]);
 		}
 		if (id === 0) { return; } // is post
-		promise.then(value => this.onData('', id, value[2]), error => this.onData('', -id, error));
+		promise.then(value => { if (value == null) {
+			this.onData('', -id, new Error(`No such handler "${ name }"`));
+		} this.onData('', id, value[2]); }, error => this.onData('', -id, [ error, ]));
 	}
 
 	destroy() {
@@ -41,6 +43,5 @@ const port = new Port({ runtime: Runtime, tabs: Tabs, }, class web_ext_Runtime {
 });
 
 Object.getOwnPropertyNames(Port.prototype).forEach(key => typeof port[key] === 'function' && (port[key] = port[key].bind(port)));
-return port;
 
-}); })(this);
+export default port;

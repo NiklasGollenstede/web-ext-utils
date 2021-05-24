@@ -11,8 +11,8 @@ if (chrome.extension.getBackgroundPage() !== global) { // stop loading at once i
 const { require, } = define(null);
 
 // show notification if the extension failed to start
-require('background/', () => null, async error => {
-	require.async('../utils/notify').then(_=>_.error(
+require(require.main.id, () => null, async error => {
+	require.async('module!../utils/notify').then(_=>_.error(
 		`${ chrome.runtime.getManifest().name } failed to start!`, error,
 	));
 	const Menus = chrome.menus || chrome.contextMenus; if (Menus) {
@@ -30,4 +30,4 @@ views.length && require.async('./views').then(async ({ getViews, }) => {
 	} });
 });
 
-})(this);
+})(this); // eslint-disable-line no-invalid-this
