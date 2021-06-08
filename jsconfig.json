@@ -3,7 +3,8 @@
     "target": "es2020",
     "module": "esnext",
     "checkJs": true,
-    "moduleResolution": "node"
+    "moduleResolution": "node",
+    "strict": false
   },
   "exclude": [ "node_modules", "test/" ]
 }

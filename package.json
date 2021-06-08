@@ -1,6 +1,6 @@
 {
 	"name": "web-ext-utils",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"description": "A collection of utilities to use with web extensions",
 	"author": "Niklas Gollenstede",
 	"license": "MPL-2.0",
@@ -10,10 +10,10 @@
 	},
 	"dependencies": {},
 	"peerDependencies": {
-		"multiport": "^0.3.0",
-		"pbq": "^0.6.0",
-		"web-ext-build": "^0.2.0",
-		"web-ext-event": "^0.2.0"
+		"multiport": "0.3.1",
+		"pbq": "0.6.1",
+		"web-ext-build": "0.2.3",
+		"web-ext-event": "0.3.0"
 	},
 	"devDependencies": {
 		"eslintrc": "github:NiklasGollenstede/eslintrc#de4265f",
@@ -21,10 +21,10 @@
 		"typescript": "^4.2.4",
 		"ghooks": "^2.0.4",
 		"webextension-polyfill-ts": "^0.25.0",
-		"multiport": "^0.3.0",
-		"pbq": "^0.6.0",
-		"web-ext-build": "^0.2.0",
-		"web-ext-event": "^0.2.0"
+		"multiport": "0.3.1",
+		"pbq": "0.6.1",
+		"web-ext-build": "0.2.3",
+		"web-ext-event": "0.3.0"
 	},
 	"scripts": {
 		"test": "mocha -r test/unit/setup.js --recursive test/unit",

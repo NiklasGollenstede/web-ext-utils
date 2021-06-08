@@ -6,9 +6,9 @@ const { files: Files, isGecko, isBlink, files: { FS, }, } = require('web-ext-bui
  * Generates and/or includes additional, library/framework specific files.
  * This currently:
  * * includes and renames the entry point for `views/<name>(/index)?[.](html|js)`
- * * includes a background page loading `background/index.js`
+ * * includes a background page loading `background/index(.esm)?.js`
  * * generates the file of files (`file.json`)
- * * runs `readPBQ`, adjusted for some implicit dependencies
+ * * sets `importMap` paths for itself and the libraries it uses
  * Configuration can be set in the extension's `package.json`, see `./web-ext-build.yaml`.
  * @param  {import('web-ext-build/util/types').Context}    ctx        The build context.
  */
@@ -31,13 +31,16 @@ async function extendFs(ctx, { } = { }) {
 	(await Files.addModule(ctx, 'node_modules/pbq/require.js'));
 
 	ctx.importMap.imports = {
-		'node_modules/': '/node_modules/',
-		'multiport/': '/node_modules/multiport/',
-		'pbq/': '/node_modules/pbq/',
+		...ctx.importMap.imports,
+		'@/': srcDir.replace(/^[/]?/, '/'),
+		'node_modules/':  '/node_modules/',
+		'multiport/':     '/node_modules/multiport/',
+		'multiport':      '/node_modules/multiport/index.esm.js',
+		'pbq/':           '/node_modules/pbq/',
 		'web-ext-build/': '/node_modules/web-ext-build/',
 		'web-ext-event/': '/node_modules/web-ext-event/',
+		'web-ext-event':  '/node_modules/web-ext-event/index.esm.js',
 		'web-ext-utils/': '/node_modules/web-ext-utils/',
-		...ctx.importMap.imports,
 	};
 
 	if (Files.has(ctx, srcDir +'background/index.js', srcDir +'background/index.esm.js')) {
@@ -107,11 +110,10 @@ async function prepareManifest(ctx, { } = { }) {
 		} : undefined,
 	};
 }
-function hasView(ctx, srcDir, name) { return Files.has(ctx, `${srcDir}/views/${name}.js`, `${srcDir}/views/${name}.html`, `${srcDir}/views/${name}/index.js`, `${srcDir}/views/${name}/index.html`); }
+function hasView(ctx, srcDir, name) { return Files.has(ctx, `${srcDir}/views/${name}.esm.js`, `${srcDir}/views/${name}.js`, `${srcDir}/views/${name}.html`, `${srcDir}/views/${name}/index.esm.js`, `${srcDir}/views/${name}/index.js`, `${srcDir}/views/${name}/index.html`); }
 
 return (module.exports = {
 	'extend-fs': extendFs,
-//	'read-pbq': readPBQ,
 	'prepare-manifest': prepareManifest,
 });
 

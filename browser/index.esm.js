@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-/** @typedef {typeof import('../node_modules/webextension-polyfill-ts/lib/index').browser} BrowserT */
+/** @typedef {typeof import('webextension-polyfill-ts').browser} BrowserT */
 
 /* globals globalThis, */
 
@@ -85,7 +85,7 @@ const Browser = /**@type{Omit<BrowserT, 'manifest'>&{
 	inContent: boolean,
 	isGecko: boolean,
 	isEdge: boolean,
-	manifest: import('../node_modules/webextension-polyfill-ts/lib/index').Manifest.WebExtensionManifest,
+	manifest: import('webextension-polyfill-ts').Manifest.WebExtensionManifest,
 }&{
 	BrowserAction: BrowserT['browserAction'],
 	Commands: BrowserT['commands'],

@@ -3,7 +3,7 @@
 	'../browser/version': { gecko, fennec, opera, chrome, },
 	'module!../utils/notify': notify,
 	'../utils/files': FS,
-	'module!node_modules/web-ext-event/event': { setEvent, setEventGetter, },
+	'module!node_modules/web-ext-event/': { setEvent, setEventGetters, },
 	require,
 	'fetch!package.json:json': packageJson,
 	'lazy!fetch!./_view.js': _2,
@@ -117,7 +117,7 @@ const fireClose = setEvent(exports, 'onClose', { lazy: false, });
 
 // location format: #name?query#hash #?query#hash #name#hash ##hash #name?query!query #?query!query #name!hash #!hash
 // view types: 'tab', 'popup', 'panel', 'sidebar', 'frame'
-class Location {
+const Location = setEventGetters(class Location {
 	get view     () { return (Self.get(this) || { }).view; }
 	get type     () { return Self.get(this).type; }
 	get tabId    () { return Self.get(this).tabId; }
@@ -133,11 +133,7 @@ class Location {
 	set name    (v) { v += '';                     const self = Self.get(this); self.navigate({ name:  v, }, self.name  !== v); }
 	set query   (v) { v += '';                     const self = Self.get(this); self.navigate({ query: v, }, self.query !== v); }
 	set hash    (v) { v += ''; const self = Self.get(this); self.hash  !== v ?  self.navigate({ hash:  v, }, true) : self.updateHash(); }
-}
-setEventGetter(Location, 'change', Self);
-setEventGetter(Location, 'nameChange', Self);
-setEventGetter(Location, 'queryChange', Self);
-setEventGetter(Location, 'hashChange', Self);
+}, [ 'change', 'nameChange', 'queryChange', 'hashChange', ], Self);
 
 // default error handler
 function defaultError(view, location) {
@@ -299,6 +295,7 @@ async function initView(view, options = { }) { try { options = parseSearch(optio
 	}
 	// TODO: in firefox panels don't have focus for (all?) keyboard input before the user clicks in them. It would be nice if the focus could be forced to the panel
 	const location = new LocationP(view, { type, tabId, windowId, activeTab, });
+	/**@type{any}*/(view)._location = location/* .public */;
 
 	for (const { 0: name, 1: getClass, } of Object.entries((await gettingCustomElements))) {
 		const Element = getClass(view); if (!Element) { continue; }
@@ -334,18 +331,22 @@ if (FS.exists(baseUrl +'views')) { for (let name of FS.readdir(baseUrl +'views')
 	? (
 		  name.endsWith('.html')
 		? FrameLoader(path)
+		: name.endsWith('.esm.js')
+		? (...args) => require.async('module!views/'+ name).then(_=>_(...args))
 		: name.endsWith('.js')
 		? (...args) => require.async('views/'+ name).then(_=>_(...args))
 		: null
 	) : (
 		  FS.exists(path +'/index.html')
 		? FrameLoader(path +'/index.html')
+		: FS.exists(path +'/index.esm.js')
+		? (...args) => require.async('module!views/'+ name +'/').then(_=>_(...args))
 		: FS.exists(path +'/index.js')
 		? (...args) => require.async('views/'+ name +'/').then(_=>_(...args))
 		: null
 	);
 	if (handler) {
-		isFile && (name = name.replace(/\.(?:html|js)$/, '')); if (name === 'index') {
+		isFile && (name = name.replace(/[.](?:html|js|esm[.]js)$/, '')); if (name === 'index') {
 			exports.setHandler('', handler); exports.setHandler('index', exports.createRedirect(''));
 		} else { exports.setHandler(name, handler); }
 	}

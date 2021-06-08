@@ -1,25 +1,25 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import Events from 'web-ext-event/event.esm.js'; const { setEvent, } = Events;
+import { setEvent, setEventGetters, } from 'web-ext-event';
 /** @typedef {[ now: Readonly<any[]>, old: Readonly<any[]>, option: Option, ]} EventArgsT */
-/** @typedef {import('web-ext-event/event').Event<EventArgsT>} Event */
-/** @typedef {import('web-ext-event/event').EventTrigger<EventArgsT>} EventTrigger */
-/** @typedef {import('web-ext-event/event').Listener<EventArgsT>} Listener */
-/** @typedef {import('web-ext-event/event').ListenerOptions} ListenerOptions */
+/** @typedef {import('web-ext-event').Event<EventArgsT>} Event */
+/** @typedef {import('web-ext-event').EventTrigger<EventArgsT>} EventTrigger */
+/** @typedef {import('web-ext-event').Listener<EventArgsT>} Listener */
+/** @typedef {import('web-ext-event').ListenerOptions} ListenerOptions */
 
-let Content = null; if (typeof (/**@type{any}*/(globalThis).browser || /**@type{any}*/(globalThis).chrome).extension.getBackgroundPage !== 'function')
-{ try { Content = /**@type{any}*/(define(null)).require('../loader/content'); } catch (_) { } }
+let Content = /**@type{any}*/(null); if (typeof (/**@type{any}*/(globalThis).browser || /**@type{any}*/(globalThis).chrome).extension.getBackgroundPage !== 'function')
+{ try { Content = /**@type{any}*/(define(/**@type{any}*/(null))).require('../loader/content'); } catch (_) { } }
 
-let currentRoot = /**@type{OptionsRoot}*/(null); // a OptionsRoot during its construction
+let currentRoot = /**@type{OptionsRoot}*/(/**@type{any}*/(null)); // a OptionsRoot during its construction
 
 /** @typedef {{
 	root: OptionsRoot;
 	values: Readonly<any[]>;
 	isSet: boolean;
-	onChange: Event;
-	fireChange: EventTrigger;
-	onAnyChange: Event;
-	fireAnyChange: EventTrigger;
+	onChange?: Event;
+	fireChange?: EventTrigger;
+	onAnyChange?: Event;
+	fireAnyChange?: EventTrigger;
 }} OptionP */
 
 /** @typedef {{
@@ -29,7 +29,7 @@ let currentRoot = /**@type{OptionsRoot}*/(null); // a OptionsRoot during its con
 	to?: number|string;
 	match?: { exp?: string|RegExp, source?: string, flags?: string, message?: string, };
 	isRegExp?: boolean;
-	unique?: '.';
+	unique?: '.'|string|string[];
 	custom?: string | ((value: any, values: any[], option: Option) => string);
 }} RestrictModel */
 
@@ -48,7 +48,6 @@ let currentRoot = /**@type{OptionsRoot}*/(null); // a OptionsRoot during its con
 	description?: string;
 	expanded?: boolean;
 	default?: any;
-	defaults?: any[];
 	hidden?: boolean;
 	maxLength?: number;
 	minLength?: number;
@@ -56,13 +55,17 @@ let currentRoot = /**@type{OptionsRoot}*/(null); // a OptionsRoot during its con
 	input?: InputModel|InputModel[];
 	restrict?: 'inherit'|RestrictModel|RestrictModel[];
 	children?: Record<string, ModelNode>|'dynamic';
+	extra?: Record<string, any>,
 }} ModelNode */
 
 const Self = /**@type{WeakMap<Option, OptionP>}*/(new WeakMap);
+function get(/**@type{Option}*/key) { return /**@type{OptionP}*/(Self.get(key)); }
 
-class Option {
-	constructor(/**@type{ModelNode}*/model, /**@type{null|Option}*/parent, name = model.name || '') {
-		this.model = model; this.parent = parent; this.name = name;
+const OptionEvents = setEventGetters([ 'change', 'anyChange', ], /**@type{{ get (): OptionP, }}*/(/**@type{any}*/(Self)));
+
+class Option extends OptionEvents {
+	constructor(/**@type{DeepReadonly<ModelNode>}*/model, /**@type{Option|null}*/parent, name = model.name || '') { super();
+		this.model = /**@type{ModelNode}*/(model); this.parent = parent; this.name = name;
 		this.path = (parent ? parent.path +'.' : '') + this.name;
 
 		if (!Object.hasOwnProperty.call(model, 'default')) {
@@ -78,16 +81,14 @@ class Option {
 
 		/**@type{OptionP}*/const self = {
 			root: currentRoot, values: explicit || this.defaults, isSet: !!explicit,
-			onChange: null, fireChange: null,
-			onAnyChange: null, fireAnyChange: null,
 		}; Self.set(this, self);
 
-		/**@type{Readonly<Option[]&Record<string, Option>>}*/let children;
+		/**@type{Readonly<Option[] & Record<string, Option>>}*/let children;
 		if (typeof model.child === 'object') {
 			this.restrict = new Restriction(this, { type: 'string', match: { exp: (/^[0-9a-f]{12}$/), }, unique: '.', });
 			children = ChildOptions(model.child, this, self);
 		} else {
-			this.restrict = model.restrict === 'inherit' ? parent.restrict : model.restrict ? new Restriction(this, model.restrict) : null;
+			const { restrict, } = model; this.restrict = restrict === 'inherit' ? parent?.restrict : restrict ? new Restriction(this, restrict) : null;
 			children = model.children === 'dynamic' ? [ ] : /**@type{any}*/(new OptionList(model.children || [ ], this));
 		} this.children = children;
 
@@ -111,37 +112,27 @@ class Option {
 		true_false && true_false.false && whenToggleTo(this, false, true_false.false, arg);
 	}
 	whenChange(/**@type{Listener}*/listener, /**@type{ListenerOptions}*/arg) {
-		const values = Self.get(this).values, added = this.onChange(listener, arg);
+		const values = get(this).values, added = this.onChange(listener, arg);
 		added && listener(values, [ ], this);
 		return added;
 	}
-	get onChange() {
-		const self = Self.get(this); if (self.onChange) { return self.onChange; }
-		self.fireChange = setEvent(self, 'onChange');
-		return self.onChange;
-	}
-	get onAnyChange() {
-		const self = Self.get(this); if (self.onAnyChange) { return self.onAnyChange; }
-		self.fireAnyChange = setEvent(self, 'onAnyChange');
-		return self.onAnyChange;
-	}
 } Object.freeze(Option.prototype);
 
+///** @typedef {BaseOption & import('web-ext-event').WithEvents<"change" | "anyChange", OptionP>} Option */
 
-
-function whenToggleTo(option, should, /**@type{Listener}*/listener, /**@type{ListenerOptions}*/arg) {
-	const wrapped = (now, old) => {
+function whenToggleTo(/**@type{Option}*/option, /**@type{boolean}*/should, /**@type{Listener}*/listener, /**@type{ListenerOptions}*/arg) {
+	const wrapped = (/**@type{any[]}*/now, /**@type{any[]}*/old) => {
 		const is = !!now.find(x=>x), was = !!old.find(x=>x);
 		is !== was && is === should && listener(now, old, option);
 	};
 	option.onChange(wrapped, arg);
-	const values = Self.get(option).values;
+	const values = get(option).values;
 	!!values.find(x=>x) === should && listener(values, [ ], option);
 	return wrapped;
 }
 
 class OptionList extends Array {
-	constructor(items, parent) {
+	constructor(/**@type{DeepReadonly<ModelNode>[] | Record<String, DeepReadonly<ModelNode>>}*/items, /**@type{Option}*/parent) {
 		super();
 		Object.defineProperty(this, 'parent', { value: parent, });
 		if (Array.isArray(items)) {
@@ -154,18 +145,18 @@ class OptionList extends Array {
 	static get [Symbol.species]() { return Array; }
 } Object.freeze(OptionList.prototype);
 
-function ChildOptions(model, parent, self) {
-	const cache = { };
-	parent.onChange(ids => Object.keys(cache).forEach(id => { if (!ids.includes(id)) {
+function ChildOptions(/**@type{DeepReadonly<ModelNode>}*/model, /**@type{Option}*/parent, /**@type{OptionP}*/self) {
+	const cache = /**@type{Record<string, Option>}*/({ });
+	parent.onChange((/**@type{string[]}*/ids) => Object.keys(cache).forEach(id => { if (!ids.includes(id)) {
 		toLeafs(cache[id], option => {
-			const self = Self.get(option);
+			const self = get(option);
 			self.fireChange && self.fireChange(null, { last: true, });
 			self.fireAnyChange && self.fireAnyChange(null, { last: true, });
 		});
 		delete cache[id];
 	} }));
 
-	return new Proxy(target || (target = new Uint8Array(1024)), {
+	return /**@type{Readonly<Option[] & Record<string, Option>>}*/(/**@type{any}*/(new Proxy(target || (target = new Uint8Array(1024)), {
 		get(_, /**@type{string}*/key) {
 			if (key === 'length') { return self.values.length; }
 			if ((/^\d+$/).test(key)) { key = self.values[key]; }
@@ -173,15 +164,15 @@ function ChildOptions(model, parent, self) {
 			return cache[key] || (cache[key] = inContext(self.root, () => new Option(model, parent, key)));
 		},
 		ownKeys() { return Reflect.ownKeys(self.values).concat(
-			self.values.length, self.vslues.map((_, i) => i)
+			'length', self.values.map((_, i) => i +'')
 		); },
 		getOwnPropertyDescriptor(_, key) {
 			const value = this.get(_, key);
 			return value === undefined ? value : { enumerable: true, value, };
 		},
 		getPrototypeOf() { return Array.prototype; },
-	});
-} let target;
+	})));
+} let target = /**@type{Uint8Array|null}*/(null);
 
 class ValueList {
 	constructor(/**@type{Option}*/parent) {
@@ -192,46 +183,46 @@ class ValueList {
 		this.min = Object.hasOwnProperty.call(model, 'minLength') ? +model.minLength : +!Object.hasOwnProperty.call(model, 'maxLength');
 		return Object.freeze(this);
 	}
-	get current() { return Self.get(this.parent).values; }
-	get is() { return !!Self.get(this.parent).values.find(x => x); }
-	get isSet() { return Self.get(this.parent).isSet; }
+	get current() { return get(this.parent).values; }
+	get is() { return !!get(this.parent).values.find(x => x); }
+	get isSet() { return get(this.parent).isSet; }
 	get(index = 0) {
-		return Self.get(this.parent).values[index];
+		return get(this.parent).values[index];
 	}
 	set(/**@type{number}*/index, /**@type{any}*/value) {
-		const values = Self.get(this.parent).values.slice();
+		const values = get(this.parent).values.slice();
 		values[index] = value;
 		this.parent.restrict && this.parent.restrict.validate(value, values, this.parent);
-		return voidPromise(Self.get(this.parent).root.storage.set(this.key, values));
+		return voidPromise(get(this.parent).root.storage.set(this.key, values));
 	}
 	replace(/**@type{any[]}*/values) {
 		if (values.length < this.min || values.length > this.max) {
 			throw new Error('the number of values for the option "'+ this.key +'" must be between '+ this.min +' and '+ this.max);
 		}
 		this.parent.restrict && this.parent.restrict.validateAll(values, this.parent);
-		return voidPromise(Self.get(this.parent).root.storage.set(this.key, values));
+		return voidPromise(get(this.parent).root.storage.set(this.key, values));
 	}
-	splice(/**@type{number}*/index, /**@type{number=}*/remove, /**@type{any[]=}*/...insert) {
-		const values = Self.get(this.parent).values.slice();
+	splice(/**@type{number}*/index, /**@type{number=}*/remove, /**@type{any[]}*/...insert) {
+		const values = get(this.parent).values.slice();
 		values.splice.apply(values, arguments);
 		if (values.length < this.min || values.length > this.max) {
 			throw new Error('the number of values for the option "'+ this.key +'" must be between '+ this.min +' and '+ this.max);
 		}
-		this.parent.restrict && this.parent.restrict.validateAll(insert || [ ], this.parent, index);
-		return voidPromise(Self.get(this.parent).root.storage.set(this.key, values));
+		this.parent.restrict && this.parent.restrict.validateAll(insert, this.parent, index);
+		return voidPromise(get(this.parent).root.storage.set(this.key, values));
 	}
 	reset() {
-		return voidPromise(Self.get(this.parent).root.storage.delete(this.key));
+		return voidPromise(get(this.parent).root.storage.delete(this.key));
 	}
 } Object.freeze(ValueList.prototype);
 
 class RestrictionBase {
-	constructor() { const checks = /**@type{Readonly<({ (value: any, values: any[], option: Option): string, })[]>}*/([ ]); this.checks = checks; }
+	constructor() { const checks = /**@type{Readonly<({ (value: any, values: any[], option: Option): string|false|null|undefined|void, })[]>}*/([ ]); this.checks = checks; }
 	validate(/**@type{any}*/value, /**@type{any[]}*/values, /**@type{Option}*/option) {
 		const message = this.checks.map(check => check(value, values, option)).find(x => x);
 		if (message) { throw new Error(message); }
 	}
-	validateAll(values, option, offset = 0) {
+	validateAll(/**@type{any[]}*/values, /**@type{Option}*/option, offset = 0) {
 		values.forEach((value, index) => { try {
 			this.validate(value, values, option);
 		} catch (error) {
@@ -242,15 +233,15 @@ class RestrictionBase {
 } Object.freeze(RestrictionBase.prototype);
 
 class Restriction extends RestrictionBase {
-	constructor(/**@type{Option}*/parent, /**@type{RestrictModel|RestrictModel[]}*/restrict) {
-		if (Array.isArray(restrict)) { return new TupelRestriction(parent, restrict); }
+	constructor(/**@type{Option}*/parent, /**@type{DeepReadonly<RestrictModel|RestrictModel[]>}*/_restrict) {
+		if (Array.isArray(_restrict)) { return new TupelRestriction(parent, _restrict); } const restrict = /**@type{DeepReadonly<RestrictModel>}*/(_restrict);
 		super(); if (arguments.length === 0) { return this; }
 		this._parent = parent;
 		const from = restrict.from;
 		const to = restrict.to;
 		const match = restrict.match && Object.freeze({
-			exp: restrict.match.exp ? new RegExp(restrict.match.exp) : new RegExp(restrict.match.source, restrict.match.flags),
-			message: restrict.match.message || 'This value must match '+ (restrict.match.exp || new RegExp(restrict.match.source, restrict.match.flags)),
+			exp: restrict.match.exp ? new RegExp(/**@type{any}*/(restrict.match.exp)) : new RegExp(/**@type{string}*/(restrict.match.source), restrict.match.flags),
+			message: restrict.match.message || 'This value must match '+ (restrict.match.exp || new RegExp(/**@type{string}*/(restrict.match.source), restrict.match.flags)),
 		});
 		const readOnly = restrict.readOnly;
 		const type = restrict.type;
@@ -265,7 +256,7 @@ class Restriction extends RestrictionBase {
 		match && checks.push(value => !match.exp.test(value) && match.message);
 		isRegExp && checks.push(value => void RegExp(value));
 		Object.hasOwnProperty.call(restrict, 'unique') && (() => { let _unique;
-			checks.push((value, values, option) => (_unique || (_unique = getUniqueSet(unique, parent))).map(other => {
+			checks.push((value, values, option) => (_unique || (_unique = getUniqueSet(/**@type{any}*/(unique), parent))).map(other => {
 				if (other === option) {
 					return values.filter(v => v === value).length > 1 && 'This value must be unique within this option';
 				}
@@ -284,8 +275,8 @@ class TupelRestriction extends Restriction {
 		super();
 		const children = this.children = Object.freeze(restricts.map(_ => new Restriction(parent, _)));
 		this.checks = Object.freeze([
-			tuple => tuple.length > children.length && `Tuple contains to many entries`,
-			tuple => {
+			(/**@type{any[]}*/tuple) => tuple.length > children.length && `Tuple contains to many entries`,
+			(/**@type{any[]}*/tuple) => {
 				for (let i = 0; i < children.length; ++i) {
 					try { children[i].validate(tuple[i], null, null); }
 					catch (error) { return error.message; }
@@ -296,15 +287,15 @@ class TupelRestriction extends Restriction {
 	}
 } Object.freeze(TupelRestriction);
 
-function getUniqueSet(unique, parent) {
+function getUniqueSet(/**@type{string | readonly string[]}*/unique, /**@type{Option}*/parent) {
 	const paths = (typeof unique === 'string' ? [ unique, ] : unique || [ ]).map(path => path.split(/[/\\]/));
-	const result = new Set;
+	const result = /**@type{Set<Option>}*/(new Set);
 	paths.forEach(path => walk(parent, path));
 	return Object.freeze(Array.from(result));
 
-	function walk(option, path) {
+	function walk(/**@type{Option}*/option, /**@type{string[]}*/path) {
 		if (!path.length) { result.add(option); return; }
-		const segment = path.shift();
+		const segment = /**@type{string}*/(path.shift());
 		switch (segment) {
 			case '.': {
 				walk(option, path);
@@ -336,7 +327,7 @@ function toRoot(/**@type{Option}*/option, /**@type{(option:Option) => void}*/act
 function inContext(/**@type{OptionsRoot}*/root, /**@type{() => ReturnT}*/action) {
 	{ currentRoot = root; } try {
 		return action();
-	} finally { currentRoot = null; }
+	} finally { currentRoot = /**@type{any}*/(null); }
 }
 
 
@@ -391,7 +382,7 @@ class ChangeListener {
 	constructor(/**@type{{ model: Record<String, ModelNode>, storage: import('../browser/storage.esm.js').CachedStorageArea, prefix: string, checks?: Record<string, (value: any, values: any[], option: Option) => string>, }}*/{ model, storage, prefix, checks, }) {
 		this.model = deepFreeze(model); this.storage = storage; this.prefix = prefix; this.checks = checks;
 		this.options = /**@type{Map<String, Option>}*/(new Map);
-		this._shadow = inContext(this, () => new Option({ children: model, }, null));
+		this._shadow = inContext(this, () => new Option(Object.freeze({ children: this.model, }), null));
 		this.children = this._shadow.children;
 
 		this.destroy = this.destroy.bind(this);
@@ -402,14 +393,14 @@ class ChangeListener {
 
 	onChanged(/**@type{string}*/key, /**@type{any[]}*/values) {
 		if (!key.startsWith(this.prefix) || this.destroyed) { return; }
-		const option = this.options.get(key.slice(this.prefix.length));
-		const self = Self.get(option); if (!self) { return; }
+		const option = this.options.get(key.slice(this.prefix.length)); if (!option) { return; }
+		const self = get(option); if (!self) { return; }
 		const old = self.values, now = values || option.defaults;
 		self.values = now; self.isSet = !!values;
 		const args = [ now, old, option, ];
 		self.fireChange && self.fireChange(/**@type{EventArgsT}*/(args));
 		toRoot(option, other => {
-			const that = Self.get(other);
+			const that = get(other);
 			that.fireAnyChange && that.fireAnyChange(/**@type{EventArgsT}*/(args));
 		});
 	}
@@ -420,7 +411,7 @@ class ChangeListener {
 	destroy() {
 		this.destroyed = true;
 		toLeafs(this._shadow, option => {
-			const self = Self.get(option);
+			const self = get(option);
 			self.fireChange && self.fireChange(null, { last: true, });
 			self.fireAnyChange && self.fireAnyChange(null, { last: true, });
 		});
@@ -428,11 +419,11 @@ class ChangeListener {
 		Content && Content.onUnload.removeListener(this.destroy);
 	}
 
-	static ObjectMap(data = { }) {
+	static ObjectMap(data = /**@type{Record<String, any>}*/({ })) {
 		const storage = {
-			data, get(/**@type{string}*/key) { return data[key]; }, delete(key) { return delete data[key]; },
+			data, get(/**@type{string}*/key) { return data[key]; }, delete(/**@type{string}*/key) { return delete data[key]; },
 			set(/**@type{string}*/key, /**@type{any}*/value) { onChanged([ key, value, data[key], ]); data[key] = value; },
-			onChanged: /**@type{import('../browser/storage.esm.js').CachedStorageArea['onChanged']}*/(null),
+			onChanged: /**@type{import('../browser/storage.esm.js').CachedStorageArea['onChanged']}*/(/**@type{any}*/(null)),
 		}; const onChanged = setEvent(storage, 'onChanged', { async: true, });
 		return storage;
 	}
@@ -447,7 +438,7 @@ function deepFreeze(/**@type{ObjectT}*/object) {
 	})(object); return /**@type{DeepReadonly<ObjectT>}*/(object);
 }
 
-function voidPromise(promise) {
+function voidPromise(/**@type{Promise<any>}*/promise) {
 	if (typeof promise.then !== 'function') { return undefined; }
 	return promise.then(() => undefined); // eslint-disable-line
 }

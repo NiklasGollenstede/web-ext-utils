@@ -2,7 +2,7 @@
 	'module!../browser/': { manifest, rootUrl, runtime, WebNavigation, Tabs, }, 'module!../browser/': Browser,
 	'../browser/version': { gecko, edge, current, version, },
 	'../utils/': { parseMatchPatterns, },
-	'module!node_modules/web-ext-event/event': { setEvent, setEventGetter, },
+	'module!node_modules/web-ext-event/': { setEvent, setEventGetter, },
 	'../utils/files': FS,
 	require,
 	'lazy!./multiplex': _1,

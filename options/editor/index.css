@@ -49,7 +49,6 @@ textarea[data-type="code"] {
 .checkbox-wrapper>input { display: none; }
 .checkbox-wrapper {
 	position: relative;
-	vertical-align: bottom;
 	width: 25px; height: 25px;
 	display: inline-block;
 }
@@ -94,8 +93,14 @@ textarea[disabled], input[disabled], select[disabled] {
 .input-row {
 	display: table;
 }
+.input-row>* {
+	vertical-align: middle;
+}
 .remove-value-entry, .inputs-wrapper {
 	display: table-cell;
+}
+.input-wrapper>* {
+	vertical-align: top;
 }
 .value-prefix {
 	padding: 0 .5em;
