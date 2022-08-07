@@ -55,23 +55,23 @@ const propsMap = new Map/*<id, props>*/; let window = null;
 		} return false; });
 	});
 
-	host.addEventListener('keypress', (event) => {
-		const { target, } = event;
+	host.addEventListener('keydown', (/**@type {KeyboardEvent}*/event) => {
+		const target = /**@type {HTMLInputElement}*/(event.target);
 		if (!target.matches || !target.matches('.input-field')) { return; }
 		switch (target.dataset.type) {
 			case 'keybordKey': {
 				target.value = (event.ctrlKey ? 'Ctrl+' : '') + (event.altKey ? 'Alt+' : '') + (event.shiftKey ? 'Shift+' : '') + event.code;
 			} break;
 			case 'command': {
-				if (event.key === 'Unidentified' || event.key === 'Dead') { return; }
+				if (event.key === 'Unidentified' || event.key === 'Dead') { break; }
 				const media = (/^Media(?:PlayPause|Stop|Track(Previous|Next))$/).exec(event.code);
 				if (media) { target.value = media[1] ? `Media${ media[1].slice(0, 4) }Track` : media[0]; break; }
 				const funcKey = (/F[1-9]|F1[0-2]/).test(event.code);
-				if (!event.ctrlKey && !event.altKey && !event.metaKey && !funcKey) { return; }
-				if (event.ctrlKey + event.altKey + event.metaKey > 1) { return; }
+				if (!event.ctrlKey && !event.altKey && !event.metaKey && !funcKey) { break; }
+				if (+event.ctrlKey + +event.altKey + +event.metaKey + +event.shiftKey > 2) { break; }
 				const mod = (event.ctrlKey ? 'Ctrl + ' : '') + (event.altKey ? 'Alt + ' : '') + (event.shiftKey ? 'Shift + ' : '');
 				const key = event.code.replace(/^Key|^Digit|^Numpad|^Arrow/, '');
-				if (!funcKey && !(/^(?:[A-Z0-9]|Comma|Period|Home|End|PageUp|PageDown|Space|Insert|Delete|Up|Down|Left|Right)$/).test(key)) { return; }
+				if (!funcKey && !(/^(?:[A-Z0-9]|Comma|Period|Home|End|PageUp|PageDown|Space|Insert|Delete|Up|Down|Left|Right)$/).test(key)) { break; }
 				target.value = mod + key;
 			} break;
 			default: return;

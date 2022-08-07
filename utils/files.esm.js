@@ -1,8 +1,8 @@
-(function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'fetch!files.json:json': files,
-}) => {
+// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-const browser = (/**@type{any}*/(global).browser || global.chrome);
+const files = (await (await globalThis.fetch('/files.json')).json());
+
+const browser = (/**@type{any}*/(globalThis).browser || globalThis.chrome);
 
 function split(path) {
 	const parts = path.split(/\/|\\/g);
@@ -53,10 +53,10 @@ function stat(path) {
  * @return {Promise<string|ArrayBuffer>}  The file's content.
  */
 async function readFile(path, encoding) {
-	const url = browser.extension.getURL(path);
+	const url = browser.runtime.getURL(path);
 
 	return new Promise((resolve, reject) => {
-		const xhr = new global.XMLHttpRequest;
+		const xhr = new globalThis.XMLHttpRequest;
 		xhr.responseType = encoding == null ? 'arraybuffer' : 'text';
 		xhr.addEventListener('load', () => resolve(xhr.response));
 		xhr.addEventListener('error', reject);
@@ -65,12 +65,10 @@ async function readFile(path, encoding) {
 	});
 }
 
-return {
+export default {
 	exists,
 	readdir: readDir, readDir,
 	readFile,
 	resolve,
 	stat,
 };
-
-}); })(this); // eslint-disable-line no-invalid-this

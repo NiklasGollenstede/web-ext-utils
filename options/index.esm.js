@@ -378,7 +378,7 @@ class ChangeListener {
 	}
 } const changeListeners = new WeakMap;
 
- export default class OptionsRoot {
+export default class OptionsRoot {
 	constructor(/**@type{{ model: Record<String, ModelNode>, storage: import('../browser/storage.esm.js').CachedStorageArea, prefix: string, checks?: Record<string, (value: any, values: any[], option: Option) => string>, }}*/{ model, storage, prefix, checks, }) {
 		this.model = deepFreeze(model); this.storage = storage; this.prefix = prefix; this.checks = checks;
 		this.options = /**@type{Map<String, Option>}*/(new Map);

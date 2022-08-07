@@ -7,7 +7,7 @@
 	'fetch!./index.css:css?': indexCss,
 	'fetch!./inline.css:css?': inlineCss,
 	'fetch!./about.css:css?': aboutCss,
-	'../../utils/files': FS,
+	'module!../../utils/files': FS,
 	require,
 	'lazy!fetch!../../loader/_view.js': _1,
 }) => { const options = (await (() => {

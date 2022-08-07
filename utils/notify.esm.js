@@ -1,10 +1,10 @@
 
 import Browser from '../browser/index.esm.js'; const { Notifications, isGecko, rootUrl, } = Browser;
 
-if (false) { // eslint-disable-line
-	// @ts-ignore
-	import('./icons/'); import('./files.js');
-} const { require, } = define(null);
+import FS from './files.esm.js';
+
+// @ts-ignore
+if (false) { import('./icons/'); } const { require, } = define('', [ ], null); // eslint-disable-line
 
 
 /**
@@ -44,12 +44,10 @@ export default Object.assign(notify, {
 	 * Uses a Notification to report a critical error to the user.
 	 * Only displays a single message at once and hides that message after 7.5 seconds.
 	 * Falls back to console.error if Notifications are unavailable.
-	 * @param  {string?}    title     Optional. The Notification's title.
-	 * @param  {...string}  lines     Additional message lines.
-	 * @param  {Error?}     error     The error that was thrown.
+	 * @param  {[ ...lines: string[], error: any?, ]} messages An optional title string, followed by any number of line strings, followed optionally be an `Error` object that will be converted to a line string.
 	 * @return {Promise<boolean>}     Whether the notification was clicked or closed (incl. timeout).
 	 */
-	async error(/**@type{string[] | [ ...string[], Error, ]}*/...messages) {
+	async error(...messages) {
 		try { console.error(...messages); } catch (_) { }
 		const error = /**@type{any}*/(messages.pop());
 		const title = (messages.shift() || error && error.title || `That didn't work ...`) +'';
@@ -114,16 +112,15 @@ Notifications.onClosed.addListener(id => {
 });
 let open = false, onclick = null, onhide = null;
 
-const icons = { }; let FS, iconUrl; async function getIcon(name) { try {
+const icons = { }; let iconUrl; async function getIcon(name) { try {
 	if (icons[name]) { return icons[name]; }
-	FS || (FS = (await require.async('./files')));
 	const prefix = require.toUrl('/').slice(rootUrl.length);
 	const included = [ `${name}.svg`, `${name}.png`, `icons/${name}.svg`, `icons/${name}.png`, ].find(icon => FS.exists(prefix + icon));
 	if (included) { return (icons[name] = require.toUrl(included)); }
 
 	const ext = FS.exists(prefix +'icon.svg') ? 'svg' : 'png', mime = 'image/'+ ext.replace('svg', 'svg+xml');
 	!iconUrl && (iconUrl = `data:${mime};base64,`+ globalThis.btoa(String.fromCharCode.apply(null, new Uint8Array((await FS.readFile(prefix +'icon.'+ ext))))));
-	const svg = (await require.async(`fetch!./icons/${name}.svg`)).replace('{{iconUrl}}', iconUrl);
+	const svg = (await (await globalThis.fetch(new globalThis.URL(`./icons/${name}.svg`, import.meta.url))).text()).replace('{{iconUrl}}', iconUrl);
 	return (icons[name] = globalThis.URL.createObjectURL(new globalThis.Blob([ svg, ], { type: 'image/svg+xml', })));
 } catch (error) { console.error(error); return icons[name]; } }
 

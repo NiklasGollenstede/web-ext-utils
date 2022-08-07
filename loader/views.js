@@ -2,7 +2,7 @@
 	'module!../browser/': { manifest, rootUrl, Windows, Tabs, Sessions, },
 	'../browser/version': { gecko, fennec, opera, chrome, },
 	'module!../utils/notify': notify,
-	'../utils/files': FS,
+	'module!../utils/files': FS,
 	'module!node_modules/web-ext-event/': { setEvent, setEventGetters, },
 	require,
 	'fetch!package.json:json': packageJson,
@@ -57,20 +57,21 @@ const exports = {
 	 * @param  {string|null}        location              Name/Location of the view to show. Can be the name as a string,
 	 *                                                    the argument to, or the return value of, `.getUrl()` or the value of a `Location#href` .
 	 * @param  {string|null}        type                  The type of view to open/show. Can be 'tab', 'popup', 'panel' or null, to give no preference (which opens as tabs).
-	 * @param  {boolean|function?}  options.useExisting   Optional. If falsy, a new view will be opened. Otherwise, an existing view may be used and returned if:
+	 * @param  {object}             options
+	 * @param  {boolean|function=}  options.useExisting   Optional. If falsy, a new view will be opened. Otherwise, an existing view may be used and returned if:
 	 *                                                    * `.useExisting` is a function and returns `true`isch for its `Location`
 	 *                                                    * or if the name part of `location` and ` type` match.
 	 *                                                    Defaults to `false` for `openView` and `true` for `showView`.
-	 * @param  {Boolean?}           options.focused       Optional. Whether the window of the returned view should be focused. Defaults to `true`.
-	 * @param  {Boolean?}           options.active        Optional. Whether the tab of the returned view should be active within its window. Defaults to `true`.
-	 * @param  {String?}            options.state         Optional. The state of the new window, if one is created. Defaults to `'normal'`.
-	 * @param  {natural?}           options.windowId      Optional. The window in which a new tab gets placed, if one is created.
+	 * @param  {boolean=}           options.focused       Optional. Whether the window of the returned view should be focused. Defaults to `true`.
+	 * @param  {boolean=}           options.active        Optional. Whether the tab of the returned view should be active within its window. Defaults to `true`.
+	 * @param  {string=}            options.state         Optional. The state of the new window, if one is created. Defaults to `'normal'`.
+	 * @param  {number=}            options.windowId      Optional. The window in which a new tab gets placed, if one is created.
 	 *                                                    Should not be a private window. If it is, the view will be moved to a normal window.
-	 * @param  {boolean?}           options.pinned        Optional. Whether the tab, if one is created, will be pinned. Defaults to `false`.
-	 * @param  {integer?}           options.openerTabId   Optional. The opener tab of the new tab, of one needs to be created.
-	 * @param  {natural?}           options.index         Optional. The position of the new tab, of one needs to be created.
-	 * @param  {integer?}           options.width/height  Optional. The dimensions of the popup, if one is created.
-	 * @param  {integer?}           options.left/top      Optional. The position of the popup, if one is created.
+	 * @param  {boolean=}           options.pinned        Optional. Whether the tab, if one is created, will be pinned. Defaults to `false`.
+	 * @param  {number=}            options.openerTabId   Optional. The opener tab of the new tab, of one needs to be created.
+	 * @param  {number=}            options.index         Optional. The position of the new tab, of one needs to be created.
+	 * @param  {number=}            options.width/height  Optional. The dimensions of the popup, if one is created.
+	 * @param  {number=}            options.left/top      Optional. The position of the popup, if one is created.
 	 * @return {Promise<Location>}                        The `Location` object corresponding to the new or matching exiting view.
 	 */
 	async openView(location, type, options) { return openView(location, type, options && ('useExisting' in options) ? options.useExisting : false, options); },
@@ -83,8 +84,9 @@ const exports = {
 	 * @param {function}  handler  (Async) Function `(Window, Location)` called whenever a view with that `name` loads.
 	 */
 	setHandler(name, handler) {
-		if (typeof name === 'function' && /**@type{any}*/(name).name) { handler = name; name = handler.name; }
-		else if (typeof name !== 'string' || typeof handler !== 'function')
+		if (typeof name === 'function') { handler = name; name = null; }
+		else if (name == null && typeof handler === 'function' && handler.name) { name = handler.name; }
+		if (typeof name !== 'string' || typeof handler !== 'function')
 		{ throw new TypeError(`setHandler must be called with a named function or a name and a function`); }
 		handlers[name] = handler;
 	},
