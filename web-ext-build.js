@@ -55,8 +55,8 @@ async function extendFs(ctx, { } = { }) {
 		// could also insert the content of `ctx.importMap` here
 	}
 
-	ctx.files['files.json'] = {
-		parent: null, generated: true, path: 'files.json',
+	ctx.files['files.json.esm.js'] = {
+		parent: null, generated: true, path: 'files.json.esm.js',
 		get content() {
 			const files = { };
 			(function add(from, to) {
@@ -66,7 +66,7 @@ async function extendFs(ctx, { } = { }) {
 					} else { to[name] = true; }
 				}
 			} })(ctx.files, files);
-			return JSON.stringify(files, null, '\t');
+			return `export default ${JSON.stringify(files, null, '\t')};`;
 		},
 	};
 }

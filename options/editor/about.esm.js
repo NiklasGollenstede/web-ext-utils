@@ -5,15 +5,12 @@
 /** @typedef {{ what: string, who: string|Person|(string|Person)[], license: string, }} Contribution */
 
 /**
- * @typedef   {object}   ManifestProperties
- * @property  {string=}  title
- * @property  {string=}  name
- * @property  {string=}  version
+ * @typedef   {object}   ExtraManifestProperties
  * @property  {string=}  license
- * @property  {Person=}  author
  * @property  {Repository=}  repository
  * @property  {Contribution[]=}  contributions
  */
+/** @typedef {ExtraManifestProperties & import('webextension-polyfill-ts').Manifest.WebExtensionManifest} ManifestProperties */
 
 /**
  * Prints the version and contributions information of the extension to an HTML element.

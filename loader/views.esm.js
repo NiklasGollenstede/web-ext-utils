@@ -1,13 +1,16 @@
-(function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'module!../browser/': { manifest, rootUrl, Windows, Tabs, Sessions, },
-	'../browser/version': { gecko, fennec, opera, chrome, },
-	'module!../utils/notify': notify,
-	'module!../utils/files': FS,
-	'module!node_modules/web-ext-event/': { setEvent, setEventGetters, },
-	require,
-	'fetch!package.json:json': packageJson,
-	'lazy!fetch!./_view.js': _2,
-}) => {
+// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+import Browser from '../browser/index.esm.js'; const { manifest, rootUrl, Windows, Tabs, } = Browser; const Sessions = (/**@type{any}*/(Browser)).Sessions;
+import { gecko, fennec, opera, chrome, } from '../browser/version.esm.js';
+import { setEvent, setEventGetters, } from 'web-ext-event';
+import notify from '../utils/notify.esm.js';
+import FS from '../utils/files.esm.js';
+const require = (/**@type {{ require: { async(id: string): Promise<any>,toUrl(id: string): string, }, }}*/(/**@type {any}*/(globalThis))).require;
+const packageJson = (await (await globalThis.fetch('/package.json')).json());
+// @ts-ignore
+if (false) { import('./_view.js'); import('./_views-bg.esm.js'); } // eslint-disable-line no-constant-condition
+
+/** @type {WeakMap<any, LocationP>} */
 const Self = new WeakMap; /* globals URL, */
 
 /**
@@ -48,7 +51,6 @@ const Self = new WeakMap; /* globals URL, */
  * Apart from that, this module provides APIs to get open views and open different types of views,
  * programmatically register named views, generate URLs, and handle redirects and errors.
  */
-
 const exports = {
 	/**
 	 * Shows or opens a specific extension view in a tab or popup window.
@@ -90,32 +92,36 @@ const exports = {
 		{ throw new TypeError(`setHandler must be called with a named function or a name and a function`); }
 		handlers[name] = handler;
 	},
-	/// Unregisters the handler for a given `name`, if one is set.
+	/** Unregisters the handler for a given `name`, if one is set. */
 	removeHandler(name) { delete handlers[name]; },
-	/// Returns the handler for a given `name`, if one is set.
+	/** Returns the handler for a given `name`, if one is set. */
 	getHandler(name) { return handlers[name]; },
 
-	/// Returns the extension instance specific, absolute, normalized URL to a view.
+	/** Returns the extension instance specific, absolute, normalized URL to a view. */
 	getUrl({ name, query, hash, }) {
 		return viewPath
 		+ (name  ? (name +'')  .replace(/^[#]/, '') : '')
 		+ (query ? (query +'') .replace(/^[?]?/, '?') : '')
 		+ (hash  ? (hash +'')  .replace(/^[#]?/, '#') : '');
 	},
-	/// @return {[Location]}  New array with all open views' `Location`s.
+	/** New array with all open views' `Location`s. */
 	getViews() { return Array.from(locations.values(), _=>_.public); },
-	/// Given the global `window` of a view, returns its `Location`.
-	locationFor(view) { const location = locations.get(view); return location ? location.public : null; },
-	/// Creates a view handler that can be registered under any name to redirect to the given `target` name.
+	/** Given the global `window` of a view, returns its `Location`. */
+	locationFor(/** @type {Window} */view) { const location = locations.get(view); return location ? location.public : null; },
+	/** Creates a view handler that can be registered under any name to redirect to the given `target` name. */
 	createRedirect(target) { return (view, location) => {
 		location.replace(target); return (handlers[target] || handlers['404'] || defaultError)(view, location);
 	}; },
 	async getCustomElements() { return getCustomElements(); },
+	/** @type {import('web-ext-event').Event<[ InstanceType<typeof Location>, ]>} `Event` that fires with `(Location)` whenever a view was opened/loaded. */
+	onOpen: null,
+	/** @type {import('web-ext-event').Event<[ InstanceType<typeof Location>, ]>} `Event` that fires with the old `(Location)` whenever a view was closed/unloaded. */
+	onClose: null,
 };
-/// `Event` that fires with `(Location)` whenever a view was opened/loaded.
-const fireOpen  = setEvent(exports, 'onOpen', { lazy: false, });
-/// `Event` that fires with the old `(Location)` whenever a view was closed/unloaded.
-const fireClose = setEvent(exports, 'onClose', { lazy: false, });
+const fireOpen  = setEvent(exports, 'onOpen');
+const fireClose = setEvent(exports, 'onClose');
+
+const _Self = /**@type {any}*/(Self); // (break type dependency circle)
 
 // location format: #name?query#hash #?query#hash #name#hash ##hash #name?query!query #?query!query #name!hash #!hash
 // view types: 'tab', 'popup', 'panel', 'sidebar', 'frame'
@@ -129,13 +135,13 @@ const Location = setEventGetters(class Location {
 	get name     () { return Self.get(this).name; }
 	get query    () { return Self.get(this).query; }
 	get hash     () { return Self.get(this).hash; }
-	assign      (v) { v = LocationP.normalize(v);  const self = Self.get(this); self.navigate({ href:  v, }, self.href  !== v); }
+	assign      (v) { v = LocationP.normalize(v);  const self = Self.get(this); self.navigate({ href:  v, }, this.href  !== v); }
 	replace     (v) { v = LocationP.normalize(v);  const self = Self.get(this); self.navigate({ href:  v, }, false); }
-	set href    (v) { v = LocationP.normalize(v);  const self = Self.get(this); self.navigate({ href:  v, }, self.href  !== v); }
+	set href    (v) { v = LocationP.normalize(v);  const self = Self.get(this); self.navigate({ href:  v, }, this.href  !== v); }
 	set name    (v) { v += '';                     const self = Self.get(this); self.navigate({ name:  v, }, self.name  !== v); }
 	set query   (v) { v += '';                     const self = Self.get(this); self.navigate({ query: v, }, self.query !== v); }
 	set hash    (v) { v += ''; const self = Self.get(this); self.hash  !== v ?  self.navigate({ hash:  v, }, true) : self.updateHash(); }
-}, [ 'change', 'nameChange', 'queryChange', 'hashChange', ], Self);
+}, [ 'change', 'nameChange', 'queryChange', 'hashChange', ], new WeakMap, _Self);
 
 // default error handler
 function defaultError(view, location) {
@@ -154,7 +160,9 @@ function defaultError(view, location) {
 Object.defineProperty(exports, '__initView__', { value: initView, });
 Object.freeze(exports);
 
-const handlers = { __proto__: null, }, pending = { __proto__: null, }, locations = new Map;
+const handlers = { __proto__: null, }, pending = { __proto__: null, };
+/** @type {Map<Window, LocationP>} */
+const locations = new Map;
 const viewName = (packageJson.config && packageJson.config['web-ext-utils'] && packageJson.config['web-ext-utils'].viewName || packageJson.name) + (gecko ? '' : '.html');
 const viewPath = rootUrl + viewName +'#';
 const { TAB_ID_NONE = -1, } = Tabs, { WINDOW_ID_NONE = -1, } = Windows || { };
@@ -240,7 +248,7 @@ async function openView(location, type, useExisting, {
 	}
 	if (type === 'panel') { location = location.replace('#', '?emulatePanel=true#'); type = 'popup'; }
 	const tab = type === 'popup'
-	? (await Windows.create({ type: 'popup', url: location, focused, state, width, height, left, top, })).tabs[0]
+	? (await Windows.create({ type: 'popup', url: location, focused, state: /**@type{any}*/(state), width, height, left, top, })).tabs[0]
 	: (await Tabs.create({ url: location, active, pinned, windowId, openerTabId, index, }));
 	type !== 'popup' && focused && windowId && Windows && Windows.update(windowId, { focused: true, });
 	return new Promise((resolve, reject) => (pending[tab.id] = { resolve, reject, }));
@@ -262,7 +270,7 @@ async function initView(view, options = { }) { try { options = parseSearch(optio
 
 	const get = what => new Promise(got => (/**@type{any}*/(view).browser || /**@type{any}*/(view).chrome)[what +'s'].getCurrent(got));
 
-	let tab, window, type = 'other', tabId = TAB_ID_NONE, windowId = WINDOW_ID_NONE, activeTab = TAB_ID_NONE, resize;
+	let tab, window, type = 'other', tabId = /**@type{number}*/(TAB_ID_NONE), windowId = /**@type{number}*/(WINDOW_ID_NONE), activeTab = /**@type{number}*/(TAB_ID_NONE), resize;
 	if (fennec) {
 		tab = (await get('tab')); tabId = tab.id; type = 'tab';
 		view.innerHeight < tab.height * .75 && (type = 'frame'); // TODO: this test is dumb
@@ -334,7 +342,7 @@ if (FS.exists(baseUrl +'views')) { for (let name of FS.readdir(baseUrl +'views')
 		  name.endsWith('.html')
 		? FrameLoader(path)
 		: name.endsWith('.esm.js')
-		? (...args) => require.async('module!views/'+ name).then(_=>_(...args))
+		? (...args) => import('/'+ path).then(_=>_.default(...args))
 		: name.endsWith('.js')
 		? (...args) => require.async('views/'+ name).then(_=>_(...args))
 		: null
@@ -342,7 +350,7 @@ if (FS.exists(baseUrl +'views')) { for (let name of FS.readdir(baseUrl +'views')
 		  FS.exists(path +'/index.html')
 		? FrameLoader(path +'/index.html')
 		: FS.exists(path +'/index.esm.js')
-		? (...args) => require.async('module!views/'+ name +'/').then(_=>_(...args))
+		? (...args) => import('/'+ path +'/index.esm.js').then(_=>_.default(...args))
 		: FS.exists(path +'/index.js')
 		? (...args) => require.async('views/'+ name +'/').then(_=>_(...args))
 		: null
@@ -386,7 +394,7 @@ function FrameLoader(path) { return function(view) {
 	frame.addEventListener('load', () => (view.document.title = frame.contentDocument.title), { once: true, });
 }; }
 
-return exports;
+export default exports;
 
 function parseSearch(search) {
 	const config = { };
@@ -401,5 +409,3 @@ function parseSearch(search) {
 function makeEdgeSuckLess(window) {
 	!window.NodeList.prototype.forEach && (window.NodeList.prototype.forEach = window.Array.prototype.forEach);
 }
-
-}); })(this); // eslint-disable-line no-invalid-this

@@ -14,6 +14,7 @@ import { setEvent, } from 'web-ext-event';
  * @property {(callbackfn: (value: [ string, any, ], index: number) => void, thisArg?: any) => void} forEach
  * @property {{ [s: string]: any, }} proxy
  * @property {import('web-ext-event').Event<[ key: string, newVal: any, oldVal: any, ref?: any, ]>} onChanged
+ * @property {Promise<void>} ready
  */
 
 /**
@@ -31,10 +32,19 @@ const storage = { local: /**@type{CachedStorageArea}*/(null), sync: /**@type{Cac
 /**@typedef {{ data: { [s: string]: any, }, onChanged: import('web-ext-event').EventTrigger<[ key: string, newVal: any, oldVal: any, ref?: any, ]>, }} Internal */
 const internal = { local: /**@type{Internal}*/(null), sync: /**@type{Internal}*/(null), };
 
-(await Promise.all([ 'local', 'sync', ].map(async (/**@type{'local'|'sync'}*/type) => {
+(/* await Promise.all */([ 'local', 'sync', ].map(/* async */ (/**@type{'local'|'sync'}*/type) => {
 	const async = Async[type];
-	let data = (await async.get());	if (Array.isArray(data) && data.length === 1) { data = data[0]; } // some weird Firefox bug (2016-12)
-	data = Object.assign(Object.create(null), data); Object.values(data).forEach(deepFreeze);
+//	let data = (await async.get());	if (Array.isArray(data) && data.length === 1) { data = data[0]; } // some weird Firefox bug (2016-12)
+//	data = Object.assign(Object.create(null), data); Object.values(data).forEach(deepFreeze);
+
+	// this is less efficient than the two lines commented out above, but does avoid the global await, which as of now (2021-06) is not yet supported by AMO or precinct
+	// once AMO supports global await (mozilla/addons-linter#3741), this can be switched back
+	// should precinct still not support it, dig out the dependency hack again ...
+	const data = /**@type{Record<string, any>}*/(Object.create(null));
+	const ready = async.get().then(values => {
+		if (Array.isArray(values) && values.length === 1) { values = values[0]; } // some weird Firefox bug (2016-12)
+		Object.entries(values).forEach(([ key, value, ]) => setValue(type, key, value));
+	});
 
 	function get(/**@type{string}*/key) { return data[key]; }
 	async function set(key, value, ref) { let update; if (typeof key !== 'object' || key === null) {
@@ -61,6 +71,7 @@ const internal = { local: /**@type{Internal}*/(null), sync: /**@type{Internal}*/
 			set(_, key, value) { set(key, value); return true; },
 			deleteProperty(_, /**@type{string}*/key) { const had = delete data[key]; remove(key); return had; },
 		}), onChanged: null,
+		ready,
 	}; internal[type] = { data, onChanged: null, };
 	/**@type{Internal['onChanged']}*/ const onChanged = internal[type].onChanged = (/**@type{any}*/(setEvent))(storage[type], 'onChanged', { async: true, });
 })));

@@ -1,6 +1,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-const files = (await (await globalThis.fetch('/files.json')).json());
+// @ts-ignore
+import files from '/files.json.esm.js';
 
 const browser = (/**@type{any}*/(globalThis).browser || globalThis.chrome);
 
@@ -48,8 +49,8 @@ function stat(path) {
 
 /**
  * Loads a file included in the extension.
- * @param  {string}  path      Absolute path of the file to read.
- * @param  {string}  encoding  Optional. Allowed values: 'utf-8'
+ * @param  {string}   path      Absolute path of the file to read.
+ * @param  {string=}  encoding  Optional. Allowed values: 'utf-8'
  * @return {Promise<string|ArrayBuffer>}  The file's content.
  */
 async function readFile(path, encoding) {

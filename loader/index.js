@@ -1,6 +1,6 @@
 (function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'module!../browser/': { manifest, rootUrl, runtime, WebNavigation, Tabs, }, 'module!../browser/': Browser,
-	'../browser/version': { gecko, edge, current, version, },
+	'module!../browser/version': { gecko, edge, },
 	'../utils/': { parseMatchPatterns, },
 	'module!node_modules/web-ext-event/': { setEvent, setEventGetter, },
 	'../utils/files': FS,
@@ -204,7 +204,6 @@ const silentErrors = new WeakSet; let debug = false;
 const getActiveTabId = async () => ((await Tabs.query({ currentWindow: true, active: true, }))[0] || (await Tabs.query({ active: true, }))[0]).id;
 const tabs = new Map/*<tabId, Map<frameId, Promise<Frame>{ setPort(), }>>*/;
 const options = { }; let optionsAsGlobal = '', optionsAsQuery = '';
-gecko && (setOptions({ b: current, v: version, }));
 const baseUrl = require.toUrl('/').slice(rootUrl.length); baseUrl && setOptions({ baseUrl, });
 function setOptions(props) {
 	Object.assign(options, props);

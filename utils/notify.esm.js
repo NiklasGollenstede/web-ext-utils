@@ -1,3 +1,4 @@
+// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import Browser from '../browser/index.esm.js'; const { Notifications, isGecko, rootUrl, } = Browser;
 
@@ -115,11 +116,13 @@ let open = false, onclick = null, onhide = null;
 const icons = { }; let iconUrl; async function getIcon(name) { try {
 	if (icons[name]) { return icons[name]; }
 	const prefix = require.toUrl('/').slice(rootUrl.length);
-	const included = [ `${name}.svg`, `${name}.png`, `icons/${name}.svg`, `icons/${name}.png`, ].find(icon => FS.exists(prefix + icon));
-	if (included) { return (icons[name] = require.toUrl(included)); }
+	for (const icon of [ `${name}.svg`, `${name}.png`, `icons/${name}.svg`, `icons/${name}.png`, ]) {
+		if (!FS.exists(prefix + icon)) { continue; }
+		return (icons[name] = require.toUrl(icon));
+	}
 
 	const ext = FS.exists(prefix +'icon.svg') ? 'svg' : 'png', mime = 'image/'+ ext.replace('svg', 'svg+xml');
-	!iconUrl && (iconUrl = `data:${mime};base64,`+ globalThis.btoa(String.fromCharCode.apply(null, new Uint8Array((await FS.readFile(prefix +'icon.'+ ext))))));
+	!iconUrl && (iconUrl = `data:${mime};base64,`+ globalThis.btoa(String.fromCharCode.apply(null, new Uint8Array(/**@type {ArrayBuffer}*/(await FS.readFile(prefix +'icon.'+ ext))))));
 	const svg = (await (await globalThis.fetch(new globalThis.URL(`./icons/${name}.svg`, import.meta.url))).text()).replace('{{iconUrl}}', iconUrl);
 	return (icons[name] = globalThis.URL.createObjectURL(new globalThis.Blob([ svg, ], { type: 'image/svg+xml', })));
 } catch (error) { console.error(error); return icons[name]; } }

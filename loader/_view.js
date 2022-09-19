@@ -75,8 +75,15 @@ for (let retry = 1; retry <= 10 && typeof main.define !== 'function'; --retry) {
 }
 if (!main.define) { throw new Error(`This extension did not start correctly. Reloading this page or disabling and enabling the extension may help.`); }
 
-let id = 'node_modules/web-ext-utils/loader/_view'; try { ({ id, } = main.define(null)); delete main.require.cache[id]; } catch (_) { } // get id of this file
-(await main.require.async(id.replace(/_view$/, 'views'))).__initView__(global, options); // work with the background page
+let id = 'node_modules/web-ext-utils/loader/_view', url = `/${id}.js`; try { ({ id, url: { pathname: url, }, } = main.define(null)); delete main.require.cache[id]; } catch (_) { } // get id of this file
+
+//(await main.require.async('module!'+ id.replace(/_view$/, 'views'))).__initView__(global, options); // work with the background page
+//(await main.import('/'+ url.replace(/_view[.]js$/, 'views.esm.js'))).__initView__(global, options); // work with the background page
+if (!main.__initView__) {
+	let ok; main.__initView__ = new main.Promise(y => { ok = y; }); main.__initView__.resolve = ok;
+	const script = main.document.createElement('script'); script.type = 'module'; script.src = url.replace(/_view[.]js$/, '_views-bg.esm.js');
+	(main.document.head || main.document.documentElement).appendChild(script);
+} (await main.__initView__)(global, options);
 
 function getUrl(query = options) { return location.href.replace(/(?:\?.*?)?(?=#.*|$)/, query ? '?'+ Object.entries(query).map(_=>_.join('=')).join('&') : ''); } // update query
 

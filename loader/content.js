@@ -190,7 +190,6 @@ function onVisibilityChange() { !document.hidden && onUnload.probe(); debug && c
 				config && config.baseUrl && require.config({ baseUrl: config.baseUrl, });
 				require.config({
 					map: { '*': { './': module.id, './views': module.id, }, },
-					config: config && config.v && { 'node_modules/web-ext-utils/browser/index': { name: config.b, version: config.v, }, },
 				});
 				gRequire = /**@type{any}*/(global).require; loaded();
 				return ({

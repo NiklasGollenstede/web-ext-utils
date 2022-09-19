@@ -1,21 +1,8 @@
-(function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-}) => {
-
-const queryChild = (() => {
-	try { global.document.querySelector(':scope'); }
-	catch (error) {
-		return (element, ...selectors) =>
-		selectors.reduce((element, selector) => element && Array.prototype.find.call(
-			element.children,
-			child => child.msMatchesSelector(selector)
-		), element) || null;
-	}
-	return (element, ...selectors) => element.querySelector(':scope>'+ selectors.join('>'));
-})();
+// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 const propsMap = new Map/*<id, props>*/; let window = null;
 
-/* export */ function loadEditor({ host, options, onCommand, prefix = '', }) {
+export default function loadEditor({ host, options, onCommand, prefix = '', }) {
 
 	host.classList.add('options-host');
 
@@ -107,8 +94,8 @@ function setButtonDisabled(element) {
 	if (element.pref.model.disabled) {
 		fieldsEnabled(element, 'model', false);
 	}
-	const container = queryChild(element, '*', '.values-container');
-	const add       = queryChild(element, '*', '.add-value-entry');
+	const container = element.querySelector(':scope>*>.values-container');
+	const add       = element.querySelector(':scope>*>.add-value-entry');
 	if (!add) { return; }
 	const { min, max, } = element.pref.values, length = container.children.length;
 	fieldEnabled(add, 'count', length < max);
@@ -451,7 +438,3 @@ function displayPreferences(prefs, host, prefix) { prefs.forEach(pref => {
 
 	setButtonDisabled(element);
 }); return host; }
-
-return loadEditor;
-
-}); })(this); // eslint-disable-line no-invalid-this
